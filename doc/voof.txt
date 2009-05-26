@@ -1,0 +1,864 @@
+*voof.txt*                          Vim Outliner Of Folds
+VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
+plugin for Python-enabled Vim version 7.x
+Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
+License: this file is in the public domain
+Version: 1.0, 2009-05-25
+
+==============================================================================
+Contents   {{{1~
+  Overview                        |voof-overview|
+  Requirements                    |voof-requirements|
+  Installation                    |voof-install|
+  Options                         |voof-options|
+  All Mappings and Commands       |voof-map|
+  OUTLINING (:Voof)               |Voof|
+  RUNNING SCRIPTS (:Voofrun)      |Voofrun|
+  __PyLog__ BUFFER (:Vooflog)     |Vooflog|
+  Implementation notes            |voof-notes|
+
+==============================================================================
+Overview   {{{1~
+                                                               *voof-overview*
+VOOF (Vim Outliner Of Folds) is a plugin for Vim that emulates a two-pane
+outliner. It can be used with any file or buffer that has fold markers with
+level numbers (|fold-marker|) such as this help file.
+
+The main ex-mode commands are: Voof, Voofrun, Vooflog, Voofhelp.
+
+:Voof   Creates outline of the current buffer. The outline is constructed from
+        lines with fold markers with levels, which become headlines. The
+        oultine is displayed in a scratch buffer, in a separate window, which
+        emulates a tree pane of a two-pane outliner. Such buffers are referred
+        to as Tree buffers. The current buffer becomes a Body buffer. Each
+        Tree headline is associated with a region (fold) of the corresponding
+        Body, called node. Nodes can be navigated by browsing the Tree. They
+        can also be manipulated from the Tree: moved up/down,
+        promoted/demoted, marked/unmarked, etc.
+        See OUTLINING (|Voof|) for detailed user guide.
+
+The VOOF plugin also provides two utilities useful when working with Vim and
+Python scripts. They can be used independently of the outlining functionality
+provided by the :Voof command. (These two utilities emulate corresponding
+features of the Leo text outliner.)
+
+:Voofrun    Executes text in the current node or fold as Vim script or Python
+            script. This is useful for testing code snippets and for
+            organizing scripts by segregating them into folds. This command
+            does not require an outline to be created and can be used with any
+            buffer that has folds.
+            See RUNNING SCRIPTS (|Voofrun|) for details.
+
+:Vooflog    Creates scratch buffer __PyLog__ and redirects Python stdout and
+            stderr to that buffer. This feature is not related to folding or
+            outlining and is completely independent from the rest of the
+            plugin. It's useful when scripting Vim with Python.
+            See __PyLog__ BUFFER (|Vooflog|) for details.
+
+
+Command Voofhelp opens help file voof.txt in new tabpage as outline.
+
+QUICK DEMO:~
+Make sure files voof.vim and voof.py are together in one folder.
+Open voof.vim and do >
+    :so %
+    :Voof
+This will create Tree buffer for voof.vim .
+
+<Up>, <Left>, <Up>, <Down> arrow keys move around the Tree and select new node
+(all mappings are for the normal mode).
+
+<Return> selects node the cursor is on and then cycles between Tree and
+voof.vim . So, to select another node, move to it with h, j, etc. and hit
+Return.
+
+<Tab> cycles between Tree and voof.vim windows without selecting node.
+
+(All VOOF mappings, except Return and Tab, are for Tree buffers only.)
+
+<Space> expands/contracts node without selecting it. Standard Vim folding
+command (zo, zc, zR, zM, etc.) can be used as well.
+
+Left mouse click in the Tree selects node. If the click is to the left/right
+of headline text, the node's expanded/contracted status is toggled.
+
+Edit a headline (line with a fold marker) in voof.vim and go back into the
+Tree: the outline will be updated.
+
+<C-Up>, <C-Down> move node or a range of sibling nodes up/down.
+<C-Left>, <C-Right> promote/demote.
+
+
+To try Python Log Buffer feature: >
+    :Vooflog
+    :py assert 2==3
+    :py print VOOF.nodes
+
+------------------------------------------------------------------------------
+Limitations   {{{2~
+VOOF is not scalable to large outlines. Nodes are not true object, they are
+just line numbers of Body headlines. The bottleneck is the brute force update
+of the outline data. Such update, which basically recreates outline from
+scratch, must be done whenever the user switches to Tree buffer after
+modifying corresponding Body--we can't possibly know what the user did with
+the Body while he was away from the Tree.
+
+Sample outline "calendar_outline.txt" seems to be approaching the usable size
+limit on my 2002 notebook (1.6GHz Pentium 4 Mobile):
+3.2MB, 56527 lines, 4160 headlines.
+When moving to Tree after modifying Body, the pause due to outline update is
+noticeable but is still less than a second.
+
+Browsing outline is fast regardless of it's size. Outline operations are also
+fast because they avoid global outline update unless g:voof_verify_oop is set
+to 1.
+
+------------------------------------------------------------------------------
+Other Text Outliners  {{{2~
+
+Leo:
+    http://webpages.charter.net/edreamleo/front.html
+    The __PyLog__ buffer, which is created by command :Vooflog, is the
+    equivalent of Leo's log pane.
+    The :Voofrun command is like Leo's Execute Script command when performed
+    on a node which has an @others directive.
+
+The "Tag List" Vim plugin:
+    http://vim.sourceforge.net/scripts/script.php?script_id=273
+    Conceptually VOOF is similar to the Taglist plugin. Taglist uses the
+    ctags program to scan the file for lines with tags. VOOF uses Python
+    script to scan the buffer for lines with fold markers with levels.
+
+Code Browser:
+    http://code-browser.sourceforge.net/
+
+VO, Vim Outliner:
+    http://www.vimoutliner.org/
+TVO, The Vim Outliner:
+    http://vim.sourceforge.net/scripts/script.php?script_id=517
+
+WikidPad:
+    http://wikidpad.sourceforge.net/
+    http://wikidpad.python-hosting.com/
+TreeLine:
+    http://treeline.bellz.org/
+FreeMind:
+    http://freemind.sourceforge.net/wiki/index.php/Main_Page
+KeyNote:
+    http://www.tranglos.com/free/index.html
+Various outliner programs found by searching Sourceforge and Google Code:
+    http://code.google.com/p/mindtree/
+    http://code.google.com/p/novedit/
+    http://code.google.com/p/keynote-nf/
+    http://sourceforge.net/projects/theguide
+    http://sourceforge.net/projects/organote
+    http://notecase.sourceforge.net/
+
+==============================================================================
+Requirements   {{{1~
+                                                           *voof-requirements*
+VOOF uses Python and requires Python-enabled Vim 7.x, that is Vim compiled
+with the Python interface. Your Vim is Python-enabled if it can do >
+    :py print 2**0.5
+
+Python version should be 2.4 - 2.6 .
+Python 3 is not supported and is not compatible with Vim anyway.
+
+Vim version 7.2 or above is preferred. Version 7.1 should also work.
+Versions 7.0 and 6.x might work as well but have not been tested.
+
+Vim should be compiled using normal or bigger feature set.
+
+==============================================================================
+Installation   {{{1~
+                                                                *voof-install*
+Copy files "voof.vim" and "voof.py" to your local plugin folder:
+  $HOME/vimfiles/plugin (Windows)
+  $HOME/.vim/plugin (Unix)
+This will make commands Voof, Vooflog, Voofrun available from any buffer.
+
+Copy help file "voof.txt" to your local doc folder. (It can also be in the
+same folder as voof.vim.) Command Voofhelp opens voof.txt as outline in a new
+tabpage.
+
+Optional: to generate help tags (there are few), do ':helptags <doc dir>' (see
+|add-local-help|).
+
+To try VOOF without installing anything:
+Make sure voof.vim, voof.py, voof.txt are in the same directory.
+Open voof.vim and do >
+    :so %
+    :Voof
+To create outline for another file, run :Voof command for it: >
+    :tabnew
+    :e $VIMRUNTIME/autoload/netrw.vim
+    :Voof
+
+NOTE: VOOF uses quickload mechanism, see |write-plugin-quickload|. The bulk of
+the "voof.vim" script is sourced and "voof.py" is imported only after a Voof
+command is run for the first time.
+
+NOTE: When "voof.vim" is sourced, its Python code adds script's directory to
+sys.path and then imports "voof.py". This creates file "voof.pyc". Command
+:Voofrun, when running Python script, creates file "voofScript.py" also in the
+"voof.vim" directory.
+
+==============================================================================
+Options   {{{1~
+                                                                *voof-options*
+------------------------------------------------------------------------------
+Vim Options   {{{2~
+
+'foldmethod' for the buffer for which the :Voof command is run should
+naturally be 'marker' (:set fdm=marker). This, however, is not required to
+create an outline or to use it. Outline operations do not rely on Vim folds,
+they use fold markers with levels. Other fold options, such as 'foldtext'
+could be set according to personal preferences and could be filetype-specific.
+
+<LocalLeader> is used to start many outline operations while in a Tree buffer.
+By default, it's backslash. For example, \i inserts new node.  To change it to
+another character, assign maplocalleader in .vimrc: >
+     let maplocalleader=','
+
+'scrolloff' should be 0 (default) or a small number (1 or 2). This global
+option affects how the headline is positioned in the Body window after
+selecting node in the Tree. For example, with scrolloff=1, the headline will
+be on the 2nd window line in the Body window. A very large value can be
+confusing.
+
+Vim commands for creating and deleting folds are not very useful and are
+potentially dangerous when typed accidentally. They can be disabled in .vimrc
+as follows: >
+     " Disable commands for creating and deleting folds.
+     noremap zf <Nop>
+     noremap zF <Nop>
+     noremap zd <Nop>
+     noremap zD <Nop>
+     noremap zE <Nop>
+
+Some color schemes (including default) use the same or similar background
+colors for Visual, Folded and CursorLine highlight groups. These highlight
+groups are used in Tree windows and it's better if they are different from
+each other.
+
+------------------------------------------------------------------------------
+VOOF Options   {{{2~
+These are VOOF-specific global variables that can be assigned in .vimrc.
+Example: >
+    let g:voof_tree_placement = "left"
+    let g:voof_tree_width = 40
+
+g:voof_tree_placement   ~
+    Where Tree window is created: "left", "right", "top", "bottom"
+    This is relative to the current window.
+    Default: "left"
+
+g:voof_tree_width   ~
+    Initial Tree window width.
+    Default: 30
+
+g:voof_tree_hight   ~
+    Initial Tree window hight.
+    Default: 12
+
+g:voof_log_placement   ~
+    Where Log window is created: "left", "right", "top", "bottom"
+    This is far left/right/top/bottom.
+    Default: "bottom"
+
+g:voof_log_width   ~
+    Initial Log window width.
+    Default: 30
+
+g:voof_log_hight   ~
+    Initial Log window hight.
+    Default: 12
+
+g:voof_verify_oop   ~
+    Verify outline after outline operations.
+    Default is 0 (disabled).
+    Set to 1 (enable) if a bug in an outline operation is suspected.
+
+Since VOOF emulates a two-pane outliner, it's important to have keys that
+shuttle between the two panes. By default, such keys are <Return> (Select Node
+and Shuttle between Body and Tree) and <Tab> (Shuttle between Body and Tree).
+These keys are mapped for Normal mode, both in Tree and Body buffers. By
+default, these two keys do not do anything useful in Normal mode. However,
+plugins and user scripts might use them. The next two settings allow to use
+keys other than <Return> or <Tab>. Note also, that these are the only keys
+that get mapped in Body when the Voof command is run.
+
+g:voof_return_key   ~
+    Key for selecting node and shuttling between Tree and Body windows.
+    It will be used in Normal mode, buffer-local mappings in Trees and Bodies.
+    Default: "<Return>"
+g:voof_tab_key   ~
+    Key for shuttling between Tree and Body windows without selecting node.
+    It will be used in Normal mode, buffer-local mappings in Trees and Bodies.
+    Default: "<Tab>"
+
+
+==============================================================================
+All Mappings and Commands   {{{1=  ~
+                                                                    *voof-map*
+:Voof               Create outline of the current buffer.
+:Voofrun {py,vim}   Run node or fold as {type} script.
+:Vooflog            Create __PyLog__ buffer.
+:Voofhelp           Open voof.txt outline in new tabpage.
+
+Body buffer mappings~
+<Return>  (n) Select node the cursor is on. If already selected, move cursor
+              to Tree window.
+<Tab>     (n) Move cursor to next window with the same Body or corresponding
+              Tree.
+
+Tree buffer mappings~
+
+        OUTLINE NAVIGATION
+
+<Return>  (n) Select node the cursor is on. If already selected, move cursor
+              to Body window.
+<Tab>     (n) Move cursor to next window with the same Tree or corresponding
+              Body.
+<Up>      (n) Move cursor Up and select new node.
+<Down>    (n) Move cursor Down and select new node.
+<Right>   (n) Traverse node's tree down: move to first child and select it.
+<Left>    (n) Traverse node's tree up: move to parent and select it.
+              If the node is expanded, it is contracted first.
+=         (n) Put cursor on selected node.
+
+<LeftRelease> (n) Mouse left button click. Select node.
+                  Expand/contract node if clicked outside headline text.
+
+<Space>   (n) Expand/contract node without selecting it.
+
+        OUTLINE OPERATIONS
+
+i I a A         (n) Edit headline the cursor is on.
+
+<LocalLeader>i  (n) Insert new node after current node.
+<LocalLeader>I  (n) Insert new node as child of current node.
+
+<C-Up>
+<LocalLeader>u  (n,v) Move node(s) Up.
+
+<C-Down>
+<LocalLeader>d  (n,v) Move node(s) Down.
+
+<C-Left>
+<<
+<LocalLeader>l  (n,v) Move node(s) Left (promote).
+
+<C-Right>
+>>
+<LocalLeader>r  (n,v) Move node(s) Right (demote).
+
+dd              (n,v) Cut node(s).
+yy              (n,v) Copy node(s).
+pp              (n)   Paste node(s) after current node.
+
+<LocalLeader>m  (n,v) Mark node(s).
+<LocalLeader>M  (n,v) Unmark node(s).
+<LocalLeader>=  (n) Mark node as to be selected after startup.
+
+        VARIOUS
+
+<LocalLeader>r  (n) Run script (same as :Voofr).
+
+==============================================================================
+OUTLINING (:Voof)   {{{1~
+------------------------------------------------------------------------------
+Create Outline   {{{2~
+                                                                        *Voof*
+:Voof   This command creates outline of the current buffer and displays it in
+        a new window in a scratch buffer called Tree buffer. The current
+        buffer becomes a Body buffer. The following happens:
+
+The current buffer (Body) is scanned for lines with opening fold markers with
+level numbers: {{{3, {{{1, etc. Closing fold markers }}}1, }}}3, etc. are
+ignored and should not be used. These lines, or headlines, are displayed in
+the corresponding Tree buffer as an outline using an indent-based folding.
+The level of each headline is set to the number after the fold marker.
+
+NOTE: Matching fold markers without level numbers, {{{ and }}}, are ignored
+and are useful to fold small areas inside numbered folds, e.g. parts of
+functions. The region between {{{ and }}} should not contain fold markers with
+levels.
+
+Tree buffers are named VOOF_{bufname}_{bufnr} where {bufname} and {bufnr} are
+buffer name and number of the corresponding Body buffer.
+
+Tree buffers are displayed in separate windows. A Tree buffer and its window
+is configured to behave as a tree pane of a two-pane outliner. Each headline
+in a Tree buffer is associated with a node in the corresponding Body.
+
+"Node" is a Body buffer range that begins with headline (line with fold marker
+with level number) and ends before the next headline. The last node ends with
+the last buffer line. The region from start of buffer to the first headline
+(or end of buffer) is treated as a special node number 1.
+
+When a Body has 'foldmethod' set to 'marker', Body nodes are also folds. This
+is recommended, but is not required: VOOF does not rely on folding, only on
+lines with fold markers with levels.
+
+Selecting a headline in the Tree (<Return>, <Up>, <Down>, <Left>, <Right>)
+will display corresponding node in Body window. Nodes can be manipulated
+from the Tree buffer: deleted, moved, promoted, demoted, marked, etc. Of
+course, the Body can be edited directly as any other buffer with folds.
+
+The outline data and the Tree buffer are updated as needed every time the
+cursor is moved to Tree window (on BufEnter). The actual update happens if the
+Body has been modified since the last update (when Body's 'changedtick' is
+different). This update is the bottleneck that limits the size of outlines
+that can be worked with comfortably.
+
+A Tree buffer is not modifiable and should never be edited directly. It has
+many buffer-local mappings that are designed to navigate the outline (e.g.,
+<Space> expands or contacts node), and to perform outline operations, that is
+to manipulate nodes in the corresponding Body (e.g., <C-Up> moves node up).
+
+A Body buffer has only two buffer-local mappings: <Return> and <Tab> in Normal
+mode. They select current node or move cursor to window with the corresponding
+Tree buffer.
+
+------------------------------------------------------------------------------
+~~~===--- Tree Headline Text ---===~~~  "#//%  {{{3~
+The headline text as displayed in Tree buffer is constructed from the
+corresponding Body headline as follows:
+
+Part of the Body headline before the first matching fold marker is taken.
+Leading and trailing white space is removed.
+Trailing line comment chars #"/% are removed.
+White space is trimmed again.
+Leading and trailing filler chars -=~ are removed.
+White space is trimmed again.
+
+This is done by voofOutline() in voof.py .
+
+------------------------------------------------------------------------------
+Selected Node   {{{3~
+At any moment, one node is designated as selected. This is similar to current
+position in a true two-pane outliner.
+
+A node is selected by pressing <Return> (Normal mode, both Tree and Body), or
+by selecting new node in Tree window with arrow keys or mouse left button
+click.
+
+Selected node is marked by = in the Tree buffer.
+
+It is possible to save position of selected node between sessions:
+Insert '=' in the Body headline right after the level number, or if the node
+is marked, after the 'x' character. Next time, when the outline is created
+with the Voof command, this node will be automatically selected. It is better,
+however, to add '=' char with  <LocalLeader>=  command in the Tree: it will
+make sure that all other = marks are removed from Body headlines.
+
+------------------------------------------------------------------------------
+Delete Outline   {{{3~
+To delete VOOF outline for a buffer: unload, delete, or wipe out the Tree
+buffer.
+
+Tree buffers are configured to be wiped out when deleted or unloaded. When a
+Tree is wiped out, the associated Body buffer becomes as it was before the
+outline creation: it looses VOOF buffer-local mappings and commands. The
+associated outline data are deleted.
+
+When a Body buffer is deleted or wiped out, the corresponding Tree buffer is
+wiped out.
+
+------------------------------------------------------------------------------
+Outline Navigation   {{{2~
+The following mappings are for Normal mode.
+
+<Return> In Body buffer: select current node and show it in Tree window.
+         If current node is already selected, move cursor to Tree window.
+         In Tree buffer: select current node and show it in Body window.
+         If current node is already selected, move cursor to Body window.
+
+         Note: <Return> creates new window with Body or Tree in the current
+         tabpage if there is none. Thus, hitting <Return> after "tab split"
+         will create tabpage with a new outline view.
+
+<Tab>    In Body buffer or Tree buffer: move cursor to next window with the
+         corresponding Body or Tree buffer.
+
+Note: <Return> and <Tab> are the only keys mapped by Voof in Bodies. Other
+keys can be used instead by defining g:voof_return_key and g:voof_tab_key.
+All other mappings are for Tree buffers only.
+
+<Up>      Move cursor Up and select new node.
+
+<Down>    Move cursor Down and select new node.
+
+<Right>   Traverse node's tree down: move to first child and select it
+
+<Left>    Traverse node's tree up: move to parent and select it.
+          If the node is expanded, it will be contracted first.
+
+=         Put cursor on selected node.
+
+<LeftRelease> Mouse left button click. If the click is to the right or to the
+              left of the headline text, select node and toggle its
+              expanded/contracted state. If the click is on the headline text,
+              just select node.
+
+<Space>   Toggle node's expanded/contracted state without selecting it.
+
+NOTE: Standard Vim folding commands can be used to expand/contract nodes
+while in Tree: zc, zo, zM, zR, etc.
+
+------------------------------------------------------------------------------
+Outline Operations   {{{2~
+Outline operations are performed using Tree buffer-local mappings.
+
+When needed, operations are automatically applied to trees, that is to Body
+nodes and their subnodes. E.g., moving a node, moves the node and its children
+as a tree.
+
+When nodes are moved, inserted, etc., their level numbers and those of their
+subnodes are automatically adjusted according to their new position in the
+outline.
+
+The entire operation can be undone with one undo command in the corresponding
+Body buffer.
+
+Most operations can be performed on a range of sibling nodes using Visual
+mode. The range is checked for being a valid range: all top level nodes should
+be at the same level.
+
+Where the  moved or inserted nodes end up depends on the expanded/contracted
+status of the node after which the nodes are inserted. This should be
+intuitive and replicates default behavior of Leo text outliner.
+
+------------------------------------------------------------------------------
+Edit Headline   {{{3~
+The only way to edit headline text is to edit corresponding Body line.
+
+While in a Tree buffer, Normal mode:
+
+i I a A    Start editing headline the cursor is on.
+           The cursor is moved into a Body window and placed on the first word
+           char of the headline.
+
+Other common commands for changing text are disabled while in a Tree.
+
+------------------------------------------------------------------------------
+Insert New Node   {{{3~
+
+<LocalLeader>i   Insert new node after current node.
+<LocalLeader>I   Insert new node as child of current node.
+
+This command creates new headline and puts cursor on the new headline in the
+Body where it can be edited. Tree buffer, Normal mode only.
+
+------------------------------------------------------------------------------
+Move/Copy/Cut/Paste Nodes   {{{3~
+
+<C-Up>
+<LocalLeader>u      Move node(s) up.
+
+<C-Down>
+<LocalLeader>d      Move node(s) down.
+
+<C-Left>
+<<
+<LocalLeader>l      Move node(s) left (promote).
+
+<C-Right>
+>>
+<LocalLeader>r      Move node(s) right (demote).
+
+dd                  Cut node(s).
+
+yy                  Copy node(s).
+
+pp                  Paste node(s) after current node.
+
+With the exception of Paste, these Tree buffer mappings are available in
+Normal and Visual modes. They apply to trees, not nodes. In Visual mode, the
+range is checked for being valid: top level nodes in the range must be
+siblings.
+
+Cut/Copy/Paste commands use Vim + register, that is system clipboard. The
+Paste command checks clipboard for being a valid Voof outline or a range of
+sibling outlines. The first line in the clipboard must have fold marker with
+level number.
+
+------------------------------------------------------------------------------
+Mark/Unmark Nodes   {{{3~
+
+<LocalLeader>m   Mark node the cursor is on (Normal mode) or all nodes in
+                 range (Visual).
+
+<LocalLeader>M   Unmark node(s).
+
+Marked nodes have "x" after level number in Body headline, so these operations
+modify Body buffer.
+
+These commands apply to nodes, not trees.
+
+To unmark all: ggVG<LocalLeader>M
+
+------------------------------------------------------------------------------
+Mark Node as Selected Node   {{{3~
+
+<LocalLeader>=   Mark node the cursor is on as to be selected after startup.
+                 Tree buffer, Normal mode only.
+
+This command puts '=' char in Body headline after the level number or, if the
+node is marked, after 'x'. All other '=' marks are removed. This mark only
+affects Voof startup: the marked node becomes selected node when the outline
+is created with the Voof command.
+
+
+==============================================================================
+RUNNING SCRIPTS (:Voofrun)   {{{1~
+                                                                     *Voofrun*
+Command :Voofr(un) executes text in the current fold or node.
+In Tree buffers, this command is also mapped to <LocalLeader>r .
+
+The following happens:
+---------------------
+1) The type of script is determined.
+
+:Voofrun
+    Without an argument, the type of script is set to the buffer 'filetype':
+    "python" if filetype is "python", "vim" if filetype is "vim", etc. When
+    run from a Tree (also with <LocalLeader>r), filetype of the corresponding
+    Body is used.
+
+:Voofrun vim
+    Run as "vim" script.
+
+:Voofrun py
+    Run as "python" script.
+
+:Voofrun whatever
+    Run as "whatever" script.
+
+If script is neither "vim" nor "python", the command aborts.
+(It should be possible to add support for other script types.)
+
+---------------------
+2) When run from a regular, not-Tree buffer, the script text is set to that of
+the current fold, including all subfolds. This obviously makes
+sense only if 'foldmethod' is 'marker'.
+
+---------------------
+3) When run from a Tree buffer, the script text is set to that of the current
+Body node (including headline) and all descendant nodes. The actual folding in
+the corresponding Body does not matter and fold markers without levels are
+ignored.
+
+---------------------
+4) Vim script is executed by copying text into a register and executing that
+register inside try/catch/endtry block.
+
+---------------------
+5) Python script is executed by first writing text to file "vooScript.py" in the
+"voof.vim" directory. The file is then executed using execfile() inside
+try/except block. ( http://docs.python.org/library/functions.html#execfile )
+The following Python names are predefined: vim, VOOF, voof.
+
+------------------------------------------------------------------------------
+sample Vim scripts   {{{2~
+Scripts in the following subnodes can be executed with >
+    :Voofr vim
+
+"---node 1---{{{3~
+echo 'in node 1'
+" section {{{
+echo 'inside section in node 1'
+" }}}
+
+"---node 1.1---{{{4
+echo 'in node 1.1'
+
+"---node 1.1.1---{{{5
+echo 'in node 1.1.1'
+
+"=============================================================================
+sample Python scripts   {{{2~
+Scripts in the following subnodes can be executed with >
+    :Voofr py
+
+#---node 1---{{{3~
+print 'in node 1'
+# section {{{
+print 'inside section in node 1'
+# }}}
+
+#---node 1.1---{{{4
+print 'in node 1.1'
+
+#---node 1.1.1---{{{5
+print 'in node 1.1.1'
+print 'in buffer number', vim.eval("bufnr('')")
+print voof.voofOutline([])
+print VOOF.nodes
+
+#=============================================================================
+Python errors in Vim script   {{{2~
+When Voofrun executes a Vim script with Python code and a Python error occurs,
+Python traceback is not printed. However, Python traceback is printed to the
+PyLog buffer if it is enabled. Example in the next fold can be run with
+":Voofr vim". >
+
+    " Vim script with Python error {{{
+    echo 'start of vim script'
+    py print bogus_name
+    py print 'py after error'
+    echo 'the end'
+    " }}}
+
+Also, Vim script is not terminated when an error occurs in Python code.
+
+==============================================================================
+__PyLog__ BUFFER (:Vooflog)   {{{1~
+                                                                     *Vooflog*
+:Vooflog   This command creates scratch buffer __PyLog__ and redirects
+           Python stdout and stderr to that buffer.
+
+Subsequent Python print statements and error messages are appended to the
+__PyLog__ buffer instead of being printed on Vim command line.
+
+Log windows in all tabpages are scrolled automatically when something is
+printed to the Log buffer. If tabpage has several Log windows, only the first
+one is scrolled. The Vooflog command can be used to create Log window in the
+current tabpage if there are none.
+
+To restore original stdout and stdin (that is Vim command line):
+unload, delete, or wipeout the __PyLog__ buffer.
+NOTE: the __PyLog__ buffer is configured to be wiped out when unloaded or
+deleted.
+
+The filetype of the Log buffer is set to "log". Some syntax highlighting is
+added automatically to highlight Python error messages and common Voof
+messages.
+
+When Python attemps to print a unicode string, e.g. >
+    :py print u'ascii test'
+    :py print u'\u042D \u042E \u042F \u2248 \u2260'
+the string is encoded using the value of Vim option 'encoding' at the time
+when the __PyLog__ buffer was created.
+
+
+Known Problems:~
+__PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
+The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
+
+Occasionally, there may be a problem with the output of help(), which
+apparently uses pydoc.py, which does someting strange to output trailing \n.
+
+==============================================================================
+Implementation notes   {{{1~
+                                                                 *voof-notes*
+------------------------------------------------------------------------------
+Why VOOF uses Python   {{{2~
+Python scans buffer for fold markers 7-15 times faster than an equivalent Vim
+script code. A demo code is given below. To test: do block selection, copy it
+into a register, execute that register, then run command 'Vooftemp' on any
+buffer with a large number of folds, or on any large buffer.
+
+Results using buffer with 6 copies of $VIMRUNTIME/autoload/netrw.vim ,
+1122 folds, 46555 lines, 1.77MB,
+Vim 7.2, Python 2.5, Win2k,
+Intel Pentium 4 Mobile, 1.6 GHz.
+    Vim:    1.66 seconds
+    Python: 0.13 seconds
+ >
+    " Get lines with fold marker followed by level number. This is the bare
+    " minimum that must be done to create an outline.
+
+    func! Voof_TimeVimVsPython()
+        let start = reltime()
+        let vim_count = Voof_GetHeadlinesVim()
+        let vim_time = reltimestr(reltime(start))
+
+        let start = reltime()
+        py py_count = Voof_GetHeadlinesPy()
+        let py_time = reltimestr(reltime(start))
+        py vim.command('let py_count=%s' %py_count)
+
+        echom 'Vim:    '.vim_time.' sec; '. vim_count. ' nodes'
+        echom 'Python: '.py_time. ' sec; '. py_count . ' nodes'
+    endfunc
+
+    com! Vooftemp call Voof_TimeVimVsPython()
+
+    func! Voof_GetHeadlinesVim()
+        let lines = getline(1,'$')
+        let headlines = []
+        for line in lines
+            if match(line, '{{{\d\+')!=-1   " }}}
+                call add(headlines, line)
+            endif
+        endfor
+        return len(headlines)
+    endfunc
+
+    python << EOF
+    import vim
+    import re
+    re_marker = re.compile(r'{{{\d+')   # }}}
+    def Voof_GetHeadlinesPy():
+        lines = vim.current.buffer[:]
+        headlines = []
+        for line in lines:
+            if re_marker.search(line):
+                headlines.append(line)
+        return len(headlines)
+    EOF
+    """"""end of demo code""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+Also, Vim's FOR loop is about 30 times slower then Python's: >
+
+    func! Time_VimForLoop()
+        let aList = range(1000000)
+        let start = reltime()
+        for i in aList
+            "do nothing
+        endfor
+        echo 'Vim:    ' . reltimestr(reltime(start))
+    endfunc
+
+    func! Time_PyForLoop()
+        let start = reltime()
+        py aList = range(1000000)
+        py for i in aList: pass
+        echo 'Python: ' . reltimestr(reltime(start))
+    endfunc
+
+    call Time_VimForLoop()  " 8.7 sec
+    call Time_PyForLoop()   " 0.3 sec
+
+Thus, Python code should be much faster when handling large lists.
+
+------------------------------------------------------------------------------
+Separate Trees or Single Tree   {{{2~
+A single Tree buffer could be used to display outlines of many files. Tlist
+does that. This makes sense when working with several related files. Also,
+having a single Tree would be more like Leo.
+
+VOOF creates new Tree buffer for every new outline. This is simpler. It is
+more appropriate for text notes, when outline files are likely to be
+unrelated. Searching headlines is easier.
+
+------------------------------------------------------------------------------
+TODO   {{{2~
+sort children
+move to next marked node
+
+------------------------------------------------------------------------------
+May be   {{{3~
+Tree: undo does Body undo and updates outline
+Tree: write writes Body
+
+------------------------------------------------------------------------------
+Don't want to {{{3~
+
+==============================================================================
+modelines   {{{1~
+ vim:fdm=marker:ft=help:ai:et:
+ vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):

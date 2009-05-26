@@ -1,0 +1,106 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2657
+
+VOoM (Vim Outliner of Markers) is a plugin for Vim that emulates a two-pane text outliner.
+
+Screenshots and an animation: http://vim-voom.webs.com/
+
+VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. See :help fold-marker. Markers are specified by option 'foldmarker'. (End fold markers with levels, }}}3, }}}2, etc. are not supported.)
+
+Current VOoM version can also work with several other markup formats that have headlines and support an outline structure. (Headlines are also called headings, headers, section headers, titles.) The following markup modes are available:
+        wiki  MediaWiki, headlines are surrounded by '='
+        vimwiki  vimwiki plugin (script_id=2226)
+        viki  Viki/Deplate plugin (script_id=861), Emacs Org-mode
+        rest  reStructuredText section titles
+        html  HTML heading tags, single line only
+        thevimoutliner  The Vim Outliner plugin (script_id=517)
+        vimoutliner  VimOutliner plugin
+        python  Python code class browser
+
+MAIN FEATURES:
+        - Works with Vim buffers, not with files on disk as ctags-based tools.
+        - Automatic outline update on entering the Tree buffer.
+        - Not a 'filetype' plugin. Has (almost) no side effects on the buffer being outlined.
+        - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
+        - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.
+
+
+=========================================
+    OVERVIEW
+=========================================
+There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
+
+:Voom
+        Create outline of the current buffer. Outline is constructed from lines with start fold markers with level numbers, which become headlines. Outline is displayed in a special buffer in separate window which emulates the tree pane of a two-pane outliner. Such buffers are referred to as Tree buffers. The current buffer becomes a Body buffer.
+
+:Voom {MarkupMode}
+        Create outline for headline markup other than start fold markers with levels. See above for available markup modes.
+
+:Voomhelp
+        Open help file voom.txt as outline in a new tabpage.
+
+:Voomexec [vim|py]
+        Execute text in the current node or fold as Vim script or Python script. This is useful for testing code snippets and for organizing scripts by segregating them into nodes or folds. This command can be used independently of the outlining functionality provided by the command :Voom.
+
+:Voomlog
+        Create scratch buffer __PyLog__ and redirect Python stdout and stderr to that buffer. This is useful when developing Python scripts and when scripting Vim with Python. This feature is completely independent from the rest of the plugin.
+
+NOTE: commands Voomexec and Voomlog attempt to emulate similar features of Leo outlining editor.
+
+
+=========================================
+    REQUIREMENTS
+=========================================
+This plugin uses Python and requires Python-enabled Vim 7.x, that is Vim compiled with the Python interface. Your Vim is Python-enabled if it can do
+        :py print 2**0.5
+        :py import sys; print sys.version
+
+Python version should be 2.4-2.7. Python 3 is not supported.
+
+Vim version 7.2 or above is preferred. Version 7.1 should also work. Versions 7.0 might work as well but has not been tested. Vim should be compiled using normal or bigger feature set.
+
+
+=========================================
+    QUICK DEMO (no installation needed)
+=========================================
+Extract VOoM archive to any folder. Open "plugin/voom.vim" in Vim and do
+        :so %
+        :Voom
+This will create Tree buffer for voom.vim, which will become a Body buffer.
+
+All VOoM mappings, except Return and Tab, are for Tree buffers only.
+
+<Up>, <Down>, <Left>, <Right> arrow keys move around the Tree and select new node (Normal mode).
+
+<Return> selects node the cursor is on and then cycles between Tree and Body. So, to select another node, move to it with h, j, etc. and hit Return.
+
+<Tab> cycles between Tree and Body windows without selecting node.
+
+<Space> expands/contracts node without selecting it. Standard Vim folding command (zo, zc, zR, zM, etc.) can be used as well.
+
+Left mouse click in the Tree selects node. If the click is outside of headline text, the node's expanded/contracted status is toggled.
+
+Edit a headline (line with a numbered fold marker) in voom.vim and go back into the Tree: the outline will be updated.
+
+<C-Up>, <C-Down> move node or a range of sibling nodes Up/Down.
+<C-Left>, <C-Right> move nodes Left/Right (promote/demote).
+(If the above CTRL mappings are not recognized by your Vim, you can also move nodes Up/Down/Left/Right with <LocalLeader>u/d/l/r .)
+
+Execute the command :Voomhelp to see all commands and mappings.
+
+
+To create outline for another buffer, execute the command :Voom for it
+        :tab h netrw
+        :Voom
+Folder "voom_samples" contains some outlines to experiment with. File "calendar_outline.txt" is a rather large outline for stress-testing purposes: 3.1 MB, 56527 lines, 4160 headlines.
+
+
+To outline the most common Wiki format (headlines are marked by strings of = on both sides)
+        :Voom wiki
+
+
+To try Python Log Buffer feature:
+        :Voomlog
+        :py assert 2==3
+        :py print u'\u2248 \u2260'
+        :py import this
+
