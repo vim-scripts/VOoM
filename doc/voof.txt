@@ -3,7 +3,7 @@ VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 plugin for Python-enabled Vim version 7.x
 Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
 License: this file is in the public domain
-Version: 1.0, 2009-05-25
+Version: 1.1, 2009-05-26
 
 ==============================================================================
 Contents   {{{1~
@@ -859,6 +859,15 @@ Tree: write writes Body
 Don't want to {{{3~
 
 ==============================================================================
+Changelog   {{{2~
+
+v1.1, 2009-05-26
+Bug fix involving nomodifiable and readonly buffers.
+Outline operations now silently abort if Body is noma or ro.
+
+v1.0, 2009-05-25
+Initial release.
+
 modelines   {{{1~
- vim:fdm=marker:ft=help:ai:et:
+ vim:fdm=marker:ft=help:ai:et:noma:ro
  vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):

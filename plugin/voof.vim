@@ -3,7 +3,7 @@
 " plugin for Python-enabled Vim version 7.x
 " Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
 " License: this software is in the public domain
-" Version: 1.0, 2009-05-25
+" Version: 1.1, 2009-05-26
 
 "---Conventions-----------------------{{{1
 " Tree      --Tree buffer
@@ -235,6 +235,17 @@ func! Voof_Help() "{{{2
     exe 'tabnew '.voof_help
     Voof
     normal! zR
+endfunc
+
+func! Voof_BufEditable(bnr) "{{{2
+" Check if buffer bnr is noma or ro.
+    let ma_opt = getbufvar(a:bnr, "&ma")
+    let ro_opt = getbufvar(a:bnr, "&ro")
+    if ma_opt==0 || ro_opt==1
+        return 0
+    else
+        return 1
+    endif
 endfunc
 
 "---Windows Navigation and Creation---{{{1
@@ -484,8 +495,7 @@ func! Voof_TreeConfigure() "{{{2
 
     " Options local to buffer.
     setl buftype=nofile noswapfile bufhidden=hide
-    setl ff=unix
-    setl noma
+    setl noro ma ff=unix noma
 
     " Syntax.
     " first line
@@ -923,6 +933,7 @@ func! Voof_OopEdit() "{{{3
     if lnum==1 | return | endif
     let tree = bufnr('')
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     " find first word char
     let firstCharIdx = match(getline('.')[3:], '\w')
     if firstCharIdx!=-1
@@ -947,6 +958,7 @@ func! Voof_OopInsert(as_child) "{{{3
         return
     endif
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -986,6 +998,7 @@ func! Voof_OopPaste() "{{{3
         return
     endif
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1024,6 +1037,7 @@ func! Voof_OopMark(op, mode) "{{{3x
         return
     endif
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1079,6 +1093,7 @@ func! Voof_OopMarkSelected() "{{{3x
         return
     endif
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1113,6 +1128,7 @@ func! Voof_Oop(op, mode) "{{{3
         return
     endif
     let body = g:voof_trees[tree]
+    if Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1407,7 +1423,8 @@ func! Voof_LogInit() "{{{2
     " Configure Log buffer
     setl cul cuc nowrap list
     setl ft=log
-    setl ff=unix buftype=nofile noswapfile bufhidden=hide
+    setl noro ma ff=unix
+    setl buftype=nofile noswapfile bufhidden=hide
     call Voof_LogSyntax()
     au BufUnload <buffer> call Voof_LogBufUnload()
 python << EOF

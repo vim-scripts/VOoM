@@ -3,7 +3,7 @@
 # plugin for Python-enabled Vim version 7.x
 # Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.0, 2009-05-25
+# Version: 1.1, 2009-05-26
 
 '''This module is meant to be imported by voof.vim .'''
 import vim
