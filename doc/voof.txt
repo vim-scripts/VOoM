@@ -1,9 +1,9 @@
 *voof.txt*                          Vim Outliner Of Folds
 VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 plugin for Python-enabled Vim version 7.x
-Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
+Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 License: this file is in the public domain
-Version: 1.1, 2009-05-26
+Version: 1.2, 2009-05-30
 
 ==============================================================================
 Contents   {{{1~
@@ -23,6 +23,8 @@ Overview   {{{1~
 VOOF (Vim Outliner Of Folds) is a plugin for Vim that emulates a two-pane
 outliner. It can be used with any file or buffer that has fold markers with
 level numbers (|fold-marker|) such as this help file.
+
+screenshots and an animation: http://www.flickr.com/photos/voof/
 
 The main ex-mode commands are: Voof, Voofrun, Vooflog, Voofhelp.
 
@@ -58,7 +60,7 @@ features of the Leo text outliner.)
 
 Command Voofhelp opens help file voof.txt in new tabpage as outline.
 
-QUICK DEMO:~
+QUICK DEMO (no installation needed):~
 Make sure files voof.vim and voof.py are together in one folder.
 Open voof.vim and do >
     :so %
@@ -125,34 +127,28 @@ Leo:
 
 The "Tag List" Vim plugin:
     http://vim.sourceforge.net/scripts/script.php?script_id=273
-    Conceptually VOOF is similar to the Taglist plugin. Taglist uses the
-    ctags program to scan the file for lines with tags. VOOF uses Python
-    script to scan the buffer for lines with fold markers with levels.
-
-Code Browser:
-    http://code-browser.sourceforge.net/
+    Conceptually VOOF is similar to the Taglist plugin. Taglist uses the ctags
+    program to scan file for lines with tags. VOOF uses Python script to scan
+    buffer for lines with fold markers with levels.
 
 VO, Vim Outliner:
     http://www.vimoutliner.org/
 TVO, The Vim Outliner:
     http://vim.sourceforge.net/scripts/script.php?script_id=517
 
-WikidPad:
-    http://wikidpad.sourceforge.net/
-    http://wikidpad.python-hosting.com/
-TreeLine:
-    http://treeline.bellz.org/
-FreeMind:
-    http://freemind.sourceforge.net/wiki/index.php/Main_Page
-KeyNote:
-    http://www.tranglos.com/free/index.html
-Various outliner programs found by searching Sourceforge and Google Code:
-    http://code.google.com/p/mindtree/
-    http://code.google.com/p/novedit/
-    http://code.google.com/p/keynote-nf/
-    http://sourceforge.net/projects/theguide
-    http://sourceforge.net/projects/organote
-    http://notecase.sourceforge.net/
+Various Vim scripts with outlining-like functionality (there are probably many
+other):
+TaskList.vim : Eclipse like task list:
+    http://www.vim.org/scripts/script.php?script_id=2607
+DotOutlineTree:
+    http://www.vim.org/scripts/script.php?script_id=1225
+
+Code Browser:
+    http://code-browser.sourceforge.net/
+
+Listings of free outliner programs:
+    http://www.psychinnovations.com/psych/node/37
+    http://en.wikipedia.org/wiki/Category:Outliners
 
 ==============================================================================
 Requirements   {{{1~
@@ -248,6 +244,9 @@ Example: >
     let g:voof_tree_placement = "left"
     let g:voof_tree_width = 40
 
+------------------------------------------------------------------------------
+Window options   {{{3~
+
 g:voof_tree_placement   ~
     Where Tree window is created: "left", "right", "top", "bottom"
     This is relative to the current window.
@@ -274,10 +273,8 @@ g:voof_log_hight   ~
     Initial Log window hight.
     Default: 12
 
-g:voof_verify_oop   ~
-    Verify outline after outline operations.
-    Default is 0 (disabled).
-    Set to 1 (enable) if a bug in an outline operation is suspected.
+------------------------------------------------------------------------------
+Tree/Body shuttle keys   {{{3~
 
 Since VOOF emulates a two-pane outliner, it's important to have keys that
 shuttle between the two panes. By default, such keys are <Return> (Select Node
@@ -297,6 +294,25 @@ g:voof_tab_key   ~
     It will be used in Normal mode, buffer-local mappings in Trees and Bodies.
     Default: "<Tab>"
 
+------------------------------------------------------------------------------
+Other options   {{{3~
+
+g:voof_verify_oop   ~
+    Verify outline after outline operations.
+    Default is 0 (disabled).
+    Set to 1 (enable) if a bug in an outline operation is suspected.
+
+------------------------------------------------------------------------------
+Customizing Tree and __PyLog__ buffers   {{{3~
+
+When a Tree buffer is created, its 'filetype' is set to "vooftree"
+When __PyLog__ buffer is created, its 'filetype' is set to "log".
+
+This should allow user customization of these buffers (syntax, wrap/norwap,
+list/nolist, etc.) via standard Vim configuration files:
+   .../ftplugin/vooftree.vim
+   .../syntax/vooftree.vim
+   .../after/syntax/log.vim, etc.
 
 ==============================================================================
 All Mappings and Commands   {{{1=  ~
@@ -502,7 +518,8 @@ All other mappings are for Tree buffers only.
               expanded/contracted state. If the click is on the headline text,
               just select node.
 
-<Space>   Toggle node's expanded/contracted state without selecting it.
+<Space>   Toggle node's expanded/contracted state without selecting it. Make
+          node visible if it's hidden in a fold.
 
 NOTE: Standard Vim folding commands can be used to expand/contract nodes
 while in Tree: zc, zo, zM, zR, etc.
@@ -671,10 +688,10 @@ echo 'in node 1'
 echo 'inside section in node 1'
 " }}}
 
-"---node 1.1---{{{4
+"---node 1.1---{{{4~
 echo 'in node 1.1'
 
-"---node 1.1.1---{{{5
+"---node 1.1.1---{{{5~
 echo 'in node 1.1.1'
 
 "=============================================================================
@@ -688,10 +705,10 @@ print 'in node 1'
 print 'inside section in node 1'
 # }}}
 
-#---node 1.1---{{{4
+#---node 1.1---{{{4~
 print 'in node 1.1'
 
-#---node 1.1.1---{{{5
+#---node 1.1.1---{{{5~
 print 'in node 1.1.1'
 print 'in buffer number', vim.eval("bufnr('')")
 print voof.voofOutline([])
@@ -847,8 +864,7 @@ unrelated. Searching headlines is easier.
 
 ------------------------------------------------------------------------------
 TODO   {{{2~
-sort children
-move to next marked node
+
 
 ------------------------------------------------------------------------------
 May be   {{{3~
@@ -857,15 +873,27 @@ Tree: write writes Body
 
 ------------------------------------------------------------------------------
 Don't want to {{{3~
+sort children --not needed
+move to next marked node --just search for ^.x
 
 ==============================================================================
-Changelog   {{{2~
+CHANGELOG   {{{2~
 
-v1.1, 2009-05-26
+v1.2, 2009-05-30~
+Bug: after outline operation cursor may be on the last line of range instead
+of first (if Visual and there is only one root node).
+Fix: tweaked Voof_OopShowTree().
+
+Re-wrote Voof_TreeToggleFold() to handle: no fold at cursor; cursor hidden in
+fold.
+
+Allow outline operation Copy when Body is noma or ro.
+
+v1.1, 2009-05-26~
 Bug fix involving nomodifiable and readonly buffers.
 Outline operations now silently abort if Body is noma or ro.
 
-v1.0, 2009-05-25
+v1.0, 2009-05-25~
 Initial release.
 
 modelines   {{{1~

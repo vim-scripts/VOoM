@@ -1,9 +1,9 @@
 # voof.py
 # VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
-# Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
+# Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.1, 2009-05-26
+# Version: 1.2, 2009-05-30
 
 '''This module is meant to be imported by voof.vim .'''
 import vim
@@ -348,9 +348,10 @@ def oopPaste(): #{{{2
             vim.command('let l:invalid_clipboard=1')
             print 'VOOF: INVALID CLIPBOARD (root level error)'
             return
+        # level incremented by 2 or more
         elif lev-lev_ > 1:
             vim.command('let l:invalid_clipboard=1')
-            print 'VOOF: INVALID CLIPBOARD (level error)'
+            print 'VOOF: INVALID CLIPBOARD (level increment error)'
             return
         lev_ = lev
 

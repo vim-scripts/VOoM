@@ -1,9 +1,9 @@
 " voof.vim
 " VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 " plugin for Python-enabled Vim version 7.x
-" Author: Vlad Irnov  (vlad.irnov AT gmail DOT com)
+" Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 " License: this software is in the public domain
-" Version: 1.1, 2009-05-26
+" Version: 1.2, 2009-05-30
 
 "---Conventions-----------------------{{{1
 " Tree      --Tree buffer
@@ -702,7 +702,7 @@ func! Voof_TreeBufUnload() "{{{3
 endfunc
 
 
-"---Node Selection and Navigation---{{{2
+"---Outline Navigation---{{{2
 "
 func! Voof_TreeSelect(lnum, focus) "{{{3
 " Select node corresponding to line lnum in the Tree.
@@ -829,16 +829,18 @@ func! Voof_TreeToLine(lnum) "{{{3
 endfunc
 
 func! Voof_TreeToggleFold() "{{{3
-" Toggle fold at cursor.
+" Toggle fold at cursor: expand/contract node.
     let lnum=line('.')
-    " line is in a closed fold
-    if foldclosed(lnum)==lnum
+    let ln_status = Voof_FoldStatus(lnum)
+
+    if ln_status=='folded'
         normal zo
-    " line is not in a closed fold and next line has bigger indent
-    elseif match(getline(lnum), '|') < match(getline(lnum+1), '|')
-        normal zc
-    else
-        return
+    elseif ln_status=='notfolded'
+        if match(getline(lnum), '|') < match(getline(lnum+1), '|')
+            normal zc
+        endif
+    elseif ln_status=='hidden'
+        call Voof_TreeZV()
     endif
 endfunc
 
@@ -1128,7 +1130,7 @@ func! Voof_Oop(op, mode) "{{{3
         return
     endif
     let body = g:voof_trees[tree]
-    if Voof_BufEditable(body)==0 | return | endif
+    if a:op!='copy' && Voof_BufEditable(body)==0 | return | endif
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1243,7 +1245,6 @@ func! Voof_Oop(op, mode) "{{{3
     if g:voof_verify_oop==1
         py voof.voofVerify(int(vim.eval('body')))
     endif
-
 endfunc
 
 func! Voof_OopShowBody(body, blnr) "{{{3
@@ -1283,26 +1284,27 @@ func! Voof_OopShowTree(ln1, ln2, mode) " {{{3
 " Adjust Tree view after an outline operation.
 " ln1 and ln2 are first and last line of the range.
 "
-" After outline operation Tree folds sometimes end up completely expanded,
-" sometimes not. To be consistent: close all folds in the moved range
-" (select range, zC) then show current node.
+" After outline operation Tree folds in the affected range are usually
+" completely expanded. To be consistent: close all folds in the range
+" (select range, zC, show first line).
 "
-        " select range
-        exe 'normal! '.a:ln1.'GV'.a:ln2.'G'
-        " close all folds
-        try " ignore no-fold-found error
-            normal! zC
-        catch /No fold found/
-        endtry
-        " show first node
-        exe 'normal!'.a:ln1.'G'
-        call Voof_TreeZV()
-        call Voof_TreePlaceCursor()
-        " restore visual mode selection
-        " 'gv' is not reliable here
-        if a:mode=='v'
-            exe 'normal! '.a:ln2.'GV'.a:ln1.'G'
-        endif
+    " zv ensures ln1 node is expanded before next GV
+    exe 'normal! '.a:ln1.'Gzv'
+    " select range and close all folds in range
+    exe 'normal! '.a:ln2.'GV'.a:ln1.'G'
+    try
+        normal! zC
+    catch /No fold found/
+    endtry
+
+    " show first node
+    call Voof_TreeZV()
+    call Voof_TreePlaceCursor()
+
+    " restore visual mode selection
+    if a:mode=='v'
+        normal! gv
+    endif
 endfunc
 
 "---BODY BUFFERS----------------------{{{1
@@ -1368,6 +1370,7 @@ func! Voof_BodySelect() "{{{2
 endfunc
 
 func! Voof_BodyBufLeave() "{{{2
+" getbufvar() doesn't work with b:changedtick (why?), thus the need for this au
     let body = bufnr('')
     let g:voof_bodies[body].tick = b:changedtick
 endfunc
