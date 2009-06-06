@@ -3,7 +3,7 @@
 " plugin for Python-enabled Vim version 7.x
 " Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 " License: this software is in the public domain
-" Version: 1.2, 2009-05-30
+" Version: 1.3, 2009-06-06
 
 "---Conventions-----------------------{{{1
 " Tree      --Tree buffer
@@ -110,17 +110,18 @@ endif
 func! Voof_Init() "{{{2
 " Voof command.
 " Create Tree for current buffer, which becomes a Body buffer.
-    if @%=~#'^VOOF_.*_\d\+$' | return | endif
-
     let body = bufnr('')
+    " this is a Tree buffer
+    if has_key(g:voof_trees, body) | return | endif
 
     if !has_key(g:voof_bodies, body)
     " There is no Tree for this Body. Create it.
         let g:voof_bodies[body] = {}
         let g:voof_bodies[body].blnr = line('.')
-        let bname = bufname('')
-        if bname=='' | let bname='No Name' | endif
-        let firstLine = ' ' . fnamemodify(bname, ":p:t") .' ['. fnamemodify(bname, ":p:h") . '], b' . body
+        let b_name = expand('%:p:t')
+        if b_name=='' | let b_name='No Name' | endif
+        let b_dir = expand('%:p:h')
+        let l:firstLine = ' ' . b_name .' ['. b_dir . '], b' . body
         py voof.init(int(vim.eval('body')))
         "normal! zMzv
         call Voof_BodyConfigure()
@@ -146,20 +147,20 @@ del VOOF.nodes[body]
 del VOOF.levels[body]
 del VOOF.snLns[body]
 del VOOF.names[body]
+if body in VOOF.markers: del VOOF.markers[body]
+if body in VOOF.markers_re: del VOOF.markers_re[body]
 EOF
 endfunc
 
-func! Voof_ReloadAllPre() "{{{2
-" Helper for reloading entire plugin.
-    update
-    " wipe out all Tree buffers
-    for bnr in keys(g:voof_trees)
-        if bufexists(str2nr(bnr))
-            exe 'bw '.bnr
-        endif
-    endfor
-    py reload(voof)
-    unlet g:voof_did_init
+func! Voof_BufEditable(bnr) "{{{2
+" Check if buffer bnr is noma or ro.
+    let ma_opt = getbufvar(a:bnr, "&ma")
+    let ro_opt = getbufvar(a:bnr, "&ro")
+    if ma_opt==0 || ro_opt==1
+        return 0
+    else
+        return 1
+    endif
 endfunc
 
 func! Voof_FoldStatus(lnum) "{{{2
@@ -185,26 +186,11 @@ func! Voof_FoldStatus(lnum) "{{{2
     endif
 endfunc
 
-func! Voof_ErrorMsg(...) "{{{2
-    echohl Error
-    for line in a:000
-        echom line
-    endfor
-    echohl None
-endfunc
-
-func! Voof_InfoMsg(...) "{{{2
-    echohl MoreMsg
-    for line in a:000
-        echo line
-    endfor
-    echohl None
-endfunc
-
 func! Voof_Help() "{{{2
-" Display voof.txt in new tabpage.
+" Display voof.txt as outline in new tabpage.
     let bnr = bufnr('')
     " already in voof.txt
+    "if expand("%:t")=='voof.txt'
     if fnamemodify(bufname(bnr), ":t")=='voof.txt'
         return
     " in Tree for voof.txt
@@ -237,15 +223,17 @@ func! Voof_Help() "{{{2
     normal! zR
 endfunc
 
-func! Voof_BufEditable(bnr) "{{{2
-" Check if buffer bnr is noma or ro.
-    let ma_opt = getbufvar(a:bnr, "&ma")
-    let ro_opt = getbufvar(a:bnr, "&ro")
-    if ma_opt==0 || ro_opt==1
-        return 0
-    else
-        return 1
-    endif
+func! Voof_ReloadAllPre() "{{{2
+" Helper for reloading entire plugin.
+    update
+    " wipe out all Tree buffers
+    for bnr in keys(g:voof_trees)
+        if bufexists(str2nr(bnr))
+            exe 'bw '.bnr
+        endif
+    endfor
+    py reload(voof)
+    unlet g:voof_did_init
 endfunc
 
 "---Windows Navigation and Creation---{{{1
@@ -254,12 +242,13 @@ endfunc
 func! Voof_ToTreeOrBodyWin() "{{{2
 " Current buffer is Body or Tree. Go to next window with corresponding Tree or
 " Body or with the same buffer.
-    if @%=~#'^VOOF_.*_\d\+$'
-        let tree = bufnr('')
+    let bnr = bufnr('')
+    if has_key(g:voof_trees, bnr)
+        let tree = bnr
         let body = g:voof_trees[tree]
     else
-        let body = bufnr('')
-        " Tree doesn't exist.
+        let body = bnr
+        " Tree doesn't exist. Should never happen.
         if !has_key(g:voof_bodies, body)
             call Voof_BodyUnVoof()
             return
@@ -280,11 +269,11 @@ func! Voof_ToTreeWin() "{{{2
 " Move to window or open a new one where a Tree will be loaded.
 
     " Allready in a Tree buffer.
-    if @%=~#'^VOOF_.*_\d\+$' | return | endif
+    if has_key(g:voof_trees, bufnr('')) | return | endif
 
     " Look for any window with a Tree buffer.
     for bnr in tabpagebuflist()
-        if bufname(bnr)=~#'^VOOF_.*_\d\+$'
+        if has_key(g:voof_trees, bnr)
             exe bufwinnr(bnr).'wincmd w'
             return
         endif
@@ -323,8 +312,8 @@ func! Voof_ToTree(tree) "{{{2
 
     " Make sure buffer exists before loading it.
     if !bufexists(a:tree)
-        call Voof_ErrorMsg("VOOF error", "Tree buffer doesn't exist: " . a:tree)
-        "TODO: clean up corresponding Body
+        " because of au, this should never happen
+        echoerr "VOOF: Tree buffer doesn't exist: " . a:tree
         return 2
     endif
 
@@ -337,7 +326,8 @@ func! Voof_ToTree(tree) "{{{2
     setl foldmethod=expr
     setl foldexpr=Voof_TreeFoldexpr(v:lnum)
     setl cul nocuc nowrap list
-    setl winfixwidth winfixheight
+    "setl winfixheight
+    setl winfixwidth
     return 0
 endfunc
 
@@ -379,14 +369,14 @@ func! Voof_ToBody(body) "{{{2
 
     " Make sure buffer exists before loading it.
     if !bufexists(a:body)
-        call Voof_ErrorMsg("VOOF error:", "Body buffer doesn't exist: " . a:body)
-        "TODO: wipeout corresponding Tree, do clean up
+        " because of au, this should never happen
+        echoerr "VOOF: Body buffer doesn't exist: " . a:body
         return 2
     endif
 
 "    " Load in the first window with a non-Tree buffer.
 "    for bnr in tabpagebuflist()
-"        if bufname(bnr)!~#'^VOOF_.*_\d\+$'
+"         if !has_key(g:voof_trees, bnr)
 "            exe bufwinnr(bnr).'wincmd w'
 "            exe 'b'.a:body
 "            return 1
@@ -441,7 +431,9 @@ func! Voof_TreeCreate(body) "{{{2
     " Suppress Tree update function that runs of BufEnter.
     let g:voof_TreeUpdate = 0
 
-    silent exe 'edit VOOF_' . fnamemodify(bufname(a:body),":t") . '_' . a:body
+    let b_name = fnamemodify(bufname(a:body),":t")
+    if b_name=='' | let b_name='NoName' | endif
+    silent exe 'edit '.b_name.'_VOOF'.a:body
     let tree = bufnr('')
 
     " Initialize VOOF data.
@@ -479,7 +471,7 @@ func! Voof_TreeCreate(body) "{{{2
     endif
 endfunc
 
-func! Voof_TreeConfigure() "{{{2
+func! Voof_TreeConfigure() "{{{2=
 " Configure current buffer as a Tree buffer.
 
     " Options local to window.
@@ -488,7 +480,8 @@ func! Voof_TreeConfigure() "{{{2
     setl foldmethod=expr
     setl foldexpr=Voof_TreeFoldexpr(v:lnum)
     setl cul nocuc nowrap list
-    setl winfixwidth winfixheight
+    "setl winfixheight
+    setl winfixwidth
 
     " This should allow customizing via ftplugin. Removes syntax hi.
     setl ft=vooftree
@@ -500,10 +493,10 @@ func! Voof_TreeConfigure() "{{{2
     " Syntax.
     " first line
     syn match Title /\%1l.*/
-    " line comment chars: "  #  //  /*
-    syn match Comment @|\zs\("\|#\|\/\/\|\/\*\).*@
+    " line comment chars: "  #  //  /*  %  <!--
+    syn match Comment @|\zs\%("\|#\|//\|/\*\|%\|<!--\).*@ contains=Todo
     " keywords
-    syn match Todo /\(TODO\|Todo\)/
+    syn match Todo /\%(TODO\|Todo\)/
 
     "augroup VoofTree
         ""au!
@@ -671,8 +664,8 @@ endfunc
 "
 augroup VoofTree
     au!
-    au BufEnter   VOOF_*_\d\+   call Voof_TreeBufEnter()
-    au BufUnload  VOOF_*_\d\+   call Voof_TreeBufUnload()
+    au BufEnter   *_VOOF\d\+   call Voof_TreeBufEnter()
+    au BufUnload  *_VOOF\d\+   nested call Voof_TreeBufUnload()
 augroup END
 
 func! Voof_TreeBufEnter() "{{{3
@@ -695,10 +688,16 @@ func! Voof_TreeBufUnload() "{{{3
 " Wipe out Tree buffer and delete Voof data when the Tree is unloaded.
 " This is also triggered when deleting and wiping out a Tree.
     let tree = expand("<abuf>")
+    "py print vim.eval('tree')
+    if !exists("g:voof_trees") || !has_key(g:voof_trees, tree)
+        echoerr "VOOF: Error in BufUnload autocommand"
+        return
+    endif
+
     let body = g:voof_trees[tree]
     exe 'au! VoofBody * <buffer='.body.'>'
     call Voof_UnVoof(body, tree)
-    exe 'bwipeout! '.tree
+    exe 'noautocmd bwipeout! '.tree
 endfunc
 
 
@@ -742,13 +741,14 @@ vim.command('let nodeEnd=%s' %nodeEnd)
 EOF
 
     " Go to Body, show current node, and either come back or stay in Body.
-    set eventignore=BufEnter,BufLeave,WinEnter,WinLeave,TabEnter,TabLeave
+    let ei_=&eventignore
+    set eventignore=BufEnter,BufLeave,WinEnter,WinLeave
     "let scrolloff_ = &scrolloff | set scrolloff=0
     let toBody = Voof_ToBody(body)
 
-    " Body buffer no longer exists (wiped out). This shold never happen because of au.
+    " Body buffer no longer exists (wiped out). This should never happen because of au.
     if toBody==2
-        set eventignore=
+        let &eventignore=ei_
         let &lz=lz_
         "let &scrolloff=scrolloff_
         return
@@ -787,7 +787,7 @@ EOF
         endif
     endif
 
-    set eventignore=
+    let &eventignore=ei_
     let &lz=lz_
 endfunc
 
@@ -1254,16 +1254,18 @@ func! Voof_OopShowBody(body, blnr) "{{{3
     let tree = bufnr('')
     let wnr_ = winnr()
     " Go to Body, show current node, and either come back or stay in Body.
-    "set eventignore=BufEnter,BufLeave,WinEnter,WinLeave,TabEnter,TabLeave
+    let ei_=&eventignore
+    set eventignore=BufEnter,BufLeave,WinEnter,WinLeave
     let toBody = Voof_ToBody(a:body)
-    " Body buffer no longer exists (wiped out). This shold never happen because of au.
+    " Body buffer no longer exists (wiped out). This should never happen because of au.
     if toBody==2
-        "set eventignore=
+        let &eventignore=ei_
         return
     endif
 
     " adjust changedtick to suppress TreeUpdate
     let g:voof_bodies[a:body].tick_ = b:changedtick
+    let g:voof_bodies[a:body].tick  = b:changedtick
 
     " show fold at blnr
     if a:blnr > 0
@@ -1277,7 +1279,7 @@ func! Voof_OopShowBody(body, blnr) "{{{3
     else " A new window was created, wnr_ could be invalid.
         exe bufwinnr(tree).'wincmd w'
     endif
-    "set eventignore=
+    let &eventignore=ei_
 endfunc
 
 func! Voof_OopShowTree(ln1, ln2, mode) " {{{3
@@ -1294,7 +1296,8 @@ func! Voof_OopShowTree(ln1, ln2, mode) " {{{3
     exe 'normal! '.a:ln2.'GV'.a:ln1.'G'
     try
         normal! zC
-    catch /No fold found/
+    " E490: No fold found
+    catch /^Vim\%((\a\+)\)\=:E490/
     endtry
 
     " show first node
@@ -1314,7 +1317,7 @@ func! Voof_BodyConfigure() "{{{2
     augroup VoofBody
         "au!
         au BufLeave  <buffer> call Voof_BodyBufLeave()
-        au BufDelete <buffer> call Voof_BodyBufDelete()
+        au BufUnload <buffer> nested call Voof_BodyBufUnload()
     augroup END
 
     let cpo_ = &cpo | set cpo&vim
@@ -1375,22 +1378,29 @@ func! Voof_BodyBufLeave() "{{{2
     let g:voof_bodies[body].tick = b:changedtick
 endfunc
 
-func! Voof_BodyBufDelete() "{{{2
-" When Body is deleted or wiped out, delete Voof data and wipe out the
-" corresponding Tree--it has no reason to exist anymore.
+func! Voof_BodyBufUnload() "{{{2
+" This is BufUnload au for Body. Called on unloading, deleting, and wiping out
+" Body. Delete VOOF data and wipe out the corresponding Tree.
     let body = expand("<abuf>")
-    "exe 'au! VoofBody * <buffer='.body.'>'
+    if !exists("g:voof_bodies") || !has_key(g:voof_bodies, body)
+        echoerr "VOOF: Error in BufUnload autocommand"
+        return
+    endif
     let tree = g:voof_bodies[body].tree
+    if !exists("g:voof_trees") || !has_key(g:voof_trees, tree)
+        echoerr "VOOF: Error in BufUnload autocommand"
+        return
+    endif
 
+    exe 'au! VoofBody * <buffer='.body.'>'
     call Voof_UnVoof(body, tree)
+    exe 'noautocmd bwipeout! '.tree
 
-    " NOTE: The following code is suspect.
-    " ???? This prevents the Body from being deleted. Why?
-    set eventignore=BufUnload
-    exe 'bwipeout! '.tree
-    set eventignore=
-    " ???? This gets the Body deleted anyway.
-    exe 'bdelete! '.body
+    try
+        exe 'noautocmd bunload! '.body
+    " E90: Cannot unload last buffer
+    catch /^Vim\%((\a\+)\)\=:E90/
+    endtry
 endfunc
 
 func! Voof_BodyUnVoof() "{{{2
@@ -1471,16 +1481,17 @@ func! Voof_LogScroll() "{{{2
 
     " This should never happen.
     if !exists('g:voof_logbnr')
-        call Voof_ErrorMsg("g:voof_logbnr doesn't exist")
+        echoerr "VOOF: g:voof_logbnr doesn't exist"
         return
     else
         if !bufexists(g:voof_logbnr)
-            call Voof_ErrorMsg("buffer g:voof_logbnr doesn't exist")
+            echoerr "VOOF: Log buffer ".g:voof_logbnr." doesn't exist"
             return
         endif
     endif
 
     " disable autocommands since we will be entering tabs and windows
+    let ei_=&eventignore
     set eventignore=BufEnter,BufLeave,WinEnter,WinLeave,TabEnter,TabLeave
 
     let log_found=0
@@ -1520,7 +1531,7 @@ func! Voof_LogScroll() "{{{2
         exe bufwinnr(bnr_).'wincmd w'
     endif
 
-    set eventignore=
+    let &eventignore=ei_
 endfunc
 
 
@@ -1531,7 +1542,7 @@ func! Voof_FoldLines(lnum) "{{{2
 " Regular buffer: return list of lines for fold at line lnum.
 
     """"" Tree buffer: get lines from corresponding node.
-    if @%=~#'^VOOF_.*_\d\+$'
+    if has_key(g:voof_trees, bufnr(''))
         let status = Voof_FoldStatus(a:lnum)
         if status=='hidden'
             echo 'current line hidden in fold'
@@ -1583,8 +1594,10 @@ func! Voof_FoldRun(...) "{{{2
     " Determine type of script: Vim or Python.
     let scriptType = ''
 
-    if @%=~#'^VOOF_.*_\d\+$'
+    " this is a Tree
+    if has_key(g:voof_trees, bufnr(''))
         let ft = getbufvar(g:voof_trees[bufnr('')], '&ft')
+    " this is not a Tree
     else
         let ft = &ft
     endif

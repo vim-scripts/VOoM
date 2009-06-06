@@ -3,7 +3,7 @@
 # plugin for Python-enabled Vim version 7.x
 # Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.2, 2009-05-30
+# Version: 1.3, 2009-06-06
 
 '''This module is meant to be imported by voof.vim .'''
 import vim
@@ -13,8 +13,9 @@ Vim = sys.modules['__main__']
 
 #---Constants and Settings---{{{1
 
-# default fold marker regexp
-FOLD_MARKER = re.compile(r'{{{(\d+)(x?)')    # }}}
+# default start fold marker and regexp
+MARKER = '{{{'  # }}}
+MARKER_RE = re.compile(r'{{{(\d+)(x?)')    # }}}
 
 voof_dir = vim.eval('g:voof_dir')
 voof_script = vim.eval('g:voof_script_py')
@@ -33,6 +34,10 @@ class VoofData: #{{{1
         self.snLns = {}
         # {body : first Tree line, ...}
         self.names = {}
+        # {body : start fold marker if not default, ...}
+        self.markers = {}
+        # {body : start fold marker regexp if not default, ...}
+        self.markers_re = {}
 
 #VOOF=VoofData()
 # VOOF, an instance of VoofData, is created from voof.vim, not here.
@@ -46,6 +51,11 @@ def init(body): #{{{2
     VOOF.buffers[body] = vim.current.buffer
     VOOF.snLns[body] = 1
     VOOF.names[body] = vim.eval('firstLine')
+
+    marker = vim.eval('&foldmarker').split(',')[0]
+    if not marker=='{{{': # }}}
+        VOOF.markers[body] = marker
+        VOOF.markers_re[body] = re.compile(re.escape(marker) + r'(\d+)(x?)')
 
 def treeCreate(): #{{{2
     '''This is part of Voof_TreeCreate(), called from Tree.'''
@@ -63,9 +73,10 @@ def treeCreate(): #{{{2
     # look for headline with .= after level number
     snLn = 0
     ln = 2
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
     for bln in nodes[1:]:
         line = Body[bln-1]
-        end = FOLD_MARKER.search(line).end()
+        end = marker_re.search(line).end()
         if end==len(line):
             ln+=1
             continue
@@ -86,19 +97,22 @@ def treeCreate(): #{{{2
         # select current Body node
         computeSnLn(body, blnr)
 
-def voofOutline(lines): #{{{2
+def voofOutline(body, lines): #{{{2
     '''Return (headlines, nodes, levels) for list of lines.'''
+
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+
     headlines, nodes, levels = [], [], []
     lnum=0
     for line in lines:
         lnum+=1
-        match = FOLD_MARKER.search(line)
+        match = marker_re.search(line)
         if not match:
             continue
         level = int(match.group(1))
         checkbox = match.group(2) or ' '
         # Strip the fold marker and possible line comment chars before it.
-        line = line[:match.start()].strip().rstrip('"#/% \t')
+        line = line[:match.start()].strip().rstrip('"#/*% \t')
         # Strip headline fillchars. They are useful in Body, but not in Tree.
         # Consider: strip headline fillchars after line comment chars.
         line = line.strip('-=~').strip()
@@ -115,7 +129,7 @@ def treeUpdate(body, draw_tree=True): #{{{2
 
     ##### Construct outline #####
     lines = VOOF.buffers[body][:]
-    headlines, nodes, levels  = voofOutline(lines)
+    headlines, nodes, levels  = voofOutline(body, lines)
     headlines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
     VOOF.nodes[body], VOOF.levels[body] = nodes, levels
 
@@ -193,7 +207,7 @@ def voofVerify(body): #{{{2
     headlines_ = VOOF.buffers[tree][:]
 
     bodylines = VOOF.buffers[body][:]
-    headlines, nodes, levels  = voofOutline(bodylines)
+    headlines, nodes, levels  = voofOutline(body, bodylines)
     headlines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
     snLn = VOOF.snLns[body]
     headlines[snLn-1] = '=%s' %headlines[snLn-1][1:]
@@ -259,10 +273,11 @@ def changeLevTreeHead(h, delta): #{{{2
         h = '%s%s' %(h[:2], h[2-2*delta:])
     return h
 
-def changeLevBodyHead(h, delta): #{{{2
+def changeLevBodyHead(h, delta, body): #{{{2
     '''Increase of decrese level number of Body headline by delta.'''
     if delta==0: return h
-    m = FOLD_MARKER.search(h)
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+    m = marker_re.search(h)
     level = int(m.group(1))
     h = '%s%s%s' %(h[:m.start(1)], level+delta, h[m.end(1):])
     return h
@@ -309,8 +324,9 @@ def oopInsert(as_child=False): #{{{2
 
     # insert headline in Tree and Body
     # bLnum is new headline ln in Body
+    marker = VOOF.markers.get(body, MARKER)
     treeLine = '= %s%sNewHeadline' %('. '*(level-1), '|')
-    bodyLine = '---NewHeadline--- {{{%s' %(level)    #}}}
+    bodyLine = '---NewHeadline--- %s%s' %(marker, level)
     if ln==len(Tree[:]):
         Tree.append(treeLine)
         bLnum = len(Body[:])
@@ -329,13 +345,22 @@ def oopInsert(as_child=False): #{{{2
 
 
 def oopPaste(): #{{{2
+    ### local vars
+    tree, body = int(vim.eval('tree')), int(vim.eval('body'))
+    ln, ln_status = int(vim.eval('ln')), vim.eval('ln_status')
+
+    Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
+    levels, nodes = VOOF.levels[body], VOOF.nodes[body]
+
+    ### clipboard
     bText = vim.eval('@+')
     if not bText:
         vim.command('let l:invalid_clipboard=1')
         print 'VOOF: clipboard is empty'
         return
     bLines = bText.split('\n') # Body lines to paste
-    pHeads, pNodes, pLevels = voofOutline(bLines)
+    pHeads, pNodes, pLevels = voofOutline(body, bLines)
+
     ### verify that clipboard is a valid Voof text
     if pNodes==[] or pNodes[0]!=1:
         vim.command('let l:invalid_clipboard=1')
@@ -354,13 +379,6 @@ def oopPaste(): #{{{2
             print 'VOOF: INVALID CLIPBOARD (level increment error)'
             return
         lev_ = lev
-
-    ### local vars
-    tree, body = int(vim.eval('tree')), int(vim.eval('body'))
-    ln, ln_status = int(vim.eval('ln')), vim.eval('ln_status')
-
-    Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
-    levels, nodes = VOOF.levels[body], VOOF.nodes[body]
 
     ### compute where and to insert and at what level
     # insert nodes after node at ln at level level
@@ -385,7 +403,7 @@ def oopPaste(): #{{{2
         pHeads = [changeLevTreeHead(h, levDelta) for h in pHeads]
         pLevels = [(lev+levDelta) for lev in pLevels]
         for bl in pNodes:
-            bLines[bl-1] = changeLevBodyHead(bLines[bl-1], levDelta)
+            bLines[bl-1] = changeLevBodyHead(bLines[bl-1], levDelta, body)
 
     # remove = mark before modifying Tree
     snLn = VOOF.snLns[body]
@@ -480,7 +498,7 @@ def oopUp(): #{{{2
     bLines = Body[bln1-1:bln2]
     if levDelta:
         for bl in nodes[ln1-1:ln2]:
-            bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta)
+            bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta, body)
     #print '-------------'
     #print '\n'.join(bLines)
     #print '-------------'
@@ -581,7 +599,7 @@ def oopDown(): #{{{2
     bLines = Body[bln1-1:bln2]
     if levDelta:
         for bl in nodes[ln1-1:ln2]:
-            bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta)
+            bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta, body)
 
     ### move body lines: insert, then cut
     if lnIns==len(nodes): # insert after the end of file
@@ -649,7 +667,7 @@ def oopRight(): #{{{2
     ### change level numbers in Body headlines
     for bln in nodes[ln1-1:ln2]:
         bLine = Body[bln-1]
-        Body[bln-1] = changeLevBodyHead(bLine, 1)
+        Body[bln-1] = changeLevBodyHead(bLine, 1, body)
 
     ### set snLn to ln1
     snLn = VOOF.snLns[body]
@@ -692,7 +710,7 @@ def oopLeft(): #{{{2
     ### change level numbers in Body headlines
     for bln in nodes[ln1-1:ln2]:
         bLine = Body[bln-1]
-        Body[bln-1] = changeLevBodyHead(bLine, -1)
+        Body[bln-1] = changeLevBodyHead(bLine, -1, body)
 
     ### set snLn to ln1
     snLn = VOOF.snLns[body]
@@ -784,6 +802,8 @@ def oopMark(): # {{{2
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
 
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+
     for idx in range(ln1-1,ln2):
         # mark Tree line
         line = Tree[idx]
@@ -792,7 +812,7 @@ def oopMark(): # {{{2
             # mark Body line
             bln = nodes[idx]
             line = Body[bln-1]
-            end = FOLD_MARKER.search(line).end(1)
+            end = marker_re.search(line).end(1)
             Body[bln-1] = '%sx%s' %(line[:end], line[end:])
 
 def oopUnmark(): # {{{2
@@ -800,6 +820,8 @@ def oopUnmark(): # {{{2
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
+
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
     for idx in range(ln1-1,ln2):
         # unmark Tree line
@@ -809,7 +831,7 @@ def oopUnmark(): # {{{2
             # unmark Body line
             bln = nodes[idx]
             line = Body[bln-1]
-            end = FOLD_MARKER.search(line).end(1)
+            end = marker_re.search(line).end(1)
             Body[bln-1] = '%s%s' %(line[:end], line[end+1:])
 
 
@@ -819,12 +841,14 @@ def oopMarkSelected(): # {{{2
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
 
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+
     bln_selected = nodes[ln-1]
     # remove = marks from all other Body headlines
     for bln in nodes[1:]:
         if bln==bln_selected: continue
         line = Body[bln-1]
-        end = FOLD_MARKER.search(line).end()
+        end = marker_re.search(line).end()
         if end==len(line):
             continue
         elif line[end] == '=':
@@ -832,7 +856,7 @@ def oopMarkSelected(): # {{{2
 
     # put = mark on current Body headline
     line = Body[bln_selected-1]
-    end = FOLD_MARKER.search(line).end()
+    end = marker_re.search(line).end()
     if end==len(line):
         Body[bln_selected-1] = '%s=' %line
     elif line[end] != '=':
