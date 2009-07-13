@@ -1,15 +1,20 @@
 # voof.py
 # VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
+# Home: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.3, 2009-06-06
+# Version: 1.4, 2009-07-13
 
 '''This module is meant to be imported by voof.vim .'''
+
 import vim
 import sys, os, re
 import traceback
-Vim = sys.modules['__main__']
+#Vim = sys.modules['__main__']
+
+# see voof.vim for conventions
+# voof_WhatEver() means it's Python code for Voof_WhatEver() Vim function
 
 #---Constants and Settings---{{{1
 
@@ -46,7 +51,7 @@ class VoofData: #{{{1
 
 #---Outline Construction-----{{{1
 
-def init(body): #{{{2
+def voof_Init(body): #{{{2
     '''This is part of Voof_Init(), called from Body.'''
     VOOF.buffers[body] = vim.current.buffer
     VOOF.snLns[body] = 1
@@ -57,7 +62,7 @@ def init(body): #{{{2
         VOOF.markers[body] = marker
         VOOF.markers_re[body] = re.compile(re.escape(marker) + r'(\d+)(x?)')
 
-def treeCreate(): #{{{2
+def voof_TreeCreate(): #{{{2
     '''This is part of Voof_TreeCreate(), called from Tree.'''
 
     VOOF.buffers[int(vim.eval('tree'))] = vim.current.buffer
@@ -106,6 +111,7 @@ def voofOutline(body, lines): #{{{2
     lnum=0
     for line in lines:
         lnum+=1
+        #if line and line[0]!='-': continue
         match = marker_re.search(line)
         if not match:
             continue
@@ -213,14 +219,56 @@ def voofVerify(body): #{{{2
     headlines[snLn-1] = '=%s' %headlines[snLn-1][1:]
 
     if not headlines_ == headlines:
-        print 'DIFFERENT headlines'
+        #print 'VOOF: DIFFERENT headlines'
+        vim.command("echoerr 'VOOF: DIFFERENT headlines'")
     if not VOOF.nodes[body] == nodes:
-        print 'DIFFERENT nodes'
+        #print 'VOOF: DIFFERENT nodes'
+        vim.command("echoerr 'VOOF: DIFFERENT nodes'")
     if not VOOF.levels[body] == levels:
-        print 'DIFFERENT levels'
+        #print 'VOOF: DIFFERENT levels'
+        vim.command("echoerr 'VOOF: DIFFERENT levels'")
+
+def voof_UnVoof(): #{{{2
+    tree = int(vim.eval('a:tree'))
+    body = int(vim.eval('a:body'))
+    del VOOF.buffers[tree]
+    del VOOF.buffers[body]
+    del VOOF.nodes[body]
+    del VOOF.levels[body]
+    del VOOF.snLns[body]
+    del VOOF.names[body]
+    if body in VOOF.markers:
+        del VOOF.markers[body]
+    if body in VOOF.markers_re:
+        del VOOF.markers_re[body]
 
 
 #=============================================================================
+#---Outline Navigation-------{{{1
+
+def voof_TreeSelect(): #{{{2
+
+    # Get first and last lnums of Body node for Tree line lnum.
+
+    lnum = int(vim.eval('a:lnum'))
+    body = int(vim.eval('body'))
+    VOOF.snLns[body] = lnum
+
+    nodeStart =  VOOF.nodes[body][lnum-1]
+    vim.command('let nodeStart=%s' %nodeStart)
+
+    if lnum==len(VOOF.nodes[body]):
+        # last node
+        nodeEnd = -1
+    else:
+        # "or 1" takes care of situation when:
+        # lnum is 1 (path info line);
+        # first Body line is a headline.
+        # In that case VOOF.nodes is [1, 1, ...]
+        nodeEnd =  VOOF.nodes[body][lnum]-1 or 1
+    vim.command('let nodeEnd=%s' %nodeEnd)
+
+
 #---Outline Operations-------{{{1
 # oopOp() functions are called by Voof_Oop Vim functions.
 # They use local Vim vars set by the caller.
@@ -239,30 +287,6 @@ def nodeChildIdx(body, lnum): #{{{2
             levels.pop()
             return idx
         idx+=1
-
-def oopSelEnd(): #{{{2
-    '''This is part of  Voof_Oop() checks.
-    Selection in Tree starts at line ln1 and ends at line ln2.
-    Selection can have many root nodes: nodes with the same level as ln1 node.
-    Return lnum of last node in the last root node's tree.
-    Return 0 if selection is invalid.'''
-    body, ln1, ln2 = int(vim.eval('body')), int(vim.eval('ln1')), int(vim.eval('ln2'))
-    levels = VOOF.levels[body]
-    if ln1==1: return 0
-    # this takes care of various selection-includes-last-node problems
-    levels.append(-1)
-    rootLevel = levels[ln1-1]
-    ln = ln1
-    for lev in levels[ln1-1:]:
-        # invalid selection: there is node with level higher than that of root nodes
-        if ln<=ln2 and lev<rootLevel:
-            levels.pop()
-            return 0
-        # end node of tree of the last root node
-        elif ln>ln2 and lev<=rootLevel:
-            levels.pop()
-            return ln-1
-        ln+=1
 
 def changeLevTreeHead(h, delta): #{{{2
     '''Increase of decrese level of Tree headline by delta:
@@ -290,6 +314,35 @@ def setClipboard(s): #{{{2
     s = s.replace("'", "''")
     #s = s.encode('utf8')
     vim.command("let @+='%s'" %s)
+
+def oopSelEnd(): #{{{2
+    '''This is part of  Voof_Oop() checks.
+    Selection in Tree starts at line ln1 and ends at line ln2.
+    Selection can have many sibling nodes: nodes with the same level as ln1 node.
+    Return lnum of last node in the last sibling node's tree.
+    Return 0 if selection is invalid.'''
+
+    body = int(vim.eval('body'))
+    ln1  = int(vim.eval('ln1'))
+    ln2  = int(vim.eval('ln2'))
+    if ln1==1: return 0
+
+    levels = VOOF.levels[body]
+    # this takes care of various selection-includes-last-node problems
+    levels.append(-1)
+
+    topLevel = levels[ln1-1]
+    ln = ln1
+    for lev in levels[ln1-1:]:
+        # invalid selection: there is node with level higher than that of ln1 node
+        if ln<=ln2 and lev<topLevel:
+            levels.pop()
+            return 0
+        # last node of the last sibling node's tree
+        elif ln>ln2 and lev<=topLevel:
+            levels.pop()
+            return ln-1
+        ln+=1
 
 def oopInsert(as_child=False): #{{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
@@ -380,7 +433,7 @@ def oopPaste(): #{{{2
             return
         lev_ = lev
 
-    ### compute where and to insert and at what level
+    ### compute where to insert and at what level
     # insert nodes after node at ln at level level
     # if node is folded, insert after the end of node's tree
     level = levels[ln-1] # default level
@@ -806,16 +859,16 @@ def oopMark(): # {{{2
 
     for idx in range(ln1-1,ln2):
         # mark Tree line
-        line = Tree[idx]
-        if line[1]!='x':
-            Tree[idx] = '%sx%s' %(line[0], line[2:])
+        tline = Tree[idx]
+        if tline[1]!='x':
+            Tree[idx] = '%sx%s' %(tline[0], tline[2:])
             # mark Body line
             bln = nodes[idx]
-            line = Body[bln-1]
-            end = marker_re.search(line).end(1)
-            Body[bln-1] = '%sx%s' %(line[:end], line[end:])
+            bline = Body[bln-1]
+            end = marker_re.search(bline).end(1)
+            Body[bln-1] = '%sx%s' %(bline[:end], bline[end:])
 
-def oopUnmark(): # {{{2
+def oopUnmark(): # {{{2x
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
@@ -825,17 +878,20 @@ def oopUnmark(): # {{{2
 
     for idx in range(ln1-1,ln2):
         # unmark Tree line
-        line = Tree[idx]
-        if line[1]=='x':
-            Tree[idx] = '%s %s' %(line[0], line[2:])
+        tline = Tree[idx]
+        if tline[1]=='x':
+            Tree[idx] = '%s %s' %(tline[0], tline[2:])
             # unmark Body line
             bln = nodes[idx]
-            line = Body[bln-1]
-            end = marker_re.search(line).end(1)
-            Body[bln-1] = '%s%s' %(line[:end], line[end+1:])
+            bline = Body[bln-1]
+            end = marker_re.search(bline).end(1)
+            # remove one 'x': not enough
+            #Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:])
+            # remove all consecutive 'x' chars
+            Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('x'))
 
 
-def oopMarkSelected(): # {{{2
+def oopMarkSelected(): # {{{2x
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln = int(vim.eval('ln'))
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
@@ -845,26 +901,42 @@ def oopMarkSelected(): # {{{2
 
     bln_selected = nodes[ln-1]
     # remove = marks from all other Body headlines
+    # also, strip 'x' chars after removed = marks
     for bln in nodes[1:]:
         if bln==bln_selected: continue
-        line = Body[bln-1]
-        end = marker_re.search(line).end()
-        if end==len(line):
+        bline = Body[bln-1]
+        end = marker_re.search(bline).end()
+        if end==len(bline):
             continue
-        elif line[end] == '=':
-            Body[bln-1] = '%s%s' %(line[:end], line[end+1:])
+        elif bline[end] == '=':
+            Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:].lstrip('x'))
 
     # put = mark on current Body headline
-    line = Body[bln_selected-1]
-    end = marker_re.search(line).end()
-    if end==len(line):
-        Body[bln_selected-1] = '%s=' %line
-    elif line[end] != '=':
-        Body[bln_selected-1] = '%s=%s' %(line[:end], line[end:])
+    bline = Body[bln_selected-1]
+    end = marker_re.search(bline).end()
+    if end==len(bline):
+        Body[bln_selected-1] = '%s=' %bline
+    elif bline[end] != '=':
+        Body[bln_selected-1] = '%s=%s' %(bline[:end], bline[end:])
 
 
 #---RUN SCRIPT---------------{{{1
 #
+def voof_GetLines(): #{{{2
+    body = int(vim.eval('body'))
+    ln1 = int(vim.eval('a:lnum'))
+
+    vim.command('let nodeStart=%s' %(VOOF.nodes[body][ln1-1]) )
+
+    ln2 = ln1 + nodeChildIdx(body, ln1)
+    if ln2==len(VOOF.nodes[body]): # last line
+        vim.command('let nodeEnd="$"')
+    else:
+        nodeEnd = VOOF.nodes[body][ln2]-1
+        vim.command('let nodeEnd=%s' %nodeEnd )
+    # (nodeStart,nodeEnd) can be (1,0), see voof_TreeSelect()
+    # it doesn't matter here
+
 def runScript(): #{{{2
     '''Run script file.'''
     #sys.path.insert(0, voof_dir)
@@ -931,13 +1003,13 @@ class LogBufferClass: #{{{2
             for line in lines1:
                 lines2+=line.splitlines()
             if int(vim.eval('bufexists(%s)' %self.logbnr)):
-                self.buffer.append('^^^^exception writing to log buffer^^^^')
+                self.buffer.append('^^^^exception writing to PyLog buffer^^^^')
                 self.buffer.append(repr(s))
                 self.buffer.append(lines2)
                 self.buffer.append('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
             else:
-                vim.command('call Voof_ErrorMsg("exception, trying to write to non-existing log buffer:")')
-                vim.command('call Voof_ErrorMsg("%s")' %repr(s))
+                vim.command('echoerr "VOOF: exception, trying to write to non-existing PyLog buffer:"')
+                vim.command("echoerr '%s'" %(repr(s).replace("'", "''")) )
                 return
 
         vim.command('call Voof_LogScroll()')

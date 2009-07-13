@@ -1,9 +1,10 @@
 " voof.vim
 " VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 " plugin for Python-enabled Vim version 7.x
+" Home: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 " License: this software is in the public domain
-" Version: 1.3, 2009-06-06
+" Version: 1.4, 2009-07-13
 
 "---Conventions-----------------------{{{1
 " Tree      --Tree buffer
@@ -26,7 +27,7 @@ if !exists('g:voof_did_load')
     com! Voof call Voof_Init()
     com! Vooflog call Voof_LogInit()
     com! Voofhelp call Voof_Help()
-    com! -nargs=? Voofrun call Voof_FoldRun(<f-args>)
+    com! -nargs=? Voofrun call Voof_Run(<f-args>)
     exe "au FuncUndefined Voof_* source " . expand("<sfile>:p")
     finish
 endif
@@ -122,7 +123,9 @@ func! Voof_Init() "{{{2
         if b_name=='' | let b_name='No Name' | endif
         let b_dir = expand('%:p:h')
         let l:firstLine = ' ' . b_name .' ['. b_dir . '], b' . body
-        py voof.init(int(vim.eval('body')))
+
+        py voof.voof_Init(int(vim.eval('body')))
+
         "normal! zMzv
         call Voof_BodyConfigure()
         call Voof_ToTreeWin()
@@ -138,18 +141,7 @@ func! Voof_UnVoof(body, tree) "{{{2
 " Remove VOOF data for Body body and its Tree tree.
     unlet g:voof_trees[a:tree]
     unlet g:voof_bodies[a:body]
-python << EOF
-tree = int(vim.eval('a:tree'))
-body = int(vim.eval('a:body'))
-del VOOF.buffers[tree]
-del VOOF.buffers[body]
-del VOOF.nodes[body]
-del VOOF.levels[body]
-del VOOF.snLns[body]
-del VOOF.names[body]
-if body in VOOF.markers: del VOOF.markers[body]
-if body in VOOF.markers_re: del VOOF.markers_re[body]
-EOF
+    py voof.voof_UnVoof()
 endfunc
 
 func! Voof_BufEditable(bnr) "{{{2
@@ -157,6 +149,7 @@ func! Voof_BufEditable(bnr) "{{{2
     let ma_opt = getbufvar(a:bnr, "&ma")
     let ro_opt = getbufvar(a:bnr, "&ro")
     if ma_opt==0 || ro_opt==1
+        py print "VOOF: Body buffer is 'nomodifiable' and/or 'readonly'"
         return 0
     else
         return 1
@@ -451,7 +444,7 @@ func! Voof_TreeCreate(body) "{{{2
 
     " Draw = mark. This must be done afer creating outline.
     " this assigns g:voof_bodies[body].snLn
-    py voof.treeCreate()
+    py voof.voof_TreeCreate()
     let snLn = g:voof_bodies[a:body].snLn
     " Initial draw puts = on first line.
     if snLn!=1
@@ -471,7 +464,7 @@ func! Voof_TreeCreate(body) "{{{2
     endif
 endfunc
 
-func! Voof_TreeConfigure() "{{{2=
+func! Voof_TreeConfigure() "{{{2
 " Configure current buffer as a Tree buffer.
 
     " Options local to window.
@@ -511,6 +504,51 @@ endfunc
 func! Voof_TreeMap() "{{{2
 " Mappings and commands local to a Tree buffer.
     let cpo_ = &cpo | set cpo&vim
+    " Use noremap to disable keys.
+    " Use nnoremap and vnoremap to map keys to Voof functions, don't use noremap.
+    " Disable common text change commands. {{{
+    noremap <buffer><silent> i <Nop>
+    noremap <buffer><silent> I <Nop>
+    noremap <buffer><silent> a <Nop>
+    noremap <buffer><silent> A <Nop>
+    noremap <buffer><silent> o <Nop>
+    noremap <buffer><silent> O <Nop>
+    noremap <buffer><silent> s <Nop>
+    noremap <buffer><silent> S <Nop>
+    noremap <buffer><silent> r <Nop>
+    noremap <buffer><silent> R <Nop>
+    noremap <buffer><silent> x <Nop>
+    noremap <buffer><silent> X <Nop>
+    noremap <buffer><silent> d <Nop>
+    noremap <buffer><silent> D <Nop>
+    noremap <buffer><silent> J <Nop>
+    noremap <buffer><silent> c <Nop>
+    noremap <buffer><silent> p <Nop>
+    noremap <buffer><silent> P <Nop>
+    noremap <buffer><silent> . <Nop>
+    " }}}
+
+    " Disable undo (also case conversion). {{{
+    noremap <buffer><silent> u <Nop>
+    noremap <buffer><silent> U <Nop>
+    " this is Move Right in Leo
+    noremap <buffer><silent> <C-r> <Nop>
+    " }}}
+
+    " Disable creation/deletion of folds. {{{
+    noremap <buffer><silent> zf <Nop>
+    noremap <buffer><silent> zF <Nop>
+    noremap <buffer><silent> zd <Nop>
+    noremap <buffer><silent> zD <Nop>
+    noremap <buffer><silent> zE <Nop>
+    " }}}
+
+    " Edit headline. {{{
+    nnoremap <buffer><silent> i :call Voof_OopEdit()<CR>
+    nnoremap <buffer><silent> I :call Voof_OopEdit()<CR>
+    nnoremap <buffer><silent> a :call Voof_OopEdit()<CR>
+    nnoremap <buffer><silent> A :call Voof_OopEdit()<CR>
+    " }}}
 
     " Node selection and navigation. {{{
 
@@ -540,45 +578,12 @@ func! Voof_TreeMap() "{{{2
 
     nnoremap <buffer><silent> <Left>  :call Voof_TreeLeft()<CR>
     nnoremap <buffer><silent> <Right> :call Voof_TreeRight()<CR>
+
+    nnoremap <buffer><silent> x :call Voof_TreeNextMark(0)<CR>
+    nnoremap <buffer><silent> X :call Voof_TreeNextMark(1)<CR>
     " }}}
 
-    " Common text change commands start headline editing. {{{
-    noremap <buffer><silent> i :call Voof_OopEdit()<CR>
-    noremap <buffer><silent> I :call Voof_OopEdit()<CR>
-    noremap <buffer><silent> a :call Voof_OopEdit()<CR>
-    noremap <buffer><silent> A :call Voof_OopEdit()<CR>
-    noremap <buffer><silent> o <Nop>
-    noremap <buffer><silent> O <Nop>
-    noremap <buffer><silent> s <Nop>
-    noremap <buffer><silent> S <Nop>
-    noremap <buffer><silent> r <Nop>
-    noremap <buffer><silent> R <Nop>
-    noremap <buffer><silent> x <Nop>
-    noremap <buffer><silent> D <Nop>
-    noremap <buffer><silent> J <Nop>
-    noremap <buffer><silent> c <Nop>
-    noremap <buffer><silent> p <Nop>
-    noremap <buffer><silent> P <Nop>
-    noremap <buffer><silent> . <Nop>
-    vnoremap <buffer><silent> d <Nop>
-    " }}}
-
-    " Disable undo (also case conversion). {{{
-    noremap <buffer><silent> u <Nop>
-    noremap <buffer><silent> U <Nop>
-    " this is Move Right in Leo
-    noremap <buffer><silent> <C-r> <Nop>
-    " }}}
-
-    " Disable creation/deletion of folds. {{{
-    noremap <buffer><silent> zf <Nop>
-    noremap <buffer><silent> zF <Nop>
-    noremap <buffer><silent> zd <Nop>
-    noremap <buffer><silent> zD <Nop>
-    noremap <buffer><silent> zE <Nop>
-    " }}}
-
-    " Outline operations {{{
+    " Outline operations. {{{
     " Can't use Ctrl as in Leo: <C-i> is Tab; <C-u>, <C-d> are page up/down.
 
     " insert new node
@@ -632,7 +637,7 @@ func! Voof_TreeMap() "{{{2
 
     " Various commands. {{{
     nnoremap <buffer><silent> <F1> :call Voof_Help()<CR>
-    nnoremap <buffer><silent> <LocalLeader>r :call Voof_FoldRun()<CR>
+    nnoremap <buffer><silent> <LocalLeader>r :call Voof_Run()<CR>
 
     " update Tree, not needed
     "nnoremap <buffer><silent> u :call Voof_TreeUpdate(g:voof_trees[bufnr('')])<CR>
@@ -647,7 +652,10 @@ func! Voof_TreeUpdate(body) "{{{2
     setl ma
     let ul_=&ul | setl ul=-1
     let snLn_ = g:voof_bodies[a:body].snLn
+    "let start = reltime()
     keepj py voof.treeUpdate(int(vim.eval('a:body')))
+    "let update_time = reltimestr(reltime(start))
+    "echom update_time
     let &ul=ul_
     setl noma
 
@@ -703,7 +711,7 @@ endfunc
 
 "---Outline Navigation---{{{2
 "
-func! Voof_TreeSelect(lnum, focus) "{{{3
+func! Voof_TreeSelect(lnum, focus) "{{{3=
 " Select node corresponding to line lnum in the Tree.
 " Show correspoding fold in the Body.
 " Leave cursor in the Body if it already shows the selected fold and focus!='tree'.
@@ -726,19 +734,9 @@ func! Voof_TreeSelect(lnum, focus) "{{{3
         let g:voof_bodies[body].snLn = a:lnum
     endif
 
-python << EOF
-# Get first and last lnums of Body node for current Tree lnum.
-lnum = int(vim.eval('a:lnum'))
-body = int(vim.eval('body'))
-VOOF.snLns[body] = lnum
-nodeStart =  VOOF.nodes[body][lnum-1]
-vim.command('let nodeStart=%s' %nodeStart)
-if lnum==len(VOOF.nodes[body]): # last fold
-    nodeEnd = '"end"'
-else:
-    nodeEnd =  VOOF.nodes[body][lnum]-1
-vim.command('let nodeEnd=%s' %nodeEnd)
-EOF
+    " this computes and assigns nodeStart and nodeEnd:
+    " first and last lnums of Body node for Tree line lnum.
+    py voof.voof_TreeSelect()
 
     " Go to Body, show current node, and either come back or stay in Body.
     let ei_=&eventignore
@@ -758,7 +756,7 @@ EOF
     let bodyLnr = line('.')
     "let bodyLnr = line('w0') " ugly hack for 'scrolloff' problems
     "let &scrolloff=scrolloff_
-    if nodeEnd=='end' | let nodeEnd=line('$')+1 | endif
+    if nodeEnd==-1 | let nodeEnd=line('$')+1 | endif
     let new_node_selected = 0
     if ((bodyLnr < nodeStart) || (bodyLnr > nodeEnd))
         let new_node_selected = 1
@@ -926,6 +924,24 @@ func! Voof_TreeRight() "{{{3
     call Voof_TreeSelect(line('.'), 'tree')
 endfunc
 
+func! Voof_TreeNextMark(back) "{{{3
+" Go to next or previous marked node.
+    if a:back==1
+        normal! 0
+        let found = search('^.x\C\V', 'bw')
+    else
+        let found = search('^.x\C\V', 'w')
+    endif
+
+    if found==0
+        py print "VOOF: there are no marked nodes"
+    else
+        call Voof_TreeZV()
+        call cursor('.', match(getline('.'), '|') + 1)
+        call Voof_TreeSelect(line('.'), 'tree')
+    endif
+endfunc
+
 
 "---Outline Operations---{{{2
 "
@@ -992,7 +1008,7 @@ func! Voof_OopInsert(as_child) "{{{3
 endfunc
 
 func! Voof_OopPaste() "{{{3
-" Paste nodes in clipboard.
+" Paste nodes in the clipboard.
     let tree = bufnr('')
     " current buffer must be a Tree
     if !has_key(g:voof_trees, tree)
@@ -1537,29 +1553,24 @@ endfunc
 
 "---RUN SCRIPT (Voofrun)--------------{{{1
 "
-func! Voof_FoldLines(lnum) "{{{2
-" Tree buffer: return list of Body node lines for Tree line lnum.
-" Regular buffer: return list of lines for fold at line lnum.
+func! Voof_GetLines(lnum) "{{{2
+" Return list of lines.
+" Tree buffer: lines from Body node (including subnodes) corresponding to Tree
+" line lnum.
+" Any other buffer: lines from fold at line lnum (including subfolds).
+" Returns [] if checks fail.
 
     """"" Tree buffer: get lines from corresponding node.
     if has_key(g:voof_trees, bufnr(''))
         let status = Voof_FoldStatus(a:lnum)
         if status=='hidden'
-            echo 'current line hidden in fold'
+            echo 'VOOF: current line hidden in fold'
             return []
         endif
         let body = g:voof_trees[bufnr('')]
-python << EOF
-body = int(vim.eval('body'))
-ln1 = int(vim.eval('a:lnum'))
-vim.command('let nodeStart=%s' %(VOOF.nodes[body][ln1-1]) )
-ln2 = ln1 + voof.nodeChildIdx(body, ln1)
-if ln2==len(VOOF.nodes[body]): # last line
-    vim.command('let nodeEnd="$"')
-else:
-    nodeEnd = VOOF.nodes[body][ln2]-1
-    vim.command('let nodeEnd=%s' %nodeEnd )
-EOF
+
+        " this computes and assigns nodeStart and nodeEnd
+        py voof.voof_GetLines()
         "echo [nodeStart, nodeEnd]
         return getbufline(body, nodeStart, nodeEnd)
     endif
@@ -1567,10 +1578,10 @@ EOF
     """"" Regular buffer: get lines from current fold.
     let status = Voof_FoldStatus(a:lnum)
     if status=='nofold'
-        echo 'no fold'
+        echo 'VOOF: no fold'
         return []
     elseif status=='hidden'
-        echo 'current line hidden in fold'
+        echo 'VOOF: current line hidden in fold'
         return []
     elseif status=='folded'
         return getline(foldclosed(a:lnum), foldclosedend(a:lnum))
@@ -1583,12 +1594,13 @@ EOF
     endif
 endfunc
 
-func! Voof_FoldRun(...) "{{{2
-" Execute lines from the current fold or node (Tree buffer) as a script.
+func! Voof_Run(...) "{{{2
+" Execute lines from the current fold (non-Tree buffer, include subfolds) or
+" node (Tree buffer, include subnodes) as a script.
 " First argument is 'vim' or 'py': execute as Vim or Python script respectively.
 " Otherwise execute according to filetype.
 
-    let lines = Voof_FoldLines(line('.'))
+    let lines = Voof_GetLines(line('.'))
     if lines==[] | return | endif
 
     " Determine type of script: Vim or Python.
@@ -1611,7 +1623,7 @@ func! Voof_FoldRun(...) "{{{2
     elseif ft=='python'
         let scriptType = 'python'
     else
-        echo "can't determine script type"
+        echo "VOOF: can't determine script type"
         return
     endif
  
