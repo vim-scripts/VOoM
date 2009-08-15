@@ -1,16 +1,17 @@
 # voof.py
 # VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
-# Home: http://www.vim.org/scripts/script.php?script_id=2657
+# Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.4, 2009-07-13
+# Version: 1.5, 2009-08-15
 
 '''This module is meant to be imported by voof.vim .'''
 
 import vim
 import sys, os, re
 import traceback
+import bisect
 #Vim = sys.modules['__main__']
 
 # see voof.vim for conventions
@@ -22,8 +23,8 @@ import traceback
 MARKER = '{{{'  # }}}
 MARKER_RE = re.compile(r'{{{(\d+)(x?)')    # }}}
 
-voof_dir = vim.eval('g:voof_dir')
-voof_script = vim.eval('g:voof_script_py')
+voof_dir = vim.eval('s:voof_dir')
+voof_script = vim.eval('s:voof_script_py')
 
 
 class VoofData: #{{{1
@@ -51,6 +52,136 @@ class VoofData: #{{{1
 
 #---Outline Construction-----{{{1
 
+def voofOutline(body, lines): #{{{2
+    '''Return (treelines, nodes, levels) for list of Body lines.'''
+
+    marker = VOOF.markers.get(body, MARKER)
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+
+    treelines, nodes, levels = [], [], []
+    lnum=0
+    for line in lines:
+        lnum+=1
+        if not marker in line: continue
+        match = marker_re.search(line)
+        if not match: continue
+        level = int(match.group(1))
+        checkbox = match.group(2) or ' '
+        # Strip the fold marker and possible line comment chars before it.
+        tline = line[:match.start()].strip().rstrip('"#/*% \t')
+        # Strip fillchars. They are useful in Body, but not in Tree.
+        # Consider: strip fillchars after line comment chars.
+        tline = tline.strip('-=~').strip()
+        tline = ' %s%s%s%s' %(checkbox, '. '*(level-1), '|', tline)
+        treelines.append(tline)
+        nodes.append(lnum)
+        levels.append(level)
+    return (treelines, nodes, levels)
+
+def voofUpdate(body): #{{{2
+    '''Construct outline for Body body.
+    Update lines in Tree buffer if needed.
+    This can be run from any buffer as long as Tree is set to ma.'''
+
+    ##### Construct outline #####
+    bLines = VOOF.buffers[body][:]
+    treelines, nodes, levels  = voofOutline(body, bLines)
+    treelines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
+    VOOF.nodes[body], VOOF.levels[body] = nodes, levels
+
+    ##### Add the = mark #####
+    snLn = VOOF.snLns[body]
+    size = len(VOOF.nodes[body])
+    # snLn got larger than the number of nodes because some nodes were
+    # deleted while editing the Body
+    if snLn > size:
+        snLn = size
+        vim.command('let s:voof_bodies[%s].snLn=%s' %(body, size))
+        VOOF.snLns[body] = size
+    treelines[snLn-1] = '=%s' %treelines[snLn-1][1:]
+
+    ##### Compare treelines, draw as needed ######
+    # Draw all treelines only when needed. This is optimization for large
+    # outlines, e.g. >1000 treelines. Drawing all lines is slower than
+    # comparing all lines and then drawing nothing or just one line.
+
+    tree = int(vim.eval('s:voof_bodies[%s].tree' %body))
+    Tree = VOOF.buffers[tree]
+    treelines_ = Tree[:]
+    if not len(treelines_)==len(treelines):
+        Tree[:] = treelines
+        return
+
+    # This causes complete redraw after editing a single headline.
+    #if not treelines_==treelines:
+        #Tree[:] = treelines
+
+    # If only one line is modified, draw that line only. This ensures that
+    # editing (and inserting) a single headline in a large outline is fast.
+    # If more than one line is modified, draw all lines from first changed line
+    # to the end of buffer.
+    draw_one = False
+    draw_many = False
+    idx=0
+    for h in treelines:
+        if not h==treelines_[idx]:
+            if draw_one==False:
+                draw_one = True
+                diff_idx = idx
+            else:
+                draw_one = False
+                draw_many = True
+                break
+        idx+=1
+    if draw_many:
+        Tree[diff_idx:] = treelines[diff_idx:]
+    elif draw_one:
+        Tree[diff_idx] = treelines[diff_idx]
+
+
+def computeSnLn(body, blnr): #{{{2
+    '''Compute Tree lnum for node at line blnr in Body body.
+    Assign Vim and Python snLn vars.'''
+
+    # snLn should be 1 if blnr is before the first node, top of Body
+
+    nodes = VOOF.nodes[body]
+    #treeLn=1
+    #for lnr in nodes:
+        #if lnr > blnr:
+            #snLn = treeLn-1
+            #break
+        #treeLn+=1
+    #snLn = treeLn-1
+
+    snLn = bisect.bisect_right(nodes,blnr)
+
+    vim.command('let s:voof_bodies[%s].snLn=%s' %(body, snLn))
+    VOOF.snLns[body] = snLn
+
+
+def voofVerify(body): #{{{2
+    '''Verify Tree and VOOF data.'''
+    tree = int(vim.eval('s:voof_bodies[%s].tree' %body))
+    treelines_ = VOOF.buffers[tree][:]
+
+    bodylines = VOOF.buffers[body][:]
+    treelines, nodes, levels  = voofOutline(body, bodylines)
+    treelines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
+    snLn = VOOF.snLns[body]
+    treelines[snLn-1] = '=%s' %treelines[snLn-1][1:]
+
+    if not treelines_ == treelines:
+        #print 'VOOF: DIFFERENT treelines'
+        vim.command("echoerr 'VOOF: DIFFERENT treelines'")
+    if not VOOF.nodes[body] == nodes:
+        #print 'VOOF: DIFFERENT nodes'
+        vim.command("echoerr 'VOOF: DIFFERENT nodes'")
+    if not VOOF.levels[body] == levels:
+        #print 'VOOF: DIFFERENT levels'
+        vim.command("echoerr 'VOOF: DIFFERENT levels'")
+
+
 def voof_Init(body): #{{{2
     '''This is part of Voof_Init(), called from Body.'''
     VOOF.buffers[body] = vim.current.buffer
@@ -65,13 +196,11 @@ def voof_Init(body): #{{{2
 def voof_TreeCreate(): #{{{2
     '''This is part of Voof_TreeCreate(), called from Tree.'''
 
-    VOOF.buffers[int(vim.eval('tree'))] = vim.current.buffer
-
     body = int(vim.eval('a:body'))
     nodes = VOOF.nodes[body]
     Body = VOOF.buffers[body]
     # current Body lnum
-    blnr = int(vim.eval('g:voof_bodies[a:body].blnr'))
+    blnr = int(vim.eval('s:voof_bodies[a:body].blnr'))
 
     ### compute snLn
 
@@ -80,18 +209,18 @@ def voof_TreeCreate(): #{{{2
     ln = 2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
     for bln in nodes[1:]:
-        line = Body[bln-1]
-        end = marker_re.search(line).end()
-        if end==len(line):
+        bline = Body[bln-1]
+        end = marker_re.search(bline).end()
+        if end==len(bline):
             ln+=1
             continue
-        elif line[end] == '=':
+        elif bline[end] == '=':
             snLn = ln
             break
         ln+=1
 
     if snLn:
-        vim.command('let g:voof_bodies[%s].snLn=%s' %(body, snLn))
+        vim.command('let s:voof_bodies[%s].snLn=%s' %(body, snLn))
         VOOF.snLns[body] = snLn
         # set blnShow if it's different from current Body node
         # TODO: really check for current Body node?
@@ -101,132 +230,6 @@ def voof_TreeCreate(): #{{{2
         # no Body headline is marked with =
         # select current Body node
         computeSnLn(body, blnr)
-
-def voofOutline(body, lines): #{{{2
-    '''Return (headlines, nodes, levels) for list of lines.'''
-
-    marker_re = VOOF.markers_re.get(body, MARKER_RE)
-
-    headlines, nodes, levels = [], [], []
-    lnum=0
-    for line in lines:
-        lnum+=1
-        #if line and line[0]!='-': continue
-        match = marker_re.search(line)
-        if not match:
-            continue
-        level = int(match.group(1))
-        checkbox = match.group(2) or ' '
-        # Strip the fold marker and possible line comment chars before it.
-        line = line[:match.start()].strip().rstrip('"#/*% \t')
-        # Strip headline fillchars. They are useful in Body, but not in Tree.
-        # Consider: strip headline fillchars after line comment chars.
-        line = line.strip('-=~').strip()
-        line = ' %s%s%s%s' %(checkbox, '. '*(level-1), '|', line)
-        headlines.append(line)
-        nodes.append(lnum)
-        levels.append(level)
-    return (headlines, nodes, levels)
-
-def treeUpdate(body, draw_tree=True): #{{{2
-    '''Construct outline for Body body.
-    Compare it to the current outline.
-    Draw it in the current buffer (Tree) if different.'''
-
-    ##### Construct outline #####
-    lines = VOOF.buffers[body][:]
-    headlines, nodes, levels  = voofOutline(body, lines)
-    headlines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
-    VOOF.nodes[body], VOOF.levels[body] = nodes, levels
-
-    ##### Add the = mark #####
-    snLn = VOOF.snLns[body]
-    size = len(VOOF.nodes[body])
-    # snLn got larger than the number of nodes because some nodes were
-    # deleted while editing the Body
-    if snLn > size:
-        snLn = size
-        vim.command('let g:voof_bodies[%s].snLn=%s' %(body, size))
-        VOOF.snLns[body] = size
-    headlines[snLn-1] = '=%s' %headlines[snLn-1][1:]
-
-    if not draw_tree: return
-
-    ##### Compare headlines, draw as needed ######
-    # Drawing all buffer lines only when needed is an optimization
-    # for large outlines, e.g. >1000 headlines. Drawing all lines is the
-    # bottleneck. Scanning and comparing is fast.
-
-    headlines_ = vim.current.buffer[:]
-    if not len(headlines_)==len(headlines):
-        vim.current.buffer[:] = headlines
-        return
-
-    # This causes complete redraw after editing a single headline.
-    #if not headlines_==headlines:
-        #vim.current.buffer[:] = headlines
-
-    # If only one line is modified, draw that line only. This ensures that
-    # editing (and inserting) a single headline in a large outline is fast.
-    # If more than one line is modified, draw all lines from first changed line
-    # to the end of buffer.
-    draw_one = False
-    draw_many = False
-    idx=0
-    for h in headlines:
-        if not h==headlines_[idx]:
-            if draw_one==False:
-                draw_one = True
-                diff_idx = idx
-            else:
-                draw_one = False
-                draw_many = True
-                break
-        idx+=1
-    if draw_many:
-        vim.current.buffer[diff_idx:] = headlines[diff_idx:]
-    elif draw_one:
-        vim.current.buffer[diff_idx] = headlines[diff_idx]
-
-
-def computeSnLn(body, blnr): #{{{2
-    '''Compute Tree lnum for node at line blnr in Body body.
-    Assign Vim and Python snLn vars.'''
-
-    # snLn should be 1 if blnr is before the first node, top of Body
-
-    nodes = VOOF.nodes[body]
-    treeLn=1
-    for lnr in nodes:
-        if lnr > blnr:
-            snLn = treeLn-1
-            break
-        treeLn+=1
-    snLn = treeLn-1
-    vim.command('let g:voof_bodies[%s].snLn=%s' %(body, snLn))
-    VOOF.snLns[body] = snLn
-
-
-def voofVerify(body): #{{{2
-    '''Verify Tree and VOOF data.'''
-    tree = int(vim.eval('g:voof_bodies[%s].tree' %body))
-    headlines_ = VOOF.buffers[tree][:]
-
-    bodylines = VOOF.buffers[body][:]
-    headlines, nodes, levels  = voofOutline(body, bodylines)
-    headlines[0:0], nodes[0:0], levels[0:0] = [VOOF.names[body]], [1], [1]
-    snLn = VOOF.snLns[body]
-    headlines[snLn-1] = '=%s' %headlines[snLn-1][1:]
-
-    if not headlines_ == headlines:
-        #print 'VOOF: DIFFERENT headlines'
-        vim.command("echoerr 'VOOF: DIFFERENT headlines'")
-    if not VOOF.nodes[body] == nodes:
-        #print 'VOOF: DIFFERENT nodes'
-        vim.command("echoerr 'VOOF: DIFFERENT nodes'")
-    if not VOOF.levels[body] == levels:
-        #print 'VOOF: DIFFERENT levels'
-        vim.command("echoerr 'VOOF: DIFFERENT levels'")
 
 def voof_UnVoof(): #{{{2
     tree = int(vim.eval('a:tree'))
@@ -243,30 +246,140 @@ def voof_UnVoof(): #{{{2
         del VOOF.markers_re[body]
 
 
-#=============================================================================
+#---parents, children, etc.-----{{{1
+# helpers for outline traversal
+
+def nodeSubnodes(body, lnum): #{{{2
+    '''Number of subnodes for node at Tree line lnum.'''
+    levels = VOOF.levels[body]
+    if lnum==1 or lnum==len(levels):
+        return 0
+    level = levels[lnum-1]
+    idx = 0
+    for lev in levels[lnum:]:
+        if lev<=level:
+            return idx
+        idx+=1
+    return idx
+
+
+def nodeParent(body, lnum): #{{{2
+    '''Return lnum of parent of node at Tree line lnum.'''
+
+    nodes, levels = VOOF.nodes[body], VOOF.levels[body]
+
+    lev0 = levels[lnum-1]
+    if lev0==1:
+        return None
+    ln = lnum-1
+    lev = levels[ln-1]
+    while lev>=lev0:
+        ln-=1
+        lev = levels[ln-1]
+    return ln
+
+
+def nodeUNL(body, lnum): #{{{2x
+    '''Compute UNL of node at Tree line lnum'''
+
+    tree = int(vim.eval('s:voof_bodies[%s].tree' %body))
+    Tree = VOOF.buffers[tree]
+    nodes, levels = VOOF.nodes[body], VOOF.levels[body]
+
+    if lnum==1:
+        return 'top-of-file'
+
+    lnums = []
+    parent = lnum
+    while parent:
+        lnums.append(parent)
+        parent = nodeParent(body, parent)
+
+    lnums.reverse()
+    heads = []
+    for ln in lnums:
+        heads.append( Tree[ln-1].split('|', 1)[1] )
+    UNL = ' -> '.join(heads)
+    return UNL
+
+
 #---Outline Navigation-------{{{1
 
 def voof_TreeSelect(): #{{{2
-
     # Get first and last lnums of Body node for Tree line lnum.
-
+    # This is called from Body
     lnum = int(vim.eval('a:lnum'))
     body = int(vim.eval('body'))
     VOOF.snLns[body] = lnum
 
     nodeStart =  VOOF.nodes[body][lnum-1]
-    vim.command('let nodeStart=%s' %nodeStart)
+    vim.command('let l:nodeStart=%s' %nodeStart)
 
     if lnum==len(VOOF.nodes[body]):
         # last node
-        nodeEnd = -1
+        vim.command("let l:nodeEnd=line('$')+1")
     else:
         # "or 1" takes care of situation when:
         # lnum is 1 (path info line);
         # first Body line is a headline.
         # In that case VOOF.nodes is [1, 1, ...]
         nodeEnd =  VOOF.nodes[body][lnum]-1 or 1
-    vim.command('let nodeEnd=%s' %nodeEnd)
+        vim.command('let l:nodeEnd=%s' %nodeEnd)
+
+
+def voof_GetUNL(): #{{{2
+
+    buftype = vim.eval('buftype')
+    body = int(vim.eval('body'))
+    lnum = int(vim.eval('lnum'))
+
+    if buftype=='body':
+        lnum = bisect.bisect_right(VOOF.nodes[body], lnum)
+
+    UNL = nodeUNL(body,lnum)
+
+    vim.command("let @n='%s'" %UNL.replace("'", "''"))
+    print '  ' + UNL
+
+
+def voof_Grep(): #{{{2x=
+
+    body = int(vim.eval('body'))
+    nodes = VOOF.nodes[body]
+    matches = vim.eval('matches')
+    matches = [int(i) for i in matches]
+
+    #print matches
+    last_match = matches.pop()
+    bln = matches[0]
+    # [ [Tree lnum, first match bln, number of total matches], ...]
+    results = [[bisect.bisect_right(nodes, bln), bln, 1]]
+    max_num_len = len('%s%s%s' %(results[-1][0], results[-1][1], results[-1][2]))
+    for bln in matches[1:]:
+        if bln==results[-1][1]:
+            results[-1][2]+=1
+            continue
+        lnum = bisect.bisect_right(nodes, bln)
+        if lnum==results[-1][0]:
+            results[-1][2]+=1
+            continue
+        results.append([lnum, bln, 1])
+        num_len = len('%s%s%s' %(results[-1][0], results[-1][1], results[-1][2]))
+        if num_len>max_num_len:
+            max_num_len = num_len
+    #print results
+
+    # list of dictionaries for setloclist() or setqflist()
+    loclist = []
+    for i in results:
+        num_len = len('%s%s%s' %(i[0],i[1],i[2]))
+        spaces = ' '*(max_num_len - num_len)
+        text = 'n%s:%s%s|%s' %(i[0],i[2],spaces, nodeUNL(body, i[0]).replace("'", "''"))
+        d = "{'text':'%s', 'lnum':%s, 'bufnr':%s}, " %(text, i[1], body)
+        loclist .append(d)
+    #print '\n'.join(loclist)
+
+    vim.command("call setqflist([%s],'a')" %(''.join(loclist)) )
 
 
 #---Outline Operations-------{{{1
@@ -274,19 +387,6 @@ def voof_TreeSelect(): #{{{2
 # They use local Vim vars set by the caller.
 # They are always called from a Tree.
 # They can set lines in Tree and Body.
-
-def nodeChildIdx(body, lnum): #{{{2
-    '''Number of children for node at Tree line lnum.'''
-    levels = VOOF.levels[body]
-    if lnum==1: return 0
-    levels.append(-1)
-    level = levels[lnum-1]
-    idx = 0
-    for lev in levels[lnum:]:
-        if lev<=level:
-            levels.pop()
-            return idx
-        idx+=1
 
 def changeLevTreeHead(h, delta): #{{{2
     '''Increase of decrese level of Tree headline by delta:
@@ -308,11 +408,9 @@ def changeLevBodyHead(h, delta, body): #{{{2
 
 def setClipboard(s): #{{{2
     '''Set Vim's + register (system clipboard) to string s.'''
-
     if not s: return
     # use '%s' for Vim string: all we need to do is double ' quotes
     s = s.replace("'", "''")
-    #s = s.encode('utf8')
     vim.command("let @+='%s'" %s)
 
 def oopSelEnd(): #{{{2
@@ -366,7 +464,7 @@ def oopInsert(as_child=False): #{{{2
     elif level < levels[ln]:
         # folded: insert after current node's tree, same level
         if ln_status=='folded':
-            ln += nodeChildIdx(body,ln)
+            ln += nodeSubnodes(body,ln)
         # not folded, insert as child
         else:
             level+=1
@@ -394,7 +492,7 @@ def oopInsert(as_child=False): #{{{2
     # write = mark and set snLn to new headline
     Tree[ln] = '=' + Tree[ln][1:]
     VOOF.snLns[body] = ln+1
-    vim.command('let g:voof_bodies[%s].snLn=%s' %(body, ln+1))
+    vim.command('let s:voof_bodies[%s].snLn=%s' %(body, ln+1))
 
 
 def oopPaste(): #{{{2
@@ -445,7 +543,7 @@ def oopPaste(): #{{{2
     elif level < levels[ln]:
         # folded: insert after current node's tree, same level
         if ln_status=='folded':
-            ln += nodeChildIdx(body,ln)
+            ln += nodeSubnodes(body,ln)
         # not folded, insert as child
         else:
             level+=1
@@ -616,7 +714,7 @@ def oopDown(): #{{{2
     # lnDn1 has children; insert as child unless it's folded
     elif levels[lnDn1-1] < levels[lnDn1]:
         if lnDn1_status=='folded':
-            lnIns += nodeChildIdx(body,lnDn1)
+            lnIns += nodeSubnodes(body,lnDn1)
         else:
             levNew+=1
     levDelta = levNew-levOld
@@ -868,7 +966,7 @@ def oopMark(): # {{{2
             end = marker_re.search(bline).end(1)
             Body[bln-1] = '%sx%s' %(bline[:end], bline[end:])
 
-def oopUnmark(): # {{{2x
+def oopUnmark(): # {{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
@@ -891,7 +989,7 @@ def oopUnmark(): # {{{2x
             Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('x'))
 
 
-def oopMarkSelected(): # {{{2x
+def oopMarkSelected(): # {{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln = int(vim.eval('ln'))
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
@@ -909,7 +1007,8 @@ def oopMarkSelected(): # {{{2x
         if end==len(bline):
             continue
         elif bline[end] == '=':
-            Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:].lstrip('x'))
+            #Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:].lstrip('x'))
+            Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('=').lstrip('x'))
 
     # put = mark on current Body headline
     bline = Body[bln_selected-1]
@@ -928,7 +1027,7 @@ def voof_GetLines(): #{{{2
 
     vim.command('let nodeStart=%s' %(VOOF.nodes[body][ln1-1]) )
 
-    ln2 = ln1 + nodeChildIdx(body, ln1)
+    ln2 = ln1 + nodeSubnodes(body, ln1)
     if ln2==len(VOOF.nodes[body]): # last line
         vim.command('let nodeEnd="$"')
     else:
@@ -936,6 +1035,26 @@ def voof_GetLines(): #{{{2
         vim.command('let nodeEnd=%s' %nodeEnd )
     # (nodeStart,nodeEnd) can be (1,0), see voof_TreeSelect()
     # it doesn't matter here
+
+
+def voof_GetLines1(): #{{{2
+
+    buftype = vim.eval('buftype')
+    body = int(vim.eval('body'))
+    lnum = int(vim.eval('lnum'))
+    if buftype=='body':
+        lnum = bisect.bisect_right(VOOF.nodes[body], lnum)
+
+    bln1 =  VOOF.nodes[body][lnum-1]
+    vim.command("let l:bln1=%s" %bln1)
+
+    if lnum==len(VOOF.nodes[body]):
+        # last node
+        vim.command("let l:bln2='$'")
+    else:
+        bln2 =  VOOF.nodes[body][lnum]-1 or 1
+        vim.command("let l:bln2=%s" %bln2)
+
 
 def runScript(): #{{{2
     '''Run script file.'''
@@ -950,7 +1069,6 @@ def runScript(): #{{{2
         lines = traceback.format_exception(typ,val,tb)
         print ''.join(lines)
     #del sys.path[0]
-
 
 
 #---LOG BUFFER---------------{{{1
@@ -1003,13 +1121,16 @@ class LogBufferClass: #{{{2
             for line in lines1:
                 lines2+=line.splitlines()
             if int(vim.eval('bufexists(%s)' %self.logbnr)):
-                self.buffer.append('^^^^exception writing to PyLog buffer^^^^')
+                self.buffer.append('')
+                self.buffer.append('VOOF: exception writing to PyLog buffer:')
                 self.buffer.append(repr(s))
                 self.buffer.append(lines2)
-                self.buffer.append('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+                self.buffer.append('')
             else:
                 vim.command('echoerr "VOOF: exception, trying to write to non-existing PyLog buffer:"')
                 vim.command("echoerr '%s'" %(repr(s).replace("'", "''")) )
+                for line in lines2:
+                    vim.command("echoerr '%s'" %(line.replace("'", "''")) )
                 return
 
         vim.command('call Voof_LogScroll()')

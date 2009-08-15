@@ -1,6 +1,7 @@
  vim:fdm=marker:
  vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):
 
+findme
 ---1--- {{{1
    1 body
 
@@ -27,6 +28,7 @@
 
 ---3.2.1.1--- {{{4=
    3.2.1.1 body
+  xxxx findme findme
 
 ---3.2.2--- {{{3
    3.2.2 body
@@ -47,7 +49,7 @@
    4 body
 
 ---4.1--- {{{2
-   4.1 body
+   4.1 body findme
 
 ---5--- {{{1
    5 body
@@ -88,6 +90,7 @@ b b b b
 
 --- BB.1 --- {{{3
 b1 b1 b1 b1 b1
+findme
 
 ---5.3--- {{{2
    5.3 body
@@ -107,7 +110,11 @@ utf8
 
 //---TODO comment--- //{{{2
 "---comment--- "{{{2
+echo 'vim ok'
+
 #---comment--- #{{{2
+print 'py ok'
+
 %---comment--- %{{{2
 /*---comment--- /*{{{2x*/
 <!-- Comment  {{{2 -->
