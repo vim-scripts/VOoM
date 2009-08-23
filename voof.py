@@ -4,7 +4,7 @@
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.5, 2009-08-15
+# Version: 1.6, 2009-08-23
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -54,7 +54,6 @@ class VoofData: #{{{1
 
 def voofOutline(body, lines): #{{{2
     '''Return (treelines, nodes, levels) for list of Body lines.'''
-
     marker = VOOF.markers.get(body, MARKER)
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
@@ -234,16 +233,14 @@ def voof_TreeCreate(): #{{{2
 def voof_UnVoof(): #{{{2
     tree = int(vim.eval('a:tree'))
     body = int(vim.eval('a:body'))
-    del VOOF.buffers[tree]
-    del VOOF.buffers[body]
-    del VOOF.nodes[body]
-    del VOOF.levels[body]
-    del VOOF.snLns[body]
-    del VOOF.names[body]
-    if body in VOOF.markers:
-        del VOOF.markers[body]
-    if body in VOOF.markers_re:
-        del VOOF.markers_re[body]
+    if tree in VOOF.buffers: del VOOF.buffers[tree]
+    if body in VOOF.buffers: del VOOF.buffers[body]
+    if body in VOOF.nodes:   del VOOF.nodes[body]
+    if body in VOOF.levels:  del VOOF.levels[body]
+    if body in VOOF.snLns:   del VOOF.snLns[body]
+    if body in VOOF.names:   del VOOF.names[body]
+    if body in VOOF.markers:    del VOOF.markers[body]
+    if body in VOOF.markers_re: del VOOF.markers_re[body]
 
 
 #---parents, children, etc.-----{{{1
@@ -342,7 +339,7 @@ def voof_GetUNL(): #{{{2
     print '  ' + UNL
 
 
-def voof_Grep(): #{{{2x=
+def voof_Grep(): #{{{2
 
     body = int(vim.eval('body'))
     nodes = VOOF.nodes[body]
@@ -384,9 +381,8 @@ def voof_Grep(): #{{{2x=
 
 #---Outline Operations-------{{{1
 # oopOp() functions are called by Voof_Oop Vim functions.
-# They use local Vim vars set by the caller.
-# They are always called from a Tree.
-# They can set lines in Tree and Body.
+# They use local Vim vars set by the caller and can create and change Vim vars.
+# They set lines in Tree and Body via vim.buffer objects.
 
 def changeLevTreeHead(h, delta): #{{{2
     '''Increase of decrese level of Tree headline by delta:
@@ -495,7 +491,7 @@ def oopInsert(as_child=False): #{{{2
     vim.command('let s:voof_bodies[%s].snLn=%s' %(body, ln+1))
 
 
-def oopPaste(): #{{{2
+def oopPaste(): #{{{2=
     ### local vars
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln, ln_status = int(vim.eval('ln')), vim.eval('ln_status')
@@ -503,10 +499,11 @@ def oopPaste(): #{{{2
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     levels, nodes = VOOF.levels[body], VOOF.nodes[body]
 
+    # default l:bnlShow is -1 -- pasting not possible
+    vim.command('let l:blnShow=-1')
     ### clipboard
     bText = vim.eval('@+')
     if not bText:
-        vim.command('let l:invalid_clipboard=1')
         print 'VOOF: clipboard is empty'
         return
     bLines = bText.split('\n') # Body lines to paste
@@ -514,19 +511,16 @@ def oopPaste(): #{{{2
 
     ### verify that clipboard is a valid Voof text
     if pNodes==[] or pNodes[0]!=1:
-        vim.command('let l:invalid_clipboard=1')
         print 'VOOF: INVALID CLIPBOARD (no marker on first line)'
         return
     lev_ = pLevels[0]
     for lev in pLevels:
         # there is node with level higher than that of root nodes
         if lev < pLevels[0]:
-            vim.command('let l:invalid_clipboard=1')
             print 'VOOF: INVALID CLIPBOARD (root level error)'
             return
         # level incremented by 2 or more
         elif lev-lev_ > 1:
-            vim.command('let l:invalid_clipboard=1')
             print 'VOOF: INVALID CLIPBOARD (level increment error)'
             return
         lev_ = lev
@@ -804,7 +798,7 @@ def oopRight(): #{{{2
 
     # can't move right if ln1 node is child of previous node
     if levels[ln1-1] == levels[ln1-2]+1:
-        vim.command('let cannot_move_right=1')
+        vim.command('let l:blnShow=-1')
         return
 
     ### change levels of Tree lines, VOOF.levels
@@ -843,11 +837,11 @@ def oopLeft(): #{{{2
 
     # can't move left if at top level 1
     if levels[ln1-1]==1:
-        vim.command('let cannot_move_left=1')
+        vim.command('let l:blnShow=-1')
         return
     # can't move left if the range is not at the end of tree
     elif ln2!=len(levels) and levels[ln2]==levels[ln1-1]:
-        vim.command('let cannot_move_left=1')
+        vim.command('let l:blnShow=-1')
         return
 
     ### change levels of Tree lines, VOOF.levels

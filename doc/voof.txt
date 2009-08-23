@@ -4,7 +4,7 @@ plugin for Python-enabled Vim version 7.x
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 License: this file is in the public domain
-Version: 1.5, 2009-08-15
+Version: 1.6, 2009-08-23
 
 ==============================================================================
 Contents   {{{1~
@@ -370,7 +370,7 @@ list/nolist, etc.) via standard Vim configuration files:
 
         OTHER COMMANDS
 :Voofunl            Display node's UNL (Uniform Node Locator) |voof_Voofunl|.
-:Voofgrep [pattern] Search Body buffer for pattern and display results.
+:Voofgrep [pattern] Search Body buffer for pattern and display results
                     in the quickfix window as list of UNLs of nodes with
                     matches |voof_Voofgrep|.
 
@@ -1085,18 +1085,71 @@ unrelated. Searching headlines is easier.
 ------------------------------------------------------------------------------
 When to wipe out Tree buffer   {{{2~
 A Tree buffer should be wiped out and the corresponding VOOF data deleted
-immediately after:
+after:
 
-1) Tree is unloaded. All content is lost, Tree reverts to blank buffer.
-2) Tree is deleted. As above, plus buffer local mappings are lost.
-3) Body is unloaded. The following scenario will cause outline corruption:
-user is in Tree, he does :bunload! on corresponding Body, which is modified,
-and then performs outline operation.
-4) Body is deleted. Buffer-local mappings are lost.
-5) Body is wiped out. Tree has no reason to exist.
+1) Body is wiped out. Tree has no reason to exist.
+2) Body is deleted. Body buffer-local mappings are lost.
+3) Body is unloaded or deleted. When Body is loaded again, its b:changedtick
+   is different.
+4) Tree is unloaded. All content is lost, Tree reverts to blank buffer.
+5) Tree is deleted. As above, plus buffer local mappings are lost.
 
 This is accomplished via BufUnload autocommands for Tree and Body.
 BufUnload is also triggered on BufDelete and BufWipeout.
+
+There are several fail-safe measures that ensure that nothing damaging will
+happen if BufUnload autocommands are not triggered, as after "noa bun",
+"noa bd", "noa bw".
+
+The following scenario is potentially dangerous: user is in Tree, he does
+":noau bun! {bufnr}" or "noau bd! {bufnr}" on corresponding Body, which is
+modified, and then performs outline operation. That the outline is invalid
+will be detected by b:changedtick check (see "Checking Bodies for ticks") and
+the Tree will be wiped out.
+
+Functions Voof_ToBody() and Voof_ToTree(), which are called when selecting
+nodes and during every outline operation, will detect if the Body or Tree
+buffer no longer exists, as after "noa bw", and will perform cleanup.
+
+When Tree or Body local mappings and syntax are lost after "noa bd", it is
+possible to restore them by executing the Voof command from the Body buffer. 
+
+------------------------------------------------------------------------------
+Checking Bodies for ticks   {{{2~
+Tree buffer and associated outline data are updated on entering Tree via
+BufEnter autocommand. To perform update only when the Body has changed since
+the last update, Body's b:changedtick is used as shown in the docs. The
+problem is that, for some reason,  b:changedtick cannot be read with
+getbufvar(), so it's not accessible from Tree on BufEnter. The workaround is
+to use Body's BufLeave autocommand to save Body's b:changedtick. So the entire
+update scheme is:
+    - on Body BufLeave save Body's b:changedtick as "tick"
+    - on Tree BufEnter compare "tick_" to "tick"
+    - if different, do outline update and set "tick_" to "tick"
+
+The outline must be up to date when the cursor is in the Tree buffer. If it's
+not, the consequences could be unpleasant. Performing outline operations will
+cause data corruption.
+
+Outline update can fail when something goes wrong with autocommands, e.g.,
+when some plugin messes with eventignore. Or, the Body file can be modified by
+an external application while cursor is in Tree.
+
+Fortunately, most Voof commands involve a visit from Tree to Body or vice
+versa, so we can compare "tick_" directly to Body's "b:changedtick". If they
+are different, the Tree buffer is wiped out and associated data are cleaned
+up. Such check is performed during:
+    - selecting node from Tree or Body
+    - Voofgrep command initiated from Tree
+    - during every outline operation, before modifying buffers
+The function that does this check is Voof_BodyCheckTicks().
+
+These checks can be tested by modifying Body and then moving to Tree with
+"noau wincmd w" or after "set ei=BufLeave", etc.
+
+Another precaution is that outline update (voof.voofUpdate()) is always done
+inside try/finally/endtry. This ensures that "tick_" will not be set to "tick"
+when an error occurs during the update.
 
 ------------------------------------------------------------------------------
 TODO   {{{2x~
@@ -1144,7 +1197,32 @@ sort children
 ==============================================================================
 CHANGELOG   {{{2~
 
-v1.5, 2009-09-15   {{{3x~
+v1.6, 2009-08-23   {{{3x~
+Added checks to prevent data corruption when outline update fails for any
+reason. When these checks fail, the Tree buffer is wiped out and outline data
+are cleaned up. These checks can be tested as follows:
+    - Create outline with the Voof command.
+    - Delete some lines in Body buffer.
+    - Move to Tree buffer with
+      :noa wincmd w
+    - Tree update did not happen and outline data are out of sync with the
+      Body. In previous versions, performing outline operation at this stage
+      would cause data corruption.
+    - Select new node or try outline operation. Voof will issue error message,
+      wipe out Tree buffer, and perform clean up.
+Another way to test these checks is to modify Body file with an external
+application while cursor is in the Tree window.
+There is more details in "Implementation notes -> Checking Bodies for ticks".
+
+Added some other foolproofing measures.
+
+Improved automatic scrolling of PyLog buffer. Both previous (^wp) and current
+window numbers are preserved in tabpages where PyLog is scrolled. Previously,
+only current window number was preserved.
+
+Fixed some bugs. Streamlined some code.
+
+v1.5, 2009-08-15   {{{3~
 New commands: Voofgrep, Voofunl.
 
 Fixed blunder in "Move Down" outline operation that could cause outline
@@ -1181,9 +1259,8 @@ The way "eventignore" was used to temporarily disable autocommands was unsafe.
 
 Modified voof.voofUpdate() (formally treeUpdate) to work from any buffer as
 long as the Tree is "ma". Voof_TreeBufEnter() now calls voof.voofUpdate()
-directly.  Voof_TreeUpdate() became Voof_TreeUpdateFromBody()--update Tree
-while in Body without moving to Tree. This is extremely useful--can now use
-outline data while in Body.
+directly.  Voof_BodyUpdateTree() updates Tree while in Body without moving to
+Tree. This is extremely useful--can now use outline data while in Body.
 
 Optimization in voof.voofOutline() parser function: >
     if not marker in line: continue
