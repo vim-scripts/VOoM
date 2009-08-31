@@ -4,7 +4,7 @@
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 " License: this software is in the public domain
-" Version: 1.6, 2009-08-23
+" Version: 1.7, 2009-08-31
 
 
 "---Conventions-----------------------{{{1
@@ -39,20 +39,11 @@ endif
 
 "---Initialize------------------------{{{1
 if !exists('s:voof_did_init')
-    let s:voof_did_init = 1
-    au! FuncUndefined Voof_*
     let s:voof_path = expand("<sfile>:p")
     let s:voof_dir = expand("<sfile>:p:h")
     let s:voof_script_py = s:voof_dir.'/voofScript.py'
-python << EOF
-import vim
-import sys
-voof_dir = vim.eval('s:voof_dir')
-if not voof_dir in sys.path:
-    sys.path.append(voof_dir)
-import voof
-VOOF = sys.modules['voof'].VOOF = voof.VoofData()
-EOF
+    let s:voof_TreeBufEnter = 1
+
     " {tree : associated body,  ...}
     let s:voof_trees = {}
     " {body : {'tree' : associated tree,
@@ -61,6 +52,19 @@ EOF
     "          'tick' : b:changedtick of Body,
     "          'tick_' : b:changedtick of Body on last Tree update}, {...}, ... }
     let s:voof_bodies = {}
+
+python << EOF
+import vim
+import sys
+voof_dir = vim.eval('s:voof_dir')
+if not voof_dir in sys.path:
+    sys.path.append(voof_dir)
+import voof
+VOOF = sys.modules['voof'].VOOF = voof.VoofData()
+VOOF.vim_stdout, VOOF.vim_stderr = sys.stdout, sys.stderr
+EOF
+    au! FuncUndefined Voof_*
+    let s:voof_did_init = 1
 endif
 
 
@@ -150,18 +154,6 @@ func! Voof_Init() "{{{2
             call Voof_TreeConfigure()
         endif
     endif
-endfunc
-
-
-func! Voof_UnVoof(body, tree) "{{{2
-" Remove VOOF data for Body body and its Tree tree.
-    if has_key(s:voof_trees, a:tree)
-        unlet s:voof_trees[a:tree]
-    endif
-    if has_key(s:voof_bodies, a:body)
-        unlet s:voof_bodies[a:body]
-    endif
-    py voof.voof_UnVoof()
 endfunc
 
 
@@ -263,7 +255,7 @@ func! Voof_ReloadAllPre() "{{{2
     " wipe out all Tree buffers
     for bnr in keys(s:voof_trees)
         if bufexists(str2nr(bnr))
-            exe 'bw '.bnr
+            exe 'bwipeout '.bnr
         endif
     endfor
     py reload(voof)
@@ -273,9 +265,17 @@ endfunc
 
 func! Voof_PrintData() "{{{2
 " Print Voof data.
+    redir => voofData
+    silent echo repeat('-', 60)
+    if exists('s:voof_logbnr')
+        silent echo 's:voof_logbnr --' s:voof_logbnr
+    endif
     for v in ['s:voof_did_load', 's:voof_did_init', 's:voof_dir', 's:voof_path', 's:voof_script_py', 's:voof_TreeBufEnter', 'g:voof_verify_oop', 's:voof_trees', 's:voof_bodies']
-        echo v '--' {v}
+        silent echo v '--' {v}
     endfor
+    redir END
+    echo ' '
+    py print vim.eval('voofData')
 endfunc
 
 
@@ -324,7 +324,14 @@ func! Voof_ToTreeWin() "{{{2
     " Allready in a Tree buffer.
     if has_key(s:voof_trees, bufnr('')) | return | endif
 
-    " Look for any window with a Tree buffer.
+    " Use previous window if it shows Tree.
+    let wnr = winnr('#')
+    if has_key(s:voof_trees, winbufnr(wnr))
+        exe wnr.'wincmd w'
+        return
+    endif
+
+    " Use any window with a Tree buffer.
     for bnr in tabpagebuflist()
         if has_key(s:voof_trees, bnr)
             exe bufwinnr(bnr).'wincmd w'
@@ -363,16 +370,12 @@ func! Voof_ToTree(tree) abort "{{{2
         return
     endif
 
-    " Make sure buffer exists before loading it.
-    if !bufexists(a:tree)
-        " because of au, this should never happen
-        echoerr "VOOF: Tree buffer doesn't exist:" a:tree
+    " Bail out if Tree is unloaded or doesn't exist.
+    " Because of au, this should never happen.
+    if !bufloaded(a:tree)
         let body = s:voof_trees[a:tree]
-        call Voof_UnVoof(body, a:tree)
-        exe 'au! VoofBody * <buffer='.body.'>'
-        if bufnr('')==body
-            call Voof_BodyUnMap()
-        endif
+        call Voof_UnVoof(body,a:tree)
+        echoerr "VOOF: Tree buffer" a:tree "was not loaded or didn't exist. Cleanup has been performed."
         return -1
     endif
 
@@ -432,17 +435,16 @@ func! Voof_ToBody(body, noa) abort "{{{2
         return
     endif
 
-    " Make sure buffer exists before loading it.
-    if !bufexists(a:body)
-        " because of au, this should never happen
-        echoerr "VOOF: Body" a:body "doesn't exist. Tree will be wiped out."
+    " Bail out if Body is unloaded or doesn't exist.
+    " Because of au, this should never happen.
+    if !bufloaded(a:body)
         let tree = s:voof_bodies[a:body].tree
         if !exists("s:voof_trees") || !has_key(s:voof_trees, tree) || (a:body!=s:voof_trees[tree])
             echoerr "VOOF: internal error"
             return -1
         endif
-        call Voof_UnVoof(a:body, tree)
-        exe 'noautocmd bwipeout! '.tree
+        call Voof_UnVoof(a:body,tree)
+        echoerr "VOOF: Body" a:body "was not loaded or didn't exist. Cleanup has been performed."
         return -1
     endif
 
@@ -525,11 +527,10 @@ func! Voof_TreeBufUnload() "{{{2
         echoerr "VOOF: internal error"
         return
     endif
-
     let body = s:voof_trees[tree]
-    exe 'au! VoofBody * <buffer='.body.'>'
-    call Voof_UnVoof(body, tree)
-    exe 'noautocmd bwipeout! '.tree
+    "echom bufexists(tree) " this is always 0
+    exe 'noautocmd bwipeout '.tree
+    call Voof_UnVoof(body,tree)
 endfunc
 
 
@@ -724,18 +725,16 @@ func! Voof_TreeMap() "{{{2
     " Put cursor on the current position.
     nnoremap <buffer><silent> = :call Voof_TreeToSnLn()<CR>
 
-    " Do not map <LeftMouse> . Not triggered on the first click in the buffer.
-    " Triggered on the first click in another buffer. Vim doesn't know what
-    " buffer it is until after the left mouse click.
-    "nnoremap <buffer><silent> <LeftMouse> <LeftMouse>:call Voof_TreeSelect(line('.'),'tree')<CR>
-
-    " Left mouse release. Also triggered when resizing windows with the mouse.
+    " Do not map <LeftMouse>. Not triggered on first click in the buffer.
+    " Triggered on first click in another buffer. Vim doesn't know what buffer
+    " it is until after the click.
+    " Left mouse release. Also triggered when resizing window with the mouse.
     nnoremap <buffer><silent> <LeftRelease> <LeftRelease>:call Voof_TreeOnLeftClick()<CR>
-
+    inoremap <buffer><silent> <LeftRelease> <LeftRelease><Esc>
     " Disable Left mouse double click to avoid entering Visual mode.
     nnoremap <buffer><silent> <2-LeftMouse> <Nop>
 
-    nnoremap <buffer><silent> <Space>      :call Voof_TreeToggleFold()<CR>
+    nnoremap <buffer><silent> <Space> :call Voof_TreeToggleFold()<CR>
     "vnoremap <buffer><silent> <Space> :<C-u>call Voof_TreeToggleFold()<CR>
 
     nnoremap <buffer><silent> <Down> <Down>:call Voof_TreeSelect(line('.'), 'tree')<CR>
@@ -1508,12 +1507,7 @@ func! Voof_BodyBufUnload() "{{{2
         echoerr "VOOF: internal error"
         return
     endif
-
-    exe 'au! VoofBody * <buffer='.body.'>'
-    call Voof_UnVoof(body, tree)
-    if bufexists(tree)
-        exe 'noautocmd bwipeout! '.tree
-    endif
+    call Voof_UnVoof(body,tree)
 endfunc
 
 
@@ -1582,11 +1576,9 @@ func! Voof_BodyUpdateTree() "{{{2
     let tree = s:voof_bodies[body].tree
 
     " paranoia
-    if !bufexists(tree)
-        echoerr "VOOF: Tree buffer" tree "doesn't exist"
-        call Voof_UnVoof(body, tree)
-        call Voof_BodyUnMap()
-        exe 'au! VoofBody * <buffer='.body.'>'
+    if !bufloaded(tree)
+        call Voof_UnVoof(body,tree)
+        echoerr "VOOF: Tree buffer" tree "was not loaded or didn't exist. Cleanup has been performed."
         return -1
     endif
 
@@ -1639,6 +1631,8 @@ endfunc
 func! Voof_BodyCheckTicks(body) "{{{2
 " Current buffer is Body body. Check ticks assuming that outline is up to date,
 " as after going to Body from Tree.
+" note: 'abort' argument is not needed and would be counterproductive
+
     " paranoia
     if bufnr('')!=a:body
         echoerr 'VOOF: WRONG BUFFER!'
@@ -1647,18 +1641,13 @@ func! Voof_BodyCheckTicks(body) "{{{2
 
     " Outline is invalid. Bail out.
     if s:voof_bodies[a:body].tick_!=b:changedtick
-        echoerr 'VOOF: WRONG TICKS IN BODY BUFFER '.a:body.'! TREE WILL BE WIPED OUT.'
         let tree = s:voof_bodies[a:body].tree
         if !exists("s:voof_trees") || !has_key(s:voof_trees, tree)
             echoerr "VOOF: internal error"
             return -1
         endif
-        exe 'au! VoofBody * <buffer='.a:body.'>'
-        call Voof_UnVoof(a:body, tree)
-        call Voof_BodyUnMap()
-        if bufexists(tree)
-            exe 'noautocmd bwipeout! '.tree
-        endif
+        call Voof_UnVoof(a:body,tree)
+        echoerr 'VOOF: WRONG TICKS IN BODY BUFFER '.a:body.'! CLEANUP HAS BEEN PERFORMED.'
         return -1
     endif
 endfunc
@@ -1666,6 +1655,29 @@ endfunc
 
 "---Tree or Body----------------------{{{1
 "
+func! Voof_UnVoof(body,tree) "{{{2
+" Delete Voof data, wipeout Tree, etc.
+" Can be called from any buffer.
+" Note: when called from Tree BufUnload au, tree doesn't exist.
+    " Remove VOOF data for Body body and its Tree tree.
+    if has_key(s:voof_trees, a:tree)
+        unlet s:voof_trees[a:tree]
+    endif
+    if has_key(s:voof_bodies, a:body)
+        unlet s:voof_bodies[a:body]
+    endif
+    py voof.voof_UnVoof()
+
+    exe 'au! VoofBody * <buffer='.a:body.'>'
+    if bufexists(a:tree)
+        exe 'noautocmd bwipeout '.a:tree
+    endif
+    if bufnr('')==a:body
+        call Voof_BodyUnMap()
+    endif
+endfunc
+
+
 func! Voof_GetUNL() "{{{2
 " Display UNL (Uniformed Node Locator) of current node.
 " Copy UNL to register 'u'.
@@ -1778,10 +1790,21 @@ func! Voof_LogInit() "{{{2
 " Redirect Python stdout and stderr to Log buffer.
     let bnr_ = bufnr('')
     """" Log buffer exists, show it.
-    if exists('g:voof_logbnr')
-        if bufwinnr(g:voof_logbnr)==-1
+    if exists('s:voof_logbnr')
+        if !bufloaded(s:voof_logbnr)
+            py sys.stdout, sys.stderr = VOOF.vim_stdout, VOOF.vim_stderr
+            py if 'pydoc' in sys.modules: del sys.modules['pydoc']
+            if bufexists(s:voof_logbnr)
+                exe 'noautocmd bwipeout '.s:voof_logbnr
+            endif
+            let bnr = s:voof_logbnr
+            unlet s:voof_logbnr
+            echoerr "VOOF: PyLog buffer" bnr "was not shut down properly. Cleanup has been performed. Run Vooflog command again."
+            return
+        endif
+        if bufwinnr(s:voof_logbnr)==-1
             call Voof_ToLogWin()
-            silent exe 'b'.g:voof_logbnr
+            silent exe 'b'.s:voof_logbnr
             normal! G
             exe bufwinnr(bnr_).'wincmd w'
         endif
@@ -1789,20 +1812,21 @@ func! Voof_LogInit() "{{{2
     endif
 
     """" Create Log buffer.
-    "wincmd t | 10wincmd l | vsplit | wincmd l
     call Voof_ToLogWin()
     silent edit __PyLog__
-    let g:voof_logbnr=bufnr('')
+    let s:voof_logbnr=bufnr('')
     " Configure Log buffer
-    setl cul nocuc nowrap list
+    setl cul nocuc list wrap
     setl ft=log
     setl noro ma ff=unix
     setl nobuflisted buftype=nofile noswapfile bufhidden=hide
     call Voof_LogSyntax()
     au BufUnload <buffer> call Voof_LogBufUnload()
 python << EOF
-VOOF.vim_stdout, VOOF.vim_stderr = sys.stdout, sys.stderr
+# this is done once in Initialize
+#VOOF.vim_stdout, VOOF.vim_stderr = sys.stdout, sys.stderr
 sys.stdout = sys.stderr = voof.LogBufferClass()
+if 'pydoc' in sys.modules: del sys.modules['pydoc']
 EOF
     " Go back.
     exe bufwinnr(bnr_).'wincmd w'
@@ -1810,9 +1834,14 @@ endfunc
 
 
 func! Voof_LogBufUnload() "{{{2
+    if !exists('s:voof_logbnr') || expand("<abuf>")!=s:voof_logbnr
+        echoerr 'VOOF: internal error'
+        return
+    endif
     py sys.stdout, sys.stderr = VOOF.vim_stdout, VOOF.vim_stderr
-    exe 'bwipeout! '.g:voof_logbnr
-    unlet g:voof_logbnr
+    py if 'pydoc' in sys.modules: del sys.modules['pydoc']
+    exe 'bwipeout '.s:voof_logbnr
+    unlet! s:voof_logbnr
 endfunc
 
 
@@ -1841,19 +1870,15 @@ func! Voof_LogScroll() "{{{2
 " Scroll windows with the __PyLog__ buffer.
 " All tabs are searched, but only the first found Log window in a tab is scrolled.
 " Uses noautocmd when entering tabs and windows.
+" Note: careful with Python here: an error can cause recursive call.
 
     " can't go to other windows when in Ex mode (after 'Q' or 'gQ')
     if mode()=='c' | return | endif
 
     " This should never happen.
-    if !exists('g:voof_logbnr')
-        echoerr "VOOF: g:voof_logbnr doesn't exist"
+    if !exists('s:voof_logbnr') || !bufloaded(s:voof_logbnr)
+        echoerr "VOOF: internal error"
         return
-    else
-        if !bufexists(g:voof_logbnr)
-            echoerr "VOOF: Log buffer ".g:voof_logbnr." doesn't exist"
-            return
-        endif
     endif
 
     let lz_=&lz | set lz
@@ -1864,7 +1889,7 @@ func! Voof_LogScroll() "{{{2
     " search among visible buffers in all tabs
     for tnr in range(1, tabpagenr('$'))
         for bnr in tabpagebuflist(tnr)
-            if bnr==g:voof_logbnr
+            if bnr==s:voof_logbnr
                 let log_found=1
                 exe 'noautocmd tabnext '.tnr
                 " save tab's current window and previous window numbers
@@ -1889,7 +1914,7 @@ func! Voof_LogScroll() "{{{2
         " Create new window.
         "wincmd t | 10wincmd l | vsplit | wincmd l
         call Voof_ToLogWin()
-        exe 'b '.g:voof_logbnr
+        exe 'b '.s:voof_logbnr
         normal G
         " Return to original tab and buffer.
         exe 'tabn '.tnr_
@@ -2039,13 +2064,17 @@ com! Voofunl  call Voof_GetUNL()
 com! -nargs=? Voofgrep  call Voof_Grep(<q-args>)
 
 "com! VoofPrintData  call Voof_PrintData()
-"" Source voof.vim, reload voof.py
-"com! VoofReload exe 'so '.s:voof_path.' | py reload(voof)'
-"" Source voof.vim .
+"
+"" source voof.vim, reload voof.py
+"com! VoofReload    exe 'so '.s:voof_path.' | py reload(voof)'
+"
+"" source voof.vim
 "com! VoofReloadVim exe 'so '.s:voof_path
-"" Reload voof.py .
-"com! VoofReloadPy py reload(voof)
-"" Complete reload: delete Trees and Voof data, source voof.vim, reload voof.py .
+"
+"" reload voof.py
+"com! VoofReloadPy  py reload(voof)
+"
+"" complete reload: delete Trees and Voof data, source voof.vim, reload voof.py
 "com! VoofReloadAll call Voof_ReloadAllPre() | exe 'so '.s:voof_path | call Voof_Init()
 
 " modelines {{{1

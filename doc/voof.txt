@@ -4,7 +4,7 @@ plugin for Python-enabled Vim version 7.x
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 License: this file is in the public domain
-Version: 1.6, 2009-08-23
+Version: 1.7, 2009-08-31
 
 ==============================================================================
 Contents   {{{1~
@@ -312,7 +312,6 @@ g:voof_log_hight   ~
 
 ------------------------------------------------------------------------------
 Tree/Body shuttle keys   {{{3~
-
 Since VOOF emulates a two-pane outliner, it's important to have keys that
 shuttle between the two panes. By default, such keys are <Return> (Select Node
 and Shuttle between Body and Tree) and <Tab> (Shuttle between Body and Tree).
@@ -333,6 +332,10 @@ g:voof_tab_key   ~
     modes) and Bodies (Normal mode).
     Default: "<Tab>"
 
+Example: >
+    let g:voof_return_key = '<C-Return>'
+    let g:voof_tab_key = '<C-Tab>'
+
 ------------------------------------------------------------------------------
 Other options   {{{3~
 
@@ -345,6 +348,11 @@ g:voof_verify_oop   ~
     a regular basis. It will alert to outline corruption, which is very likely
     if there is a bug in outline operation. The downside is there is a
     performance hit when the outline is large (>500 headlines).
+
+
+All VOOF commands can be mapped to key shortcuts in .vimrc: >
+    nnoremap <LocalLeader><LocalLeader> :Voof<CR>
+    nnoremap <LocalLeader>n :Voofunl<CR>
 
 ------------------------------------------------------------------------------
 Customizing Tree and __PyLog__ buffers   {{{3~
@@ -439,6 +447,8 @@ pp              (n)   Paste node(s) after current node.
 
 <LocalLeader>r  (n) Run script. Same as Voofrun command.
 
+There is a bunch of commented out commands in the "Commands" node of voof.vim.
+They are useful only during VOOF development.
 
 ==============================================================================
 OUTLINING (:Voof)   {{{1~
@@ -951,15 +961,19 @@ Known Problems:   {{{2~
 1) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
 The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
 
-2) Under some conditions, there is a problem with the output of help(), which
-apparently uses pydoc.py, which does something strange to output trailing \n.
-Steps to reproduce:
-1. Open new instance of Vim.
-2. Vooflog
-3. :py help(help)
-4. Delete __PyLog__ buffer.
-5. :py help(help)
-An error occurs: '\n' is printed to the nonexisting log buffer.
+2) In versions before 1.7 there was problem with the output of help(), which
+apparently uses Lib/pydoc.py, which does something strange to output trailing
+\n. Steps to reproduce:
+    1. Open new instance of Vim.
+    2. Vooflog
+    3. :py help(help)
+    4. Wipe out __PyLog__ buffer to restore sys.stdout.
+    5. :py help(help)
+       An error occurs: '\n' is printed to the nonexisting log buffer.
+The culprit is in Lib/pydoc.py:
+    help = Helper(sys.stdin, sys.stdout)
+The current workaround is to delete pydoc from sys.modules when changing stdin
+and stdout.
 
 ==============================================================================
 Implementation notes   {{{1~
@@ -1097,22 +1111,53 @@ after:
 This is accomplished via BufUnload autocommands for Tree and Body.
 BufUnload is also triggered on BufDelete and BufWipeout.
 
-There are several fail-safe measures that ensure that nothing damaging will
-happen if BufUnload autocommands are not triggered, as after "noa bun",
-"noa bd", "noa bw".
+Also, when a buffer is unloaded but still exists, that is after :bunload and
+:bdelete, there is potential for big trouble when trying to modify the buffer
+via Python--see next node.
 
-The following scenario is potentially dangerous: user is in Tree, he does
-":noau bun! {bufnr}" or "noau bd! {bufnr}" on corresponding Body, which is
-modified, and then performs outline operation. That the outline is invalid
-will be detected by b:changedtick check (see "Checking Bodies for ticks") and
-the Tree will be wiped out.
+There are several fail-safe measures that ensure that nothing damaging will
+happen if BufUnload autocommands are not triggered, as after "noa bun", "noa
+bd", "noa bw". Tree and Body buffers are always checked for being loaded
+(bufloaded()) during most Voof commands.
 
 Functions Voof_ToBody() and Voof_ToTree(), which are called when selecting
-nodes and during every outline operation, will detect if the Body or Tree
-buffer no longer exists, as after "noa bw", and will perform cleanup.
+nodes and before every outline operation, will detect if the Body or Tree
+buffer is no longer loaded and will perform cleanup.
+
+The b:changedtick check (see "Checking Bodies for ticks") also will prevent
+potential troubles after improper unloading of Body with "noa bun!", etc.
+This is because b:changedtick changes after unloading a buffer and loading it
+again.
 
 When Tree or Body local mappings and syntax are lost after "noa bd", it is
 possible to restore them by executing the Voof command from the Body buffer. 
+
+The PyLog buffer should also be wiped out when unloaded or deleted. There is a
+check that ensures that PyLog is loaded before printing to it.
+
+------------------------------------------------------------------------------
+unloaded buffer + python == trouble   {{{2~
+Bad things happen when attempting to modify an unloaded buffer via Python
+vim.buffer object. (This might be a Vim bug.) Example:
+    - Create two buffers: buf1 and buf2. They can be new, no-file buffers.
+    - With cursor in buf2
+      :py buf2=vim.current.buffer
+    - Buffer 2 can now be modified via Python:
+      :py buf2[0]="xxxxxxxxx"
+    - Unload buffer 2
+      :bun!
+      Buffer 1 is the current buffer.
+    - Try writing to buffer 2, which is not loaded
+      :py buf2[0]="yyyyy"
+    - Buffer 1 is modified instead of buffer 2, and the change cannot be undone!
+      Buffer 2 is no longer unloaded, so subsequent writes to it via buf2
+      happen correctly.
+
+VOOF's BufUnload autocommands ensure that Tree, Body, and PyLog buffers are
+never unloaded when they are being written to. Buffers can become unloaded
+when they are closed improperly with "noa bun" or "noa bd" or when something
+goes wrong with autocommands. There are fail-safe checks that make sure that
+the buffer is loaded (bufloaded()) before it is modified via Python.
 
 ------------------------------------------------------------------------------
 Checking Bodies for ticks   {{{2~
@@ -1197,7 +1242,26 @@ sort children
 ==============================================================================
 CHANGELOG   {{{2~
 
-v1.6, 2009-08-23   {{{3x~
+v1.7, 2009-08-31   {{{3x~
+Checks that previously checked that Body or Tree buffer exists now check if
+the buffer is loaded (bufloaded()). This is needed because bad things happen
+when writing to an unloaded buffer via Python's vim.buffer.
+See "Implementation notes -> unloaded buffer + python == trouble"
+
+When killing Trees and PyLog do "bwipeout" instead of "bwipeout!" -- it's
+sufficient and safer.
+
+Adjusted how new Tree window is opened: previous window (^wp) is used if it
+shows a Tree buffer.
+
+PyLog:
+Added fail-safe check that ensures PyLog buffer is loaded before being written
+to. This can be tested by unloading PyLog with "noa bun" or "noa bd" and then
+printing to it: py print "something".
+Added workaround for a glitch with the output of help().
+Made voof_logbnr variable script-local.
+
+v1.6, 2009-08-23   {{{3~
 Added checks to prevent data corruption when outline update fails for any
 reason. When these checks fail, the Tree buffer is wiped out and outline data
 are cleaned up. These checks can be tested as follows:

@@ -4,7 +4,7 @@
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 # License: this software is in the public domain
-# Version: 1.6, 2009-08-23
+# Version: 1.7, 2009-08-31
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -1091,8 +1091,18 @@ class LogBufferClass: #{{{2
 
         # Can't have '\n' in appended list items, so always use splitlines().
         # A trailing \n is lost after splitlines(), but not for '\n\n' etc.
+        #print self.buffer.name
 
         if not s: return
+        # Nasty things happen when printing to unloaded PyLog buffer.
+        # This also catches printing to noexisting buffer, as in pydoc help() glitch.
+        if vim.eval("bufloaded(%s)" %self.logbnr)=='0':
+            vim.command("echoerr 'VOOF (PyLog): PyLog buffer %s is unloaded or doesn''t exist'" %self.logbnr)
+            vim.command("echoerr 'VOOF (PyLog): unable to write string:'")
+            vim.command("echom '%s'" %(repr(s).replace("'", "''")) )
+            vim.command("echoerr 'VOOF (PyLog): please try executing command Vooflog to fix'")
+            return
+
         try:
             if type(s) == type(u" "):
                 s = s.encode(self.encoding)
@@ -1114,18 +1124,11 @@ class LogBufferClass: #{{{2
             lines2 = []
             for line in lines1:
                 lines2+=line.splitlines()
-            if int(vim.eval('bufexists(%s)' %self.logbnr)):
-                self.buffer.append('')
-                self.buffer.append('VOOF: exception writing to PyLog buffer:')
-                self.buffer.append(repr(s))
-                self.buffer.append(lines2)
-                self.buffer.append('')
-            else:
-                vim.command('echoerr "VOOF: exception, trying to write to non-existing PyLog buffer:"')
-                vim.command("echoerr '%s'" %(repr(s).replace("'", "''")) )
-                for line in lines2:
-                    vim.command("echoerr '%s'" %(line.replace("'", "''")) )
-                return
+            self.buffer.append('')
+            self.buffer.append('VOOF: exception writing to PyLog buffer:')
+            self.buffer.append(repr(s))
+            self.buffer.append(lines2)
+            self.buffer.append('')
 
         vim.command('call Voof_LogScroll()')
 
