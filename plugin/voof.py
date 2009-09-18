@@ -2,9 +2,13 @@
 # VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
-# Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
-# License: this software is in the public domain
-# Version: 1.7, 2009-08-31
+#  Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
+# License: This program is free software. It comes without any warranty,
+#          to the extent permitted by applicable law. You can redistribute it
+#          and/or modify it under the terms of the Do What The Fuck You Want To
+#          Public License, Version 2, as published by Sam Hocevar.
+#          See http://sam.zoy.org/wtfpl/COPYING for more details.
+# Version: 1.8, 2009-09-18
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -277,14 +281,15 @@ def nodeParent(body, lnum): #{{{2
 
 
 def nodeUNL(body, lnum): #{{{2x
-    '''Compute UNL of node at Tree line lnum'''
+    '''Compute UNL of node at Tree line lnum.
+    Returns list of headlines.'''
 
     tree = int(vim.eval('s:voof_bodies[%s].tree' %body))
     Tree = VOOF.buffers[tree]
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
 
     if lnum==1:
-        return 'top-of-file'
+        return ['top-of-file']
 
     lnums = []
     parent = lnum
@@ -296,8 +301,9 @@ def nodeUNL(body, lnum): #{{{2x
     heads = []
     for ln in lnums:
         heads.append( Tree[ln-1].split('|', 1)[1] )
-    UNL = ' -> '.join(heads)
-    return UNL
+    #UNL = ' -> '.join(heads)
+    #return UNL
+    return heads
 
 
 #---Outline Navigation-------{{{1
@@ -333,10 +339,20 @@ def voof_GetUNL(): #{{{2
     if buftype=='body':
         lnum = bisect.bisect_right(VOOF.nodes[body], lnum)
 
-    UNL = nodeUNL(body,lnum)
-
+    heads = nodeUNL(body,lnum)
+    UNL = ' -> '.join(heads)
     vim.command("let @n='%s'" %UNL.replace("'", "''"))
-    print '  ' + UNL
+    #print '  ' + UNL
+    for h in heads[:-1]:
+        h = h.replace("'", "''")
+        vim.command("echohl ModeMsg")
+        vim.command("echon '%s'" %h)
+        vim.command("echohl Title")
+        vim.command("echon ' -> '")
+    h = heads[-1].replace("'", "''")
+    vim.command("echohl ModeMsg")
+    vim.command("echon '%s'" %h)
+    vim.command("echohl None")
 
 
 def voof_Grep(): #{{{2
@@ -371,7 +387,7 @@ def voof_Grep(): #{{{2
     for i in results:
         num_len = len('%s%s%s' %(i[0],i[1],i[2]))
         spaces = ' '*(max_num_len - num_len)
-        text = 'n%s:%s%s|%s' %(i[0],i[2],spaces, nodeUNL(body, i[0]).replace("'", "''"))
+        text = 'n%s:%s%s|%s' %(i[0],i[2],spaces, ' -> '.join(nodeUNL(body, i[0])).replace("'", "''"))
         d = "{'text':'%s', 'lnum':%s, 'bufnr':%s}, " %(text, i[1], body)
         loclist .append(d)
     #print '\n'.join(loclist)
@@ -504,25 +520,25 @@ def oopPaste(): #{{{2=
     ### clipboard
     bText = vim.eval('@+')
     if not bText:
-        print 'VOOF: clipboard is empty'
+        vim.command("call Voof_WarningMsg('VOOF: clipboard is empty')")
         return
     bLines = bText.split('\n') # Body lines to paste
     pHeads, pNodes, pLevels = voofOutline(body, bLines)
 
     ### verify that clipboard is a valid Voof text
     if pNodes==[] or pNodes[0]!=1:
-        print 'VOOF: INVALID CLIPBOARD (no marker on first line)'
+        vim.command("call Voof_ErrorMsg('VOOF: INVALID CLIPBOARD (no marker on first line)')")
         return
     lev_ = pLevels[0]
     for lev in pLevels:
         # there is node with level higher than that of root nodes
         if lev < pLevels[0]:
-            print 'VOOF: INVALID CLIPBOARD (root level error)'
+            vim.command("call Voof_ErrorMsg('VOOF: INVALID CLIPBOARD (root level error)')")
             return
         # level incremented by 2 or more
         elif lev-lev_ > 1:
-            print 'VOOF: INVALID CLIPBOARD (level increment error)'
-            return
+            vim.command("call Voof_WarningMsg('VOOF: WARNING, CLIPBOARD ERROR (level incremented by >2)', ' ')")
+            #return
         lev_ = lev
 
     ### compute where to insert and at what level
@@ -1136,5 +1152,3 @@ class LogBufferClass: #{{{2
 # modelines {{{1
 # vim:fdm=marker:fdl=0
 # vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart)
-
-
