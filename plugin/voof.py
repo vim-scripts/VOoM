@@ -8,7 +8,7 @@
 #          and/or modify it under the terms of the Do What The Fuck You Want To
 #          Public License, Version 2, as published by Sam Hocevar.
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
-# Version: 1.8, 2009-09-18
+# Version: 1.9, 2009-12-19
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -21,7 +21,7 @@ import bisect
 # see voof.vim for conventions
 # voof_WhatEver() means it's Python code for Voof_WhatEver() Vim function
 
-#---Constants and Settings---{{{1
+#---Constants and Settings--------------------{{{1
 
 # default start fold marker and regexp
 MARKER = '{{{'  # }}}
@@ -54,7 +54,8 @@ class VoofData: #{{{1
 # Thus, this module can be reloaded without destroying data.
 
 
-#---Outline Construction-----{{{1
+#---Outline Construction----------------------{{{1
+
 
 def voofOutline(body, lines): #{{{2
     '''Return (treelines, nodes, levels) for list of Body lines.'''
@@ -80,6 +81,7 @@ def voofOutline(body, lines): #{{{2
         nodes.append(lnum)
         levels.append(level)
     return (treelines, nodes, levels)
+
 
 def voofUpdate(body): #{{{2
     '''Construct outline for Body body.
@@ -196,6 +198,7 @@ def voof_Init(body): #{{{2
         VOOF.markers[body] = marker
         VOOF.markers_re[body] = re.compile(re.escape(marker) + r'(\d+)(x?)')
 
+
 def voof_TreeCreate(): #{{{2
     '''This is part of Voof_TreeCreate(), called from Tree.'''
 
@@ -204,35 +207,44 @@ def voof_TreeCreate(): #{{{2
     Body = VOOF.buffers[body]
     # current Body lnum
     blnr = int(vim.eval('s:voof_bodies[a:body].blnr'))
+    L = len(nodes)
 
-    ### compute snLn
+    ### compute snLn, create Tree folding
 
-    # look for headline with .= after level number
+    # find node marked with '='
+    # find nodes marked with 'o'
     snLn = 0
-    ln = 2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
-    for bln in nodes[1:]:
-        bline = Body[bln-1]
-        end = marker_re.search(bline).end()
-        if end==len(bline):
-            ln+=1
-            continue
-        elif bline[end] == '=':
+    oFolds = []
+    for ln in range(2,L+1):
+        bline = Body[nodes[ln-1]-1]
+        # part of Body headline after marker+level+'x'
+        bline2 = bline[marker_re.search(bline).end():]
+        if not bline2: continue
+        if bline2[0]=='=':
             snLn = ln
-            break
-        ln+=1
+        elif bline2[0]=='o':
+            oFolds.append(ln)
+            if bline2[1:] and bline2[1]=='=':
+                snLn = ln
+
+    # create Tree folding
+    if oFolds:
+        cFolds = foldingFlip(2,L,oFolds,body)
+        foldingCreate(2,L,cFolds)
 
     if snLn:
         vim.command('let s:voof_bodies[%s].snLn=%s' %(body, snLn))
         VOOF.snLns[body] = snLn
         # set blnShow if it's different from current Body node
         # TODO: really check for current Body node?
-        if len(nodes)>2 and (blnr==1 or blnr<nodes[1]):
+        if L>2 and (blnr==1 or blnr<nodes[1]):
             vim.command('let blnShow=%s' %nodes[snLn-1])
     else:
         # no Body headline is marked with =
         # select current Body node
         computeSnLn(body, blnr)
+
 
 def voof_UnVoof(): #{{{2
     tree = int(vim.eval('a:tree'))
@@ -247,11 +259,12 @@ def voof_UnVoof(): #{{{2
     if body in VOOF.markers_re: del VOOF.markers_re[body]
 
 
-#---parents, children, etc.-----{{{1
+#---parents, children, etc.-------------------{{{1
 # helpers for outline traversal
 
+
 def nodeSubnodes(body, lnum): #{{{2
-    '''Number of subnodes for node at Tree line lnum.'''
+    '''Number of all subnodes for node at Tree line lnum.'''
     levels = VOOF.levels[body]
     if lnum==1 or lnum==len(levels):
         return 0
@@ -280,7 +293,18 @@ def nodeParent(body, lnum): #{{{2
     return ln
 
 
-def nodeUNL(body, lnum): #{{{2x
+def nodeHasChildren(body, ln): #{{{2
+    '''Determine if node at Tree line ln has children.'''
+    levels = VOOF.levels[body]
+    if ln==1 or ln==len(levels):
+        return False
+    elif levels[ln-1] < levels[ln]:
+        return True
+    else:
+        return False
+
+
+def nodeUNL(body, lnum): #{{{2
     '''Compute UNL of node at Tree line lnum.
     Returns list of headlines.'''
 
@@ -306,7 +330,8 @@ def nodeUNL(body, lnum): #{{{2x
     return heads
 
 
-#---Outline Navigation-------{{{1
+#---Outline Navigation------------------------{{{1
+
 
 def voof_TreeSelect(): #{{{2
     # Get first and last lnums of Body node for Tree line lnum.
@@ -328,6 +353,27 @@ def voof_TreeSelect(): #{{{2
         # In that case VOOF.nodes is [1, 1, ...]
         nodeEnd =  VOOF.nodes[body][lnum]-1 or 1
         vim.command('let l:nodeEnd=%s' %nodeEnd)
+
+
+def voof_TreeToStartupNode(): #{{{2
+    body = int(vim.eval('body'))
+    nodes = VOOF.nodes[body]
+    Body = VOOF.buffers[body]
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+    L = len(nodes)
+    # find Body headlines marked with '='
+    lnums = []
+    for ln in range(2,L+1):
+        bline = Body[nodes[ln-1]-1]
+        # part of Body headline after marker+level+'x'
+        bline2 = bline[marker_re.search(bline).end():]
+        if not bline2: continue
+        if bline2[0]=='=':
+            lnums.append(ln)
+        elif bline2[0]=='o':
+            if bline2[1:] and bline2[1]=='=':
+                lnums.append(ln)
+    vim.command('let l:lnums=%s' %repr(lnums))
 
 
 def voof_GetUNL(): #{{{2
@@ -395,10 +441,11 @@ def voof_Grep(): #{{{2
     vim.command("call setqflist([%s],'a')" %(''.join(loclist)) )
 
 
-#---Outline Operations-------{{{1
+#---Outline Operations------------------------{{{1
 # oopOp() functions are called by Voof_Oop Vim functions.
 # They use local Vim vars set by the caller and can create and change Vim vars.
 # They set lines in Tree and Body via vim.buffer objects.
+
 
 def changeLevTreeHead(h, delta): #{{{2
     '''Increase of decrese level of Tree headline by delta:
@@ -409,6 +456,7 @@ def changeLevTreeHead(h, delta): #{{{2
         h = '%s%s' %(h[:2], h[2-2*delta:])
     return h
 
+
 def changeLevBodyHead(h, delta, body): #{{{2
     '''Increase of decrese level number of Body headline by delta.'''
     if delta==0: return h
@@ -418,12 +466,14 @@ def changeLevBodyHead(h, delta, body): #{{{2
     h = '%s%s%s' %(h[:m.start(1)], level+delta, h[m.end(1):])
     return h
 
+
 def setClipboard(s): #{{{2
     '''Set Vim's + register (system clipboard) to string s.'''
     if not s: return
     # use '%s' for Vim string: all we need to do is double ' quotes
     s = s.replace("'", "''")
     vim.command("let @+='%s'" %s)
+
 
 def oopSelEnd(): #{{{2
     '''This is part of  Voof_Oop() checks.
@@ -453,6 +503,7 @@ def oopSelEnd(): #{{{2
             levels.pop()
             return ln-1
         ln+=1
+
 
 def oopInsert(as_child=False): #{{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
@@ -507,7 +558,7 @@ def oopInsert(as_child=False): #{{{2
     vim.command('let s:voof_bodies[%s].snLn=%s' %(body, ln+1))
 
 
-def oopPaste(): #{{{2=
+def oopPaste(): #{{{2
     ### local vars
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln, ln_status = int(vim.eval('ln')), vim.eval('ln_status')
@@ -606,6 +657,7 @@ def oopPaste(): #{{{2=
     # insert pNodes after ln
     nodes[ln:ln] = pNodes
 
+
 def oopUp(): #{{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
@@ -703,6 +755,7 @@ def oopUp(): #{{{2
     #  .............. bln2=nodes[ln2]-1, can be last line
     #  ==============
     #  ..............
+
 
 def oopDown(): #{{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
@@ -902,6 +955,7 @@ def oopCopy(): #{{{2
 
     setClipboard('\n'.join(bLines))
 
+
 def oopCut(): #{{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
@@ -957,6 +1011,7 @@ def oopCut(): #{{{2
     #  ==============
     #  ..............
 
+
 def oopMark(): # {{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
@@ -966,15 +1021,16 @@ def oopMark(): # {{{2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
     for idx in range(ln1-1,ln2):
-        # mark Tree line
+        # insert 'x' in Tree line
         tline = Tree[idx]
         if tline[1]!='x':
             Tree[idx] = '%sx%s' %(tline[0], tline[2:])
-            # mark Body line
+            # insert 'x' in Body headline
             bln = nodes[idx]
             bline = Body[bln-1]
             end = marker_re.search(bline).end(1)
             Body[bln-1] = '%sx%s' %(bline[:end], bline[end:])
+
 
 def oopUnmark(): # {{{2
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
@@ -985,15 +1041,15 @@ def oopUnmark(): # {{{2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
     for idx in range(ln1-1,ln2):
-        # unmark Tree line
+        # remove 'x' from Tree line
         tline = Tree[idx]
         if tline[1]=='x':
             Tree[idx] = '%s %s' %(tline[0], tline[2:])
-            # unmark Body line
+            # remove 'x' from Body headline
             bln = nodes[idx]
             bline = Body[bln-1]
             end = marker_re.search(bline).end(1)
-            # remove one 'x': not enough
+            # remove one 'x', not enough
             #Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:])
             # remove all consecutive 'x' chars
             Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('x'))
@@ -1008,29 +1064,208 @@ def oopMarkSelected(): # {{{2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
     bln_selected = nodes[ln-1]
-    # remove = marks from all other Body headlines
-    # also, strip 'x' chars after removed = marks
+    # remove '=' from all other Body headlines
+    # also, strip 'x' and 'o' after removed '='
     for bln in nodes[1:]:
         if bln==bln_selected: continue
         bline = Body[bln-1]
         end = marker_re.search(bline).end()
-        if end==len(bline):
-            continue
-        elif bline[end] == '=':
-            #Body[bln-1] = '%s%s' %(bline[:end], bline[end+1:].lstrip('x'))
-            Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('=').lstrip('x'))
+        bline2 = bline[end:]
+        if not bline2: continue
+        if bline2[0]=='=':
+            Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('=xo'))
+        elif bline2[0]=='o' and bline2[1:] and bline2[1]=='=':
+            Body[bln-1] = '%s%s' %(bline[:end+1], bline[end+1:].lstrip('=xo'))
 
-    # put = mark on current Body headline
+    # insert '=' in current Body headline, but only if it's not there already
     bline = Body[bln_selected-1]
     end = marker_re.search(bline).end()
-    if end==len(bline):
+    bline2 = bline[end:]
+    if not bline2:
         Body[bln_selected-1] = '%s=' %bline
-    elif bline[end] != '=':
-        Body[bln_selected-1] = '%s=%s' %(bline[:end], bline[end:])
+        return
+    if bline2[0]=='=':
+        return
+    elif bline2[0]=='o' and bline2[1:] and bline2[1]=='=':
+        return
+    elif bline2[0]=='o':
+        end+=1
+    Body[bln_selected-1] = '%s=%s' %(bline[:end], bline[end:])
 
 
-#---RUN SCRIPT---------------{{{1
+#---Tree Folding Operations-------------------{{{1=
+# Opened/Closed Tree buffer folds are equivalent to Expanded/Contracted nodes.
+# By default, folds are closed. Opened folds are marked by 'o' in Body
+# headlines (after 'x', before '=').
 #
+# To determine which folds are currently closed/opened, we recursively visit
+# every visible closed fold and open it. This gives a list of closed folds.
+#
+# To restore folding according to a list of closed folds:
+#   open all folds;
+#   close folds from bottom to top.
+#
+# Conventions:
+#   cFolds --lnums of closed folds
+#   oFolds --lnums of opened folds
+#   ln, ln1, ln2  --Tree line number
+#
+# NOTE: Cursor/Window position is not restored here.
+#
+
+def voof_OopFolding(action): #{{{2
+    body = int(vim.eval('body'))
+    # check and adjust range lnums
+    # don't worry about invalid range lnums: Vim checks that
+    if not action=='cleanup':
+        ln1, ln2 = int(vim.eval('a:ln1')), int(vim.eval('a:ln2'))
+        if ln2<ln1: ln1,ln2=ln2,ln1 # probably redundant
+        if ln2==1: return
+        #if ln1==1: ln1=2
+        if ln1==ln2:
+            ln2 = ln2 + nodeSubnodes(body, ln2)
+            if ln1==ln2: return
+
+    if action=='save':
+        cFolds = foldingGetAll(ln1, ln2)
+        foldingWrite(ln1, ln2, cFolds, body)
+    elif action=='restore':
+        cFolds = foldingRead(ln1, ln2, body)
+        foldingCreate(ln1, ln2, cFolds)
+    elif action=='cleanup':
+        foldingCleanup(body)
+
+
+def foldingGet(ln, cFolds): #{{{2
+    '''Recursive function for finding closed folds at line ln, which is first
+    line of a closed fold. Recursively open it and all closed subfolds. Save
+    their lnums in cFolds.'''
+    # line ln is not a closed fold--do nothing
+    if int(vim.eval('foldclosed(%s)' %ln))!=ln:
+        return
+    # line ln is first line of a closed fold
+    cFolds.append(ln)
+    foldend = int(vim.eval('foldclosedend(%s)' %ln))
+    vim.command('keepj normal! %sGzo' %ln)
+    l = ln+1
+    while l < foldend:
+        foldingGet(l,cFolds)
+        l+=1
+
+
+def foldingGetAll(ln1, ln2): #{{{2
+    '''Get all closed folds in line range ln1-ln2.'''
+    cFolds=[]
+    ln=ln1
+    while ln < ln2+1:
+        if int(vim.eval('foldclosed(%s)' %ln))!=ln:
+            ln+=1
+        else:
+            cfold = ln
+            ln = int(vim.eval('foldclosedend(%s)' %ln))+1
+            foldingGet(cfold, cFolds)
+
+    cFolds.reverse()
+    # close back opened folds
+    for ln in cFolds:
+        vim.command('keepj normal! %sGzc' %ln)
+
+    return cFolds
+
+
+def foldingFlip(ln1, ln2, folds, body): #{{{2
+    '''Convert list of opened/closed folds in range ln1-ln2 into list of
+    closed/opened folds.'''
+    # This also eliminates lnums of nodes without children.
+    folds = {}.fromkeys(folds)
+    folds_flipped = []
+    for ln in range(ln1,ln2+1):
+        if nodeHasChildren(body, ln) and not ln in folds:
+            folds_flipped.append(ln)
+    folds_flipped.reverse()
+    return folds_flipped
+
+
+def foldingCreate(ln1, ln2, cFolds): #{{{2
+    '''Create folds in range ln1-ln2 from a list of closed folds in that
+    range. The list must be reverse sorted.'''
+    #cFolds.sort()
+    #cFolds.reverse()
+    #vim.command('keepj normal! zR')
+    vim.command('%s,%sfoldopen!' %(ln1,ln2))
+    for ln in cFolds:
+        vim.command('keepj normal! %sGzc' %ln)
+
+
+def foldingRead(ln1, ln2, body): #{{{2
+    '''Read "o" marks in Body headlines.'''
+    cFolds = []
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+    nodes = VOOF.nodes[body]
+    Body = VOOF.buffers[body]
+
+    for ln in range(ln1,ln2+1):
+        if not nodeHasChildren(body, ln):
+            continue
+        bline = Body[nodes[ln-1]-1]
+        end = marker_re.search(bline).end()
+        if end<len(bline) and bline[end]=='o':
+            continue
+        else:
+            cFolds.append(ln)
+
+    cFolds.reverse()
+    return cFolds
+
+
+def foldingWrite(ln1, ln2, cFolds, body): #{{{2
+    '''Write "o" marks in Body headlines.'''
+
+    cFolds = {}.fromkeys(cFolds)
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+    nodes = VOOF.nodes[body]
+    Body = VOOF.buffers[body]
+
+    for ln in range(ln1,ln2+1):
+        if not nodeHasChildren(body, ln):
+            continue
+        bln = nodes[ln-1]
+        bline = Body[bln-1]
+        end = marker_re.search(bline).end()
+        isClosed = ln in cFolds
+        # headline is marked with 'o'
+        if end<len(bline) and bline[end]=='o':
+            # remove 'o' mark
+            if isClosed:
+                Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('ox'))
+        # headline is not marked with 'o'
+        else:
+            # add 'o' mark
+            if not isClosed:
+                if end==len(bline):
+                    Body[bln-1] = '%so' %bline
+                elif bline[end] != 'o':
+                    Body[bln-1] = '%so%s' %(bline[:end], bline[end:])
+
+
+def foldingCleanup(body): #{{{2
+    '''Remove "o" marks from  from nodes without children.'''
+    marker_re = VOOF.markers_re.get(body, MARKER_RE)
+    nodes = VOOF.nodes[body]
+    Body = VOOF.buffers[body]
+
+    for ln in range(2,len(nodes)+1):
+        if nodeHasChildren(body, ln): continue
+        bln = nodes[ln-1]
+        bline = Body[bln-1]
+        end = marker_re.search(bline).end()
+        if end<len(bline) and bline[end]=='o':
+            Body[bln-1] = '%s%s' %(bline[:end], bline[end:].lstrip('ox'))
+
+
+#---EXECUTE SCRIPT----------------------------{{{1
+#
+
 def voof_GetLines(): #{{{2
     body = int(vim.eval('body'))
     ln1 = int(vim.eval('a:lnum'))
@@ -1066,12 +1301,12 @@ def voof_GetLines1(): #{{{2
         vim.command("let l:bln2=%s" %bln2)
 
 
-def runScript(): #{{{2
-    '''Run script file.'''
+def execScript(): #{{{2
+    '''Execute script file.'''
     #sys.path.insert(0, voof_dir)
     try:
-        d = {'vim':vim, 'VOOF':VOOF, 'voof':sys.modules[__name__]}
-        #d['__name__'] = 'voof'
+        #d = {'vim':vim, 'VOOF':VOOF, 'voof':sys.modules[__name__]}
+        d = {'vim':vim, 'VOOF':VOOF, 'voof':sys.modules['voof']}
         execfile(voof_script, d)
         print '---end of Python script---'
     except Exception:
@@ -1081,7 +1316,7 @@ def runScript(): #{{{2
     #del sys.path[0]
 
 
-#---LOG BUFFER---------------{{{1
+#---LOG BUFFER--------------------------------{{{1
 #
 class LogBufferClass: #{{{2
     '''A file-like object for replacing sys.stdout and sys.stdin with a Vim
@@ -1150,5 +1385,5 @@ class LogBufferClass: #{{{2
 
 
 # modelines {{{1
-# vim:fdm=marker:fdl=0
-# vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart)
+# vim:fdm=marker:fdl=0:
+# vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):

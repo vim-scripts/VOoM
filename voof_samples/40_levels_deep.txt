@@ -1,4 +1,4 @@
- vim:fdm=marker:
+ vim:fdm=marker
  vim:foldtext=getline(v\:foldstart).'\ \ \ /'.v\:foldlevel.'...'.(v\:foldend-v\:foldstart)
  foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart)
 

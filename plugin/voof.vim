@@ -8,10 +8,10 @@
 "          and/or modify it under the terms of the Do What The Fuck You Want To
 "          Public License, Version 2, as published by Sam Hocevar.
 "          See http://sam.zoy.org/wtfpl/COPYING for more details.
-" Version: 1.8, 2009-09-18
+" Version: 1.9, 2009-12-19
 
 
-"---Conventions-----------------------{{{1
+"---Conventions-------------------------------{{{1
 " Tree      --Tree buffer
 " Body      --Body buffer
 " tree      --Tree buffer number
@@ -29,19 +29,19 @@
 " var_      --previous value of var
 
 
-"---Quickload-------------------------{{{1
+"---Quickload---------------------------------{{{1
 if !exists('s:voof_did_load')
-    let s:voof_did_load = '1.7'
+    let s:voof_did_load = 'v1.9'
     com! Voof  call Voof_Init()
     com! Vooflog  call Voof_LogInit()
     com! Voofhelp  call Voof_Help()
-    com! -nargs=? Voofrun  call Voof_Run(<q-args>)
+    com! -nargs=? Voofexec  call Voof_Exec(<q-args>)
     exe "au FuncUndefined Voof_* source " . expand("<sfile>:p")
     finish
 endif
 
 
-"---Initialize------------------------{{{1
+"---Initialize--------------------------------{{{1
 if !exists('s:voof_did_init')
     let s:voof_path = expand("<sfile>:p")
     let s:voof_dir = expand("<sfile>:p:h")
@@ -72,7 +72,7 @@ EOF
 endif
 
 
-"---User Options----------------------{{{1
+"---User Options------------------------------{{{1
 " These can be defined in .vimrc .
 
 " Where Tree window is created: 'left', 'right', 'top', 'bottom'
@@ -84,9 +84,9 @@ endif
 if !exists('g:voof_tree_width')
     let g:voof_tree_width = 30
 endif
-" Initial Tree window hight.
-if !exists('g:voof_tree_hight')
-    let g:voof_tree_hight = 12
+" Initial Tree window height.
+if !exists('g:voof_tree_height')
+    let g:voof_tree_height = 12
 endif
 
 " Where Log window is created: 'left', 'right', 'top', 'bottom'
@@ -98,9 +98,9 @@ endif
 if !exists('g:voof_log_width')
     let g:voof_log_width = 30
 endif
-" Initial Log window hight.
-if !exists('g:voof_log_hight')
-    let g:voof_log_hight = 12
+" Initial Log window height.
+if !exists('g:voof_log_height')
+    let g:voof_log_height = 12
 endif
 
 " Verify outline after outline operations.
@@ -119,7 +119,29 @@ if !exists('g:voof_tab_key')
 endif
 
 
-"---Voof_Init(), various helpers------{{{1
+"---Commands----------------------------------{{{1
+" Main Voof commands should be defined in Quickload section.
+
+com! Voofunl  call Voof_GetUNL()
+com! -nargs=? Voofgrep  call Voof_Grep(<q-args>)
+
+com! -range VoofFoldingSave    call Voof_OopFolding(<line1>,<line2>, 'save')
+com! -range VoofFoldingRestore call Voof_OopFolding(<line1>,<line2>, 'restore')
+com! -range VoofFoldingCleanup call Voof_OopFolding(<line1>,<line2>, 'cleanup')
+
+""" development helpers
+"com! VoofPrintData  call Voof_PrintData()
+"" source voof.vim, reload voof.py
+"com! VoofReload    exe 'so '.s:voof_path.' | py reload(voof)'
+"" source voof.vim
+"com! VoofReloadVim exe 'so '.s:voof_path
+"" reload voof.py
+"com! VoofReloadPy  py reload(voof)
+"" complete reload: delete Trees and Voof data, source voof.vim, reload voof.py
+"com! VoofReloadAll call Voof_ReloadAllPre() | exe 'so '.s:voof_path | call Voof_Init()
+
+
+"---Voof_Init(), various helpers--------------{{{1
 "
 func! Voof_Init() "{{{2
 " Voof command.
@@ -185,11 +207,18 @@ func! Voof_FoldStatus(lnum) "{{{2
 endfunc
 
 
-func! Voof_Help() "{{{2=
-" Display voof.txt as outline in new tabpage.
+func! Voof_Help() "{{{2
+" Open voof.txt as outline in a new tabpage.
     let bnr = bufnr('')
     " already in voof.txt
     if fnamemodify(bufname(bnr), ":t")==#'voof.txt'
+        if !has_key(s:voof_bodies, bnr)
+            setl fdm=marker fmr=[[[,]]]
+        endif
+        if &ft!=#'help'
+            set ft=help
+        endif
+        call Voof_Init()
         return
     " in Tree for voof.txt
     elseif has_key(s:voof_trees, bnr) && fnamemodify(bufname(s:voof_trees[bnr]), ":t")==#'voof.txt'
@@ -214,8 +243,12 @@ func! Voof_Help() "{{{2=
         let voof_help_installed = 0
     endtry
     if voof_help_installed==1
-        Voof
-        normal! zR
+        if fnamemodify(bufname(""), ":t")!=#'voof.txt'
+            echoerr "VOOF: internal error"
+            return
+        endif
+        setl fdm=marker fmr=[[[,]]]
+        call Voof_Init()
         return
     elseif tabpagenr()==tnr_+1 && bufname('')==''
         " 'tab help' failed, we are on new empty tabpage
@@ -225,11 +258,15 @@ func! Voof_Help() "{{{2=
 
     """"" open voof.txt as regular file
     exe 'tabnew '.voof_help
+    if fnamemodify(bufname(""), ":t")!=#'voof.txt'
+        echoerr "VOOF: internal error"
+        return
+    endif
     if &ft!=#'help'
         set ft=help
     endif
-    Voof
-    normal! zR
+    setl fdm=marker fmr=[[[,]]]
+    call Voof_Init()
 endfunc
 
 
@@ -251,17 +288,9 @@ func! Voof_ErrorMsg(...) "{{{2
 endfunc
 
 
-func! Voof_ReloadAllPre() "{{{2
-" Helper for reloading entire plugin.
-    update
-    " wipe out all Tree buffers
-    for bnr in keys(s:voof_trees)
-        if bufexists(str2nr(bnr))
-            exe 'bwipeout '.bnr
-        endif
-    endfor
-    py reload(voof)
-    unlet s:voof_did_init
+func! Voof_GetData() "{{{2
+" Allows external scripts to read Vim-side Voof data.
+    return [s:voof_trees, s:voof_bodies]
 endfunc
 
 
@@ -281,7 +310,21 @@ func! Voof_PrintData() "{{{2
 endfunc
 
 
-"---Windows Navigation and Creation---{{{1
+func! Voof_ReloadAllPre() "{{{2
+" Helper for reloading entire plugin.
+    update
+    " wipe out all Tree buffers
+    for bnr in keys(s:voof_trees)
+        if bufexists(str2nr(bnr))
+            exe 'bwipeout '.bnr
+        endif
+    endfor
+    py reload(voof)
+    unlet s:voof_did_init
+endfunc
+
+
+"---Windows Navigation and Creation-----------{{{1
 " These deal only with the current tab page.
 "
 func! Voof_ToTreeOrBodyWin() "{{{2
@@ -321,7 +364,7 @@ endfunc
 
 
 func! Voof_ToTreeWin() "{{{2
-" Move to window or open a new one where a Tree will be loaded.
+" Move to window or create a new one where a Tree will be loaded.
 
     " Allready in a Tree buffer.
     if has_key(s:voof_trees, bufnr('')) | return | endif
@@ -343,9 +386,9 @@ func! Voof_ToTreeWin() "{{{2
 
     " Create new window.
     if g:voof_tree_placement=='top'
-        exe 'leftabove '.g:voof_tree_hight.'split'
+        exe 'leftabove '.g:voof_tree_height.'split'
     elseif g:voof_tree_placement=='bottom'
-        exe 'rightbelow '.g:voof_tree_hight.'split'
+        exe 'rightbelow '.g:voof_tree_height.'split'
     elseif g:voof_tree_placement=='left'
         exe 'leftabove '.g:voof_tree_width.'vsplit'
     elseif g:voof_tree_placement=='right'
@@ -398,10 +441,10 @@ endfunc
 func! Voof_ToBodyWin() "{{{2
 " Split current Tree window to create window where Body will be loaded
     if g:voof_tree_placement=='top'
-        exe 'leftabove '.g:voof_tree_hight.'split'
+        exe 'leftabove '.g:voof_tree_height.'split'
         wincmd p
     elseif g:voof_tree_placement=='bottom'
-        exe 'rightbelow '.g:voof_tree_hight.'split'
+        exe 'rightbelow '.g:voof_tree_height.'split'
         wincmd p
     elseif g:voof_tree_placement=='left'
         exe 'leftabove '.g:voof_tree_width.'vsplit'
@@ -459,9 +502,9 @@ endfunc
 func! Voof_ToLogWin() "{{{2
 " Create new window where PyLog will be loaded.
     if g:voof_log_placement=='top'
-        exe 'topleft '.g:voof_log_hight.'split'
+        exe 'topleft '.g:voof_log_height.'split'
     elseif g:voof_log_placement=='bottom'
-        exe 'botright '.g:voof_log_hight.'split'
+        exe 'botright '.g:voof_log_height.'split'
     elseif g:voof_log_placement=='left'
         exe 'topleft '.g:voof_log_width.'vsplit'
     elseif g:voof_log_placement=='right'
@@ -470,7 +513,7 @@ func! Voof_ToLogWin() "{{{2
 endfunc
 
 
-"---TREE BUFFERS----------------------{{{1
+"---TREE BUFFERS------------------------------{{{1
 "
 "---Tree augroup---{{{2
 augroup VoofTree
@@ -581,10 +624,12 @@ func! Voof_TreeCreate(body) "{{{2
     let ul_=&ul | setl ul=-1
     try
         keepj py voof.voofUpdate(int(vim.eval('a:body')))
-        " Draw = mark. This must be done afer creating outline.
+        " Draw = mark. Create folding from o marks.
+        " This must be done afer creating outline.
         " this assigns s:voof_bodies[body].snLn
-        " calendar_outline.txt: 0.002 sec
+        "let start = reltime()
         py voof.voof_TreeCreate()
+        "echom reltimestr(reltime(start))
         let snLn = s:voof_bodies[a:body].snLn
         " Initial draw puts = on first line.
         if snLn!=1
@@ -601,6 +646,7 @@ func! Voof_TreeCreate(body) "{{{2
     exe 'normal! ' . snLn . 'G'
     call Voof_TreeZV()
     call Voof_TreePlaceCursor()
+    normal! zz
     " blnShow is created by voof_TreeCreate() when there is Body headline marked with =
     if exists('l:blnShow')
         " go to Body
@@ -725,8 +771,10 @@ func! Voof_TreeMap() "{{{2
     exe "vnoremap <buffer><silent> ".g:voof_tab_key.   " <Esc>:<C-u>call Voof_ToTreeOrBodyWin()<CR>"
     "exe "vnoremap <buffer><silent> ".g:voof_tab_key.   " <Nop>"
 
-    " Put cursor on the current position.
-    nnoremap <buffer><silent> = :<C-u>call Voof_TreeToSnLn()<CR>
+    " Put cursor on currently selected node.
+    nnoremap <buffer><silent> = :<C-u>call Voof_TreeToSelected()<CR>
+    " Put cursor on node marked with '=', if any.
+    nnoremap <buffer><silent> + :<C-u>call Voof_TreeToStartupNode()<CR>
 
     " Do not map <LeftMouse>. Not triggered on first click in the buffer.
     " Triggered on first click in another buffer. Vim doesn't know what buffer
@@ -802,9 +850,16 @@ func! Voof_TreeMap() "{{{2
     nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voof_OopMarkSelected()<CR>
     " }}}
 
+    " Save/Restore Tree folding. {{{
+    nnoremap <buffer><silent> <LocalLeader>fs  :<C-u>call Voof_OopFolding(line('.'),line('.'), 'save')<CR>
+    nnoremap <buffer><silent> <LocalLeader>fr  :<C-u>call Voof_OopFolding(line('.'),line('.'), 'restore')<CR>
+    nnoremap <buffer><silent> <LocalLeader>fas :<C-u>call Voof_OopFolding(1,line('$'), 'save')<CR>
+    nnoremap <buffer><silent> <LocalLeader>far :<C-u>call Voof_OopFolding(1,line('$'), 'restore')<CR>
+    " }}}
+
     " Various commands. {{{
     nnoremap <buffer><silent> <F1> :<C-u>call Voof_Help()<CR>
-    nnoremap <buffer><silent> <LocalLeader>r :<C-u>call Voof_Run('')<CR>
+    nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voof_Exec('')<CR>
     " }}}
 
     let &cpo = cpo_
@@ -895,7 +950,7 @@ endfunc
 
 
 func! Voof_TreeToLine(lnum) "{{{3
-" Put cursor on line lnum, usually snLn.
+" Put cursor on line lnum, e.g., snLn.
     if (line('w0') < a:lnum) && (a:lnum > 'w$')
         let offscreen = 0
     else
@@ -910,10 +965,27 @@ func! Voof_TreeToLine(lnum) "{{{3
 endfunc
 
 
-func! Voof_TreeToSnLn() "{{{3
-" Put cursor on SnLn line.
+func! Voof_TreeToSelected() "{{{3
+" Put cursor on selected node,  that is on SnLn line.
     let lnum = s:voof_bodies[s:voof_trees[bufnr('')]].snLn
     call Voof_TreeToLine(lnum)
+endfunc
+
+
+func! Voof_TreeToStartupNode() "{{{3
+" Put cursor on startup node, if any: node marked with '=' in Body headline.
+" Warn if there are several such nodes.
+    let body = s:voof_trees[bufnr('')]
+    " this creates l:lnums
+    py voof.voof_TreeToStartupNode()
+    if len(l:lnums)==0
+        call Voof_WarningMsg("VOOF: no nodes marked with '='")
+        return
+    endif
+    call Voof_TreeToLine(l:lnums[-1])
+    if len(l:lnums)>1
+        call Voof_WarningMsg("VOOF: multiple nodes marked with '=': ".join(l:lnums, ', '))
+    endif
 endfunc
 
 
@@ -1047,21 +1119,21 @@ func! Voof_OopEdit() "{{{3
     let lnum = line('.')
     if lnum==1 | return | endif
     if Voof_OopBodyEditable(body)==-1 | return | endif
-    " find first word char
-    let firstCharIdx = match(getline('.')[3:], '\w')
-    if firstCharIdx!=-1
-        let firstChar = getline('.')[3:][firstCharIdx]
-    endif
-    py vim.command("let bLnr=%s" %VOOF.nodes[int(vim.eval('body'))][int(vim.eval('lnum'))-1])
+
+    py vim.command("let l:bLnr=%s" %VOOF.nodes[int(vim.eval('body'))][int(vim.eval('lnum'))-1])
 
     let lz_ = &lz | set lz
     if Voof_ToBody(body,'')==-1 | let &lz=lz_ | return | endif
     if Voof_BodyCheckTicks(body)==-1 | let &lz=lz_ | return | endif
-    exe 'normal! ' . bLnr.'G0'
+
+    exe 'normal! ' . l:bLnr.'G0'
     normal! zv
-    " put cursor on first word char
-    if firstCharIdx!=-1 && getline('.')[0]!=firstChar
-        exe 'normal! f'.firstChar
+    " put cursor on the first word char before the foldmarker
+    let foldmarker = split(&foldmarker, ',')[0]
+    let markerIdx = match(getline('.'), '\V\C'.foldmarker)
+    let wordCharIdx = match(getline('.'), '\<')
+    if wordCharIdx < markerIdx
+        call cursor(line('.'), wordCharIdx+1)
     endif
     let &lz=lz_
 endfunc
@@ -1075,7 +1147,7 @@ func! Voof_OopInsert(as_child) "{{{3
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     if ln_status=='hidden'
-        call Voof_WarningMsg("VOOF: CAN'T RUN COMMAND (cursor hidden in fold)")
+        call Voof_WarningMsg("VOOF: CAN'T EXECUTE COMMAND (cursor hidden in fold)")
         return
     endif
 
@@ -1116,7 +1188,7 @@ func! Voof_OopPaste() "{{{3
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     if ln_status=='hidden'
-        call Voof_WarningMsg("VOOF: CAN'T RUN COMMAND (cursor hidden in fold)")
+        call Voof_WarningMsg("VOOF: CAN'T EXECUTE COMMAND (cursor hidden in fold)")
         return
     endif
 
@@ -1160,7 +1232,7 @@ func! Voof_OopMark(op, mode) "{{{3
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
     if ln_status=='hidden'
-        call Voof_WarningMsg("VOOF: CAN'T RUN COMMAND (cursor hidden in fold)")
+        call Voof_WarningMsg("VOOF: CAN'T EXECUTE COMMAND (cursor hidden in fold)")
         return
     endif
     " normal mode: use current line
@@ -1210,7 +1282,7 @@ func! Voof_OopMarkSelected() "{{{3
     let ln_status = Voof_FoldStatus(ln)
     " current line must not be hidden in a fold
     if ln_status=='hidden'
-        call Voof_WarningMsg("VOOF: CAN'T RUN COMMAND (cursor hidden in fold)")
+        call Voof_WarningMsg("VOOF: CAN'T EXECUTE COMMAND (cursor hidden in fold)")
         return
     endif
     if ln==1
@@ -1245,7 +1317,7 @@ func! Voof_Oop(op, mode) "{{{3
     let ln = line('.')
     let ln_status = Voof_FoldStatus(ln)
     if ln_status=='hidden'
-        call Voof_WarningMsg("VOOF: CAN'T RUN COMMAND (cursor hidden in fold)")
+        call Voof_WarningMsg("VOOF: CAN'T EXECUTE COMMAND (cursor hidden in fold)")
         return
     endif
     " normal mode: use current line
@@ -1399,6 +1471,54 @@ func! Voof_Oop(op, mode) "{{{3
 endfunc
 
 
+func! Voof_OopFolding(ln1, ln2, action) "{{{3=
+" Deal with Tree folding in range ln1-ln2 according to action:
+" save, restore, cleanup. Range is ignored if 'cleanup'.
+" Since potentially large lists are involved, folds are manipulated in Python.
+
+    " must be in Tree buffer
+    let tree = bufnr('')
+    if !has_key(s:voof_trees, tree)
+        call Voof_WarningMsg("VOOF: this command must be executed in Tree buffer")
+        return
+    endif
+    let body = s:voof_trees[tree]
+
+    if a:action!=#'restore' && Voof_OopBodyEditable(body)==-1
+        return
+    endif
+
+    " can't deal with folds of node hidden in a fold
+    if a:action!=#'cleanup' && Voof_FoldStatus(a:ln1)=='hidden'
+        call Voof_WarningMsg("VOOF: cursor hidden in fold")
+        return
+    endif
+
+    let lz_ = &lz | set lz
+
+    " go to Body, check ticks, go back
+    if Voof_ToBody(body,'noa')==-1 | let &lz=lz_ | return | endif
+    if Voof_BodyCheckTicks(body)==-1 | let &lz=lz_ | return | endif
+    call Voof_OopFromBody(body,tree, -1)
+    " make sure we are back
+    if bufnr('')!=tree
+        echoerr "VOOF: internal error" | let &lz=lz_ | return
+    endif
+
+    """ diddle with folds
+    let winsave_dict = winsaveview()
+    py voof.voof_OopFolding(vim.eval('a:action'))
+    call winrestview(winsave_dict)
+
+    " go to Body, set ticks, go back
+    if a:action!=#'restore'
+        if Voof_ToBody(body,'noa')==-1 | let &lz=lz_ | return | endif
+        call Voof_OopFromBody(body,tree, 0)
+    endif
+
+    let &lz=lz_
+endfunc
+
 func! Voof_OopBodyEditable(body) "{{{3
 " Check if Body is noma or ro before outline operation.
 " This also catches if Body doesn't exist.
@@ -1474,7 +1594,7 @@ func! Voof_OopShowTree(ln1, ln2, mode) " {{{3
 endfunc
 
 
-"---BODY BUFFERS----------------------{{{1
+"---BODY BUFFERS------------------------------{{{1
 "
 "---Body augroup---{{{2
 augroup VoofBody
@@ -1653,7 +1773,7 @@ func! Voof_BodyCheckTicks(body) "{{{2
 endfunc
 
 
-"---Tree or Body----------------------{{{1
+"---Tree or Body------------------------------{{{1
 "
 func! Voof_UnVoof(body,tree) "{{{2
 " Delete Voof data, wipeout Tree, etc.
@@ -1784,7 +1904,7 @@ func! Voof_Grep(pattern) "{{{2
 endfunc
 
 
-"---LOG BUFFER (Vooflog)--------------{{{1
+"---LOG BUFFER (Vooflog)----------------------{{{1
 "
 func! Voof_LogInit() "{{{2
 " Redirect Python stdout and stderr to Log buffer.
@@ -1799,7 +1919,7 @@ func! Voof_LogInit() "{{{2
             endif
             let bnr = s:voof_logbnr
             unlet s:voof_logbnr
-            echoerr "VOOF: PyLog buffer" bnr "was not shut down properly. Cleanup has been performed. Run Vooflog command again."
+            echoerr "VOOF: PyLog buffer" bnr "was not shut down properly. Cleanup has been performed. Execute the command :Vooflog again."
             return
         endif
         if bufwinnr(s:voof_logbnr)==-1
@@ -1924,7 +2044,7 @@ func! Voof_LogScroll() "{{{2
 endfunc
 
 
-"---RUN SCRIPT (Voofrun)--------------{{{1
+"---EXECUTE SCRIPT (Voofexec)-----------------{{{1
 "
 func! Voof_GetLines(lnum) "{{{2
 " Return list of lines.
@@ -2002,40 +2122,41 @@ func! Voof_GetLines1() "{{{2
 endfunc
 
 
-func! Voof_Run(qargs) "{{{2
-" Execute lines from the current fold (non-Tree buffer, include subfolds) or
+func! Voof_Exec(qargs) "{{{2
+" Execute text from the current fold (non-Tree buffer, include subfolds) or
 " node (Tree buffer, include subnodes) as a script.
-" First argument is 'vim' or 'py': execute as Vim or Python script respectively.
+" If argument is 'vim' or 'py'/'python': execute as Vim or Python script.
 " Otherwise execute according to filetype.
 
-    let lines = Voof_GetLines(line('.'))
-    if lines==[] | return | endif
-
-    " Determine type of script: Vim or Python.
-    let scriptType = ''
-
-    " this is a Tree
+    " Determine type of script.
+    " this is a Tree, use Body filetype
     if has_key(s:voof_trees, bufnr(''))
         let ft = getbufvar(s:voof_trees[bufnr('')], '&ft')
-    " this is not a Tree
+    " this is not a Tree, use current buffer filetype
     else
         let ft = &ft
     endif
-
     if     a:qargs==#'vim'
         let scriptType = 'vim'
     elseif a:qargs==#'py' || a:qargs==#'python'
         let scriptType = 'python'
+    elseif a:qargs!=''
+        call Voof_WarningMsg('VOOF: unsupported script type: "'.a:qargs.'"')
+        return
     elseif ft==#'vim'
         let scriptType = 'vim'
     elseif ft==#'python'
         let scriptType = 'python'
     else
-        call Voof_WarningMsg("VOOF: can't determine script type")
+        call Voof_WarningMsg('VOOF: unsupported script type: "'.ft.'"')
         return
     endif
 
-    " Run Vim script: Copy list of lines to register and execute it.
+    " Get script lines.
+    let lines = Voof_GetLines(line('.'))
+    if lines==[] | return | endif
+
+    " Execute Vim script: Copy list of lines to register and execute it.
     " Problem: Python errors do not terminate script and Python tracebacks are
     " not printed. They are printed to the PyLog if it's enabled.
     if scriptType==#'vim'
@@ -2050,33 +2171,17 @@ func! Voof_Run(qargs) "{{{2
             call Voof_ErrorMsg(v:exception)
         endtry
         call setreg('z', reg_z, reg_z_mode)
-    " Run Python script: write lines to a .py file and do execfile().
+    " Execute Python script: write lines to a .py file and do execfile().
     elseif scriptType==#'python'
+        " specifiy script encoding on first line
+        let fenc = &fenc!='' ? &fenc : &enc
+        call insert(lines, '# -*- coding: '.fenc.' -*-')
         call writefile(lines, s:voof_script_py)
-        py voof.runScript()
+        py voof.execScript()
     endif
 endfunc
 
 
-"---Commands--------------------------{{{1
-" Main Voof commands should be defined in Quickload section.
-com! Voofunl  call Voof_GetUNL()
-com! -nargs=? Voofgrep  call Voof_Grep(<q-args>)
-
-"com! VoofPrintData  call Voof_PrintData()
-"
-"" source voof.vim, reload voof.py
-"com! VoofReload    exe 'so '.s:voof_path.' | py reload(voof)'
-"
-"" source voof.vim
-"com! VoofReloadVim exe 'so '.s:voof_path
-"
-"" reload voof.py
-"com! VoofReloadPy  py reload(voof)
-"
-"" complete reload: delete Trees and Voof data, source voof.vim, reload voof.py
-"com! VoofReloadAll call Voof_ReloadAllPre() | exe 'so '.s:voof_path | call Voof_Init()
-
 " modelines {{{1
-" vim:fdm=marker:fdl=0
-" vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart)
+" vim:fdm=marker:fdl=0:
+" vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):
