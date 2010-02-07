@@ -113,6 +113,33 @@ print 'py ok'
 
 <!-- Comment  {{{2 -->
 
+--- Voofgrep tests--- {{{1
+:Voofg Spam and ham not bacon
+:Voofg Spam and\ ham not\ bacon
+:Voofg Spam and\\ ham not\\ bacon
+\Spam// ' "
+
+--- n41 breakfast --- {{{2
+eggs
+bacon
+
+--- n42 lunch --- {{{2
+Spam Spam Spam Spam Spam Spam Spam Spam Spam 
+Spam Spam Spam Spam Spam Spam Spam Spam Spam 
+Spam Spam Spam Spam Spam Spam Spam Spam Spam 
+ham
+
+--- n43 dinner --- {{{2
+eggs
+Spam
+ham
+
+--- n44 snack --- {{{2
+bacon
+spam
+HAM
+beef
+
 --- special chars tests --- {{{1
 
 --- '" /\\/ --- {{{2 '" /\\/  

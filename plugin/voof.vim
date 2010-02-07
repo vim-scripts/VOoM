@@ -8,7 +8,7 @@
 "          and/or modify it under the terms of the Do What The Fuck You Want To
 "          Public License, Version 2, as published by Sam Hocevar.
 "          See http://sam.zoy.org/wtfpl/COPYING for more details.
-" Version: 1.9, 2009-12-19
+" Version: 1.91, 2010-02-06
 
 
 "---Conventions-------------------------------{{{1
@@ -31,7 +31,7 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voof_did_load')
-    let s:voof_did_load = 'v1.9'
+    let s:voof_did_load = 'v1.91'
     com! Voof  call Voof_Init()
     com! Vooflog  call Voof_LogInit()
     com! Voofhelp  call Voof_Help()
@@ -129,7 +129,7 @@ com! -range VoofFoldingSave    call Voof_OopFolding(<line1>,<line2>, 'save')
 com! -range VoofFoldingRestore call Voof_OopFolding(<line1>,<line2>, 'restore')
 com! -range VoofFoldingCleanup call Voof_OopFolding(<line1>,<line2>, 'cleanup')
 
-""" development helpers
+"""" development helpers
 "com! VoofPrintData  call Voof_PrintData()
 "" source voof.vim, reload voof.py
 "com! VoofReload    exe 'so '.s:voof_path.' | py reload(voof)'
@@ -150,8 +150,8 @@ func! Voof_Init() "{{{2
     " this is a Tree buffer
     if has_key(s:voof_trees, body) | return | endif
 
-    if !has_key(s:voof_bodies, body)
     " There is no Tree for this Body. Create it.
+    if !has_key(s:voof_bodies, body)
         let s:voof_bodies[body] = {}
         let s:voof_bodies[body].blnr = line('.')
         let b_name = expand('%:p:t')
@@ -167,8 +167,8 @@ func! Voof_Init() "{{{2
         call Voof_ToTreeWin()
         call Voof_TreeCreate(body)
 
-    else
     " There is already a Tree for this Body. Show it.
+    else
         let tree = s:voof_bodies[body].tree
         if !exists('b:voof_body')
             echoerr "VOOF: Body lost b:voof_tree. Reconfiguring..."
@@ -620,16 +620,16 @@ func! Voof_TreeCreate(body) "{{{2
     call Voof_TreeConfigure()
 
     """ Create outline and draw Tree lines.
+    let lz_ = &lz | set lz
     setl ma
     let ul_=&ul | setl ul=-1
     try
+        "let start = reltime()
         keepj py voof.voofUpdate(int(vim.eval('a:body')))
         " Draw = mark. Create folding from o marks.
         " This must be done afer creating outline.
         " this assigns s:voof_bodies[body].snLn
-        "let start = reltime()
         py voof.voof_TreeCreate()
-        "echom reltimestr(reltime(start))
         let snLn = s:voof_bodies[a:body].snLn
         " Initial draw puts = on first line.
         if snLn!=1
@@ -637,30 +637,32 @@ func! Voof_TreeCreate(body) "{{{2
             keepj call setline(1, ' '.getline(1)[1:])
         endif
         let s:voof_bodies[a:body].tick_ = s:voof_bodies[a:body].tick
+        "echom reltimestr(reltime(start))
     finally
         let &ul=ul_
         setl noma
+        let &lz=lz_
     endtry
 
-    """ Show current position.
-    exe 'normal! ' . snLn . 'G'
+    """ Show startup node.
+    exe 'normal! gg' . snLn . 'G'
     call Voof_TreeZV()
     call Voof_TreePlaceCursor()
-    normal! zz
+    if line('w0')!=1 && line('w$')!=line('$')
+        normal! zz
+    endif
     " blnShow is created by voof_TreeCreate() when there is Body headline marked with =
     if exists('l:blnShow')
         " go to Body
         let wnr_ = winnr()
         if Voof_ToBody(a:body,'noa')==-1 | return | endif
-
         " show fold at l:blnShow
-        exe 'normal '.l:blnShow.'G'
+        exe 'normal! '.l:blnShow.'G'
         if &fdm==#'marker'
             normal! zMzvzt
         else
             normal! zt
         endif
-
         " go back to Tree
         let wnr_ = winnr('#')
         if winbufnr(wnr_)==tree
@@ -674,6 +676,7 @@ endfunc
 
 func! Voof_TreeConfigure() "{{{2
 " Configure current buffer as a Tree buffer--options, syntax, mappings.
+    call Voof_TreeMap()
 
     """" Options local to window.
     setl foldenable
@@ -702,7 +705,6 @@ func! Voof_TreeConfigure() "{{{2
     "syn match Pmenu /^=.\{-}|\zs.*/
     "syn match Pmenu /^=/
 
-    call Voof_TreeMap()
     let b:voof_tree = 1
 
     "augroup VoofTree
@@ -902,7 +904,7 @@ func! Voof_TreeSelect(lnum, focus) "{{{3
     py voof.voof_TreeSelect()
     if ((bodyLnr < l:nodeStart) || (bodyLnr > l:nodeEnd))
         let new_node_selected = 1
-        exe 'normal '.nodeStart.'G'
+        exe 'normal! '.nodeStart.'G'
         if &fdm ==# 'marker'
             normal! zMzv
         endif
@@ -943,7 +945,7 @@ func! Voof_TreeZV() "{{{3
     let lnum = line('.')
     let fc = foldclosed(lnum)
     while fc < lnum && fc!=-1
-        normal zo
+        normal! zo
         let fc = foldclosed(lnum)
     endwhile
 endfunc
@@ -960,13 +962,13 @@ func! Voof_TreeToLine(lnum) "{{{3
     call Voof_TreeZV()
     call Voof_TreePlaceCursor()
     if offscreen==1
-        normal zz
+        normal! zz
     endif
 endfunc
 
 
 func! Voof_TreeToSelected() "{{{3
-" Put cursor on selected node,  that is on SnLn line.
+" Put cursor on selected node, that is on SnLn line.
     let lnum = s:voof_bodies[s:voof_trees[bufnr('')]].snLn
     call Voof_TreeToLine(lnum)
 endfunc
@@ -995,10 +997,10 @@ func! Voof_TreeToggleFold() "{{{3
     let ln_status = Voof_FoldStatus(lnum)
 
     if ln_status=='folded'
-        normal zo
+        normal! zo
     elseif ln_status=='notfolded'
         if match(getline(lnum), '|') < match(getline(lnum+1), '|')
-            normal zc
+            normal! zc
         endif
     elseif ln_status=='hidden'
         call Voof_TreeZV()
@@ -1023,10 +1025,10 @@ func! Voof_TreeLeft() "{{{3
     let fc = foldclosed(lnum)
     if fc < lnum && fc!=-1
         while fc < lnum && fc!=-1
-            normal zo
+            normal! zo
             let fc = foldclosed(lnum)
         endwhile
-        normal zz
+        normal! zz
         call cursor('.', match(getline('.'), '|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
         return
@@ -1038,7 +1040,7 @@ func! Voof_TreeLeft() "{{{3
 
     " line is in an opened fold and next line has bigger indent: close fold
     if fc==-1 && (ind < indn)
-        normal zc
+        normal! zc
         call Voof_TreeSelect(line('.'), 'tree')
         return
     endif
@@ -1053,10 +1055,10 @@ func! Voof_TreeLeft() "{{{3
     " move to parent
     let indp = ind
     while indp>=ind
-        normal k
+        normal! k
         let indp = match(getline('.'), '|')
     endwhile
-    "normal zz
+    "normal! zz
     call cursor('.', match(getline('.'), '|') + 1)
     call Voof_TreeSelect(line('.'), 'tree')
 endfunc
@@ -1069,10 +1071,10 @@ func! Voof_TreeRight() "{{{3
     let fc = foldclosed(lnum)
     if fc < lnum && fc!=-1
         while fc < lnum && fc!=-1
-            normal zo
+            normal! zo
             let fc = foldclosed(lnum)
         endwhile
-        normal zz
+        normal! zz
         call cursor('.', match(getline('.'), '|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
         return
@@ -1080,11 +1082,11 @@ func! Voof_TreeRight() "{{{3
 
     " line is in a closed fold
     if fc==lnum
-        normal zoj
+        normal! zoj
         call cursor('.', match(getline('.'), '|') + 1)
     " line is not in a closed fold and next line has bigger indent
     elseif match(getline(lnum), '|') < match(getline(lnum+1), '|')
-        normal j
+        normal! j
         call cursor('.', match(getline('.'), '|') + 1)
     endif
     call Voof_TreeSelect(line('.'), 'tree')
@@ -1471,7 +1473,7 @@ func! Voof_Oop(op, mode) "{{{3
 endfunc
 
 
-func! Voof_OopFolding(ln1, ln2, action) "{{{3=
+func! Voof_OopFolding(ln1, ln2, action) "{{{3
 " Deal with Tree folding in range ln1-ln2 according to action:
 " save, restore, cleanup. Range is ignored if 'cleanup'.
 " Since potentially large lists are involved, folds are manipulated in Python.
@@ -1544,7 +1546,7 @@ func! Voof_OopFromBody(body, tree, blnr) "{{{3
     endif
     if a:blnr>0
         " show fold at blnr
-        exe 'normal '.a:blnr.'G'
+        exe 'normal! '.a:blnr.'G'
         if &fdm==#'marker'
             normal! zMzvzt
         else
@@ -1823,22 +1825,23 @@ func! Voof_GetUNL() "{{{2
 endfunc
 
 
-func! Voof_Grep(pattern) "{{{2
-" Seach Body for pattern and show list of nodes with matches.
-" Number of matches is limited to first 1000.
-" Search register is set to pattern.
-"
-    "let start = reltime()
-    if a:pattern==''
-        let pattern = expand('<cword>')
-        let pattern = substitute(pattern, '\s\+$', '', '')
-        if pattern=='' | return | endif
-        let pattern = '\<'.pattern.'\>'
+func! Voof_Grep(input) "{{{2=
+" Seach Body for pattern(s). Show list of UNLs of nodes with matches.
+" Input can have several patterns separated by boolean 'AND' and 'NOT'.
+" Stop searches after the first 10,000 matches.
+" Set search register to first pattern.
+
+"    let start = reltime()
+    if a:input==''
+        let input = expand('<cword>')
+        let input = substitute(input, '\s\+$', '', '')
+        if input=='' | return | endif
+        let [pattsAND, pattsNOT] = [ ['\<'.input.'\>'], [] ]
     else
-        let pattern = substitute(a:pattern, '\s\+$', '', '')
-        if pattern=='' | return | endif
+        let input = substitute(a:input, '\s\+$', '', '')
+        if input =='' | return | endif
+        let [pattsAND, pattsNOT] = Voof_GrepParseInput(input)
     endif
-    "echo '"'.pattern.'"'
 
     """ Search must be done in Body buffer. Move to Body if in Tree.
     let bnr = bufnr('')
@@ -1855,52 +1858,109 @@ func! Voof_Grep(pattern) "{{{2
         return
     endif
 
-    " Problem: there is no search highlight after :noh
-    let @/ = pattern
-
-    """ Search current buffer for pattern. Limit to first 1000 matches.
+    """ Search for each pattern with search().
     let lz_ = &lz | set lz
     let winsave_dict = winsaveview()
-    " search from start
-    keepj normal! gg0
+    let [matchesAND, matchesNOT] = [[], []]
+    for patt in pattsAND
+        let matches = Voof_GrepSearch(patt)
+        if matches==[0]
+            call Voof_WarningMsg('VOOF (Voofgrep): pattern not found: '.patt)
+            call winrestview(winsave_dict)
+            call winline()
+            let &lz=lz_
+            return
+        endif
+        call add(matchesAND, matches)
+    endfor
+    for patt in pattsNOT
+        call add(matchesNOT, Voof_GrepSearch(patt))
+    endfor
+    call winrestview(winsave_dict)
+    call winline()
+    let &lz=lz_
+
+    """ Highlight first AND pattern.
+    " Problem: there is no search highlight after :noh
+    " Consider: use matchadd() if several AND patterns
+    if len(pattsAND)>0
+        let @/ = pattsAND[0]
+    endif
+
+    """ Set and display quickfix list.
+    " first line shows patterns and number of matches
+    let line1 = ''
+    for i in range(len(pattsAND))
+        let L = matchesAND[i]
+        let line1 = i==0 ? line1.pattsAND[i].' {' : line1.'AND '.pattsAND[i].' {'
+        let line1 = L[-1]==0 ? line1. (len(L)-1) .' matches}  ' : line1.'>10,000 matches}  '
+    endfor
+    for i in range(len(pattsNOT))
+        let L = matchesNOT[i]
+        let line1 = line1.'NOT '.pattsNOT[i].' {'
+        let line1 = L[-1]==0 ? line1. (len(L)-1) .' matches}  ' : line1.'>10,000 matches}  '
+    endfor
+    let line1 = 'Voofgrep '. substitute(line1,"'","''",'g')
+    exe "call setqflist([{'text':'".line1."'}])"
+
+    py voof.voof_Grep()
+    botright copen
+"    echo reltimestr(reltime(start))
+endfunc
+
+
+func! Voof_GrepParseInput(input) "{{{2
+" Input string is patterns separated by AND or NOT.
+" There can be a leading NOT, but not leading AND.
+" Segregate patterns into AND and NOT lists.
+    let [pattsAND, pattsNOT] = [[], []]
+    " split at AND
+    let andParts = split(a:input, '\v\c\s+and\s+')
+    let i = 1
+    for part in andParts
+        " split at NOT
+        let notParts = split(part, '\v\c\s+not\s+')
+        " check for leading NOT
+        if i==1
+            let i+=1
+            let parts1 = split(notParts[0], '\v\c^\s*not\s+', 1)
+            if len(parts1)>1
+                call add(pattsNOT, parts1[1])
+            else
+                call add(pattsAND, notParts[0])
+            endif
+        else
+            call add(pattsAND, notParts[0])
+        endif
+        if len(notParts)>1
+            let pattsNOT+=notParts[1:]
+        endif
+    endfor
+    return [pattsAND, pattsNOT]
+endfunc
+
+
+func! Voof_GrepSearch(pattern) "{{{2
+" Seach Body for pattern. Return [lnums of matching lines].
+" Stop search after first 10000 matches.
     let matches = []
+    " always search from start
+    keepj normal! gg0
     " special effort needed to detect match at cursor
-    if searchpos(pattern, 'nc')==[1,1]
+    if searchpos(a:pattern, 'nc')==[1,1]
         call add(matches,1)
     endif
     " do search
     let found = 1
-    while found>0 && len(matches)<1000
-        let found = search(pattern, 'W')
+    while found>0 && len(matches)<10000
+        let found = search(a:pattern, 'W')
         call add(matches, found)
     endwhile
-    call winrestview(winsave_dict)
-    " without this, current line jumps to top after :copen
-    call winline()
-    let &lz=lz_
-
-    " this signals that search was terminated after 1000 matches were found
+    " search was terminated after 10000 matches were found
     if matches[-1]!=0
         call add(matches,-1)
     endif
-
-    if matches==[0]
-        call Voof_WarningMsg('VOOF (Voofgrep): pattern not found: '.pattern)
-        "py print 'VOOF (Voofgrep): pattern not found: '+vim.eval('pattern')
-        return
-    endif
-
-    """ set and display quickfix list
-    exe "call setqflist([{'text':'Voofgrep ". substitute(pattern,"'","''",'g') ."'}])"
-    if matches[-1]==-1
-        call setqflist([{'text':'seach stopped after 1000 matches'}], 'a')
-    else
-        exe "call setqflist([{'text':'". (len(matches)-1) ." matches'}], 'a')"
-    endif
-
-    py voof.voof_Grep()
-    botright copen
-    "echo reltimestr(reltime(start))
+    return matches
 endfunc
 
 
@@ -2017,7 +2077,7 @@ func! Voof_LogScroll() "{{{2
                 let wnr__p = winnr('#')
                 " move to window with buffer bnr
                 exe 'noautocmd '. bufwinnr(bnr).'wincmd w'
-                normal G
+                normal! G
                 " restore tab's current and previous window numbers
                 exe 'noautocmd '.wnr__p.'wincmd w'
                 exe 'noautocmd '.wnr__.'wincmd w'
@@ -2035,7 +2095,7 @@ func! Voof_LogScroll() "{{{2
         "wincmd t | 10wincmd l | vsplit | wincmd l
         call Voof_ToLogWin()
         exe 'b '.s:voof_logbnr
-        normal G
+        normal! G
         " Return to original tab and buffer.
         exe 'tabn '.tnr_
         exe bufwinnr(bnr_).'wincmd w'

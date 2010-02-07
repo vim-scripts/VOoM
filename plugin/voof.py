@@ -8,7 +8,7 @@
 #          and/or modify it under the terms of the Do What The Fuck You Want To
 #          Public License, Version 2, as published by Sam Hocevar.
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
-# Version: 1.9, 2009-12-19
+# Version: 1.91, 2010-02-06
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -377,7 +377,6 @@ def voof_TreeToStartupNode(): #{{{2
 
 
 def voof_GetUNL(): #{{{2
-
     buftype = vim.eval('buftype')
     body = int(vim.eval('body'))
     lnum = int(vim.eval('lnum'))
@@ -401,44 +400,94 @@ def voof_GetUNL(): #{{{2
     vim.command("echohl None")
 
 
-def voof_Grep(): #{{{2
-
+def voof_Grep(): #{{{2=
     body = int(vim.eval('body'))
     nodes = VOOF.nodes[body]
-    matches = vim.eval('matches')
-    matches = [int(i) for i in matches]
+    matchesAND, matchesNOT = vim.eval('matchesAND'), vim.eval('matchesNOT')
 
-    #print matches
-    last_match = matches.pop()
-    bln = matches[0]
-    # [ [Tree lnum, first match bln, number of total matches], ...]
-    results = [[bisect.bisect_right(nodes, bln), bln, 1]]
-    max_num_len = len('%s%s%s' %(results[-1][0], results[-1][1], results[-1][2]))
-    for bln in matches[1:]:
-        if bln==results[-1][1]:
-            results[-1][2]+=1
-            continue
-        lnum = bisect.bisect_right(nodes, bln)
-        if lnum==results[-1][0]:
-            results[-1][2]+=1
-            continue
-        results.append([lnum, bln, 1])
-        num_len = len('%s%s%s' %(results[-1][0], results[-1][1], results[-1][2]))
-        if num_len>max_num_len:
-            max_num_len = num_len
+    # convert blnums of mathes into tlnums, that is node numbers
+    tlnumsAND, tlnumsNOT = [], [] # lists of AND and NOT "tlnums" dicts
+    counts = {} # {tlnum: count of all AND matches in this node, ...}
+    blnums = {} # {tlnum: first AND match in this node, ...}
+    for L in matchesAND:
+        tlnums = {} # {tlnum of node with a match:0, ...}
+        L.pop()
+        for bln in L:
+            bln = int(bln)
+            tln = bisect.bisect_right(nodes, bln)
+            if not tln in blnums:
+                blnums[tln] = bln
+            elif blnums[tln] > bln:
+                blnums[tln] = bln
+            if tln in counts:
+                counts[tln]+=1
+            else:
+                counts[tln] = 1
+            tlnums[tln] = 0
+        tlnumsAND.append(tlnums)
+    for L in matchesNOT:
+        tlnums = {} # {tlnum of node with a match:0, ...}
+        L.pop()
+        for bln in L:
+            bln = int(bln)
+            tln = bisect.bisect_right(nodes, bln)
+            tlnums[tln] = 0
+        tlnumsNOT.append(tlnums)
+
+    # if there are only NOT patterns
+    if not matchesAND:
+        tlnumsAND = [{}.fromkeys(range(1,len(nodes)+1))]
+
+    # compute intersection
+    results = intersectDicts(tlnumsAND, tlnumsNOT)
+    results = results.keys()
+    results.sort()
     #print results
+
+    # need this to left-align UNLs in the qflist
+    max_size = 0
+    for t in results:
+        if not matchesAND:
+            blnums[t] = nodes[t-1]
+            counts[t] = 0
+        size = len('%s%s%s' %(t, counts[t], blnums[t]))
+        if size > max_size:
+            max_size = size
 
     # list of dictionaries for setloclist() or setqflist()
     loclist = []
-    for i in results:
-        num_len = len('%s%s%s' %(i[0],i[1],i[2]))
-        spaces = ' '*(max_num_len - num_len)
-        text = 'n%s:%s%s|%s' %(i[0],i[2],spaces, ' -> '.join(nodeUNL(body, i[0])).replace("'", "''"))
-        d = "{'text':'%s', 'lnum':%s, 'bufnr':%s}, " %(text, i[1], body)
+    for t in results:
+        size = len('%s%s%s' %(t, counts[t], blnums[t]))
+        spaces = ' '*(max_size - size)
+        UNL = ' -> '.join(nodeUNL(body, t)).replace("'", "''")
+        text = 'n%s:%s%s|%s' %(t, counts[t], spaces, UNL)
+        d = "{'text':'%s', 'lnum':%s, 'bufnr':%s}, " %(text, blnums[t], body)
         loclist .append(d)
     #print '\n'.join(loclist)
 
     vim.command("call setqflist([%s],'a')" %(''.join(loclist)) )
+
+
+def intersectDicts(dictsAND, dictsNOT): #{{{2
+    '''Arguments are two lists of dictionaries. Keys are Tree lnums.
+    Return dict: intersection of all dicts in dictsAND and non-itersection with
+    all dicts in dictsNOT.'''
+    if not dictsAND: return {}
+    D1 = dictsAND[0]
+    if len(dictsAND)==1:
+        res = D1
+    else:
+        res = {}
+    # get intersection with all other AND dicts
+    for D in dictsAND[1:]:
+        for item in D1:
+            if item in D: res[item] = 0
+    # get non-intersection with NOT dicts
+    for D in dictsNOT:
+        keys = res.keys()
+        for key in keys:
+            if key in D: del res[key]
+    return res
 
 
 #---Outline Operations------------------------{{{1
@@ -1093,7 +1142,7 @@ def oopMarkSelected(): # {{{2
     Body[bln_selected-1] = '%s=%s' %(bline[:end], bline[end:])
 
 
-#---Tree Folding Operations-------------------{{{1=
+#---Tree Folding Operations-------------------{{{1
 # Opened/Closed Tree buffer folds are equivalent to Expanded/Contracted nodes.
 # By default, folds are closed. Opened folds are marked by 'o' in Body
 # headlines (after 'x', before '=').
@@ -1306,7 +1355,7 @@ def execScript(): #{{{2
     #sys.path.insert(0, voof_dir)
     try:
         #d = {'vim':vim, 'VOOF':VOOF, 'voof':sys.modules[__name__]}
-        d = {'vim':vim, 'VOOF':VOOF, 'voof':sys.modules['voof']}
+        d = { 'vim':vim, 'VOOF':VOOF, 'voof':sys.modules['voof'] }
         execfile(voof_script, d)
         print '---end of Python script---'
     except Exception:
