@@ -1,11 +1,11 @@
-*voof.txt*      VOOF (Vim Outliner Of Folds)
+*voof.txt*      Two-pane outliner and related utilities
 VOOF (Vim Outliner Of Folds): two-pane outliner and related utilities
 plugin for Python-enabled Vim version 7.x
 Website: http://www.vim.org/scripts/script.php?script_id=2657
  Author: Vlad Irnov  (vlad DOT irnov AT gmail DOT com)
 License: This documentation is released under the Do What The Fuck You Want To
          Public License, Version 2. See http://sam.zoy.org/wtfpl/COPYING.
-Version: 1.91, 2010-02-06
+Version: 1.92, 2010-03-03
 
 ==============================================================================
 Contents   [[[1~
@@ -134,14 +134,14 @@ limit on my 2002 notebook (1.6GHz Pentium 4 Mobile): >
 When moving to Tree after modifying Body, the pause due to outline update is
 noticeable but is still less than a second.
 
-Browsing outline is fast regardless of it's size. Outline operations are also
-fast because they bypass global outline update unless "g:voof_verify_oop" is
-set to 1.
+Browsing an outline is fast regardless of it's size. Outline operations are
+also fast because they bypass global outline update unless "g:voof_verify_oop"
+is set to 1.
 
 In case of stress test file "calendar_outline.txt", the time-consuming step is
 not just scanning for fold markers, but also comparing >4000 headlines between
 the old and new outlines, or, if outlines are very different, setting all
-lines in the Tree buffer. This means that even larger files can be used
+lines in the Tree buffer. This means that even larger files can be outlined
 comfortably if they have much fewer headlines.
 
 ==============================================================================
@@ -155,9 +155,9 @@ Start fold markers with levels have many advantages:
     - Easy to parse in a script and to search for.
     - Fold markers without levels are handy for folding smaller regions.
 
-Perhaps the only drawback of numbered fold markers is that inserting them is
-somewhat awkward and slow. This is not a big deal if outline nodes have a lot
-of body text: most of the time is spent writing body text rather than creating
+One drawback of numbered fold markers is that inserting them is somewhat
+awkward and slow. This is not a big deal if outline nodes have a lot of body
+text: most of the time is spent writing body text rather than creating
 headlines (also known as headings). For outlines that consist mostly of
 headlines (e.g., a shopping list) an indent based outlining mode is more
 appropriate. See VO (VimOutliner) and TVO (The Vim Outliner) plugins.
@@ -216,6 +216,7 @@ Requirements   [[[1~
 VOOF uses Python and requires Python-enabled Vim 7.x, that is Vim compiled
 with the Python interface. Your Vim is Python-enabled if it can do >
     :py print 2**0.5
+    :py import sys; print sys.version_info
 
 Python version should be 2.4 - 2.7 .
 Python 3 is not supported and is not compatible with Vim anyway.
@@ -362,9 +363,10 @@ Note that these keys have default meaning in Vim:
     <Return> moves cursor down, which is not very useful since "j" does almost
     the same thing.
 
-    <Tab>/CTRL-I in Normal mode goes to newer position in the jump list
-    (opposite of CTRL-O, see |CTRL-I|). It seems that Ctrl-Tab still works
-    like default <Tab>/CTRL-I, at least in GUI Vim, when <Tab> is mapped.
+    By default, <Tab>/CTRL-I in Normal mode goes to newer position in the jump
+    list (opposite of CTRL-O, see |CTRL-I|). Thus, although tempting, mapping
+    <Tab> is usually a bad idea. It seems that Ctrl-Tab still works like
+    default <Tab>/CTRL-I, at least in GUI Vim, when <Tab> is mapped.
 
 The following two settings allow to use keys or key combinations other than
 <Return> and <Tab>.
@@ -447,10 +449,10 @@ Body: Normal mode. Tree: Normal and Visual modes. |voof_shuttle_keys|
 
 <Down>              Move cursor Down and select new node. (n)
 
-<Right>             Traverse node's tree down: move to first child and
+<Right>             Traverse node's branch down: move to first child and
                     select it. (n)
 
-<Left>              Traverse node's tree up: move to parent and select it.
+<Left>              Traverse node's branch up: move to parent and select it.
                     If the node is expanded, it is contracted first. (n)
 
 <LeftRelease>       This is mouse left button click.
@@ -547,8 +549,8 @@ pp                  Paste node(s) after current node. (n)
 
 :Voofunl            Display node's UNL (Uniform Node Locator). |voof_Voofunl|
 
-:Voofgrep [patterns]
-                    Search current outline for patterns and display results in
+:Voofgrep [pattern(s)]
+                    Search current outline for pattern and display results in
                     the quickfix window as list of UNLs of nodes with matches.
                     Performs boolean AND and NOT searches if there are several
                     patterns separated by words "and" or "not". Uses word at
@@ -576,7 +578,7 @@ NOTE: End fold markers with levels, }}}1, }}}3, etc., are ignored and should
 not be used.
 
 NOTE: Matching fold markers without level numbers, {{{ and }}}, are ignored.
-They are are useful to fold small areas inside numbered folds, e.g. parts of
+They are handy for folding small areas inside numbered folds, e.g. parts of
 functions. The region between {{{ and }}} should not contain fold markers with
 levels.
 
@@ -604,11 +606,16 @@ manipulated from Tree window: deleted, moved, promoted, demoted, marked, etc.
 Obviously, Body buffers can be edited directly as any other buffers with fold
 markers.
 
-The outline data and the Tree buffer are updated automatically on entering the
-Tree buffer (on |BufEnter|). The actual update happens if the Body has been
+The outline data and the Tree are updated automatically on entering the Tree
+buffer (on |BufEnter|). The actual update happens if the Body has been
 modified since the last update (when Body's |b:changedtick-variable| is
 different). This update is the bottleneck that limits the size of outlines
 that can be edited comfortably.
+
+A Tree buffer is not modifiable and should never be edited directly. It has
+many buffer-local mappings for navigating the outline and for performing
+outline operations. Most of Vim standard Normal and Visual text change
+commands are either disabled or remapped.
 
 A Body buffer is not configured in any substantial way by the command :Voof.
 It has only two VOOF-specific mappings: <Return> and <Tab> in Normal mode
@@ -617,11 +624,6 @@ between Body and Tree windows. These two mappings can be changed by the user,
 see |voof_shuttle_keys|. The user is responsible for setting all other Body
 settings to his liking: folding, indenting, syntax highlighting and so on
 (these are usually determined by Body 'filetype').
-
-A Tree buffer is not modifiable and should never be edited directly. It has
-many buffer-local mappings for navigating the outline and for performing
-outline operations. Most of Vim standard Normal and Visual text change
-commands are either disabled or remapped.
 
 ==============================================================================
 About Fold Markers   [[[3~
@@ -640,7 +642,7 @@ the outline will be created from lines with <<<1, <<<2, <<<3, etc.
 make sure to recreate the outline: delete Tree buffer and execute the command
 :Voof again.
 
-VOOF scans only for start fold markers with level numbers. End fold markers
+VOOF scans only for _start_ fold markers with level numbers. End fold markers
 with levels and fold markers without levels are ignored. This assumes that the
 user follows certain rules of using fold markers. These rules make a lot of
 sense and are similar to recommendations given in Vim help, see |fold-marker|.
@@ -778,9 +780,9 @@ in Tree buffers, where they work both in Normal and Visual modes.
               Tree buffer, a new window is created. Thus, hitting <Return>
               after ":tab split" will create tabpage with a new outline view.
 
-<Tab>       - If Body buffer, move cursor to window with the corresponding
+<Tab>       - In Body buffer: move cursor to window with the corresponding
               Tree buffer.
-            - If Tree buffer, move cursor to window with the corresponding
+            - In Tree buffer: move cursor to window with the corresponding
               Body buffer.
          
 Note: All Voof commands look for a Tree or Body window in the current tabpage
@@ -796,9 +798,9 @@ All other mappings are for Tree buffers only, Normal mode.
 
 <Down>      Move cursor Down and select new node.
 
-<Right>     Traverse node's tree down: move to first child and select it.
+<Right>     Traverse node's branch down: move to first child and select it.
 
-<Left>      Traverse node's tree up: move to parent and select it.
+<Left>      Traverse node's branch up: move to parent and select it.
             If the node is expanded, it will be contracted first.
 
 <LeftRelease>
@@ -824,7 +826,6 @@ zc, zo, zM, zR, zv, etc.
 x           Go to next marked node (find headline marked with 'x').
 
 X           Go to previous marked node.
-
 
 ==============================================================================
 :Voofunl   [[[3~
@@ -933,9 +934,9 @@ Outline Operations   [[[2o~
 Outline operations are performed using Tree buffer-local mappings, that is
 they are always performed in a Tree buffer.
 
-When appropriate, operations are automatically applied to trees, that is to
+When appropriate, operations are automatically applied to branches, that is to
 top level nodes and all their descendant nodes. E.g., moving a node, moves the
-node and its descendants as a tree. The level numbers of the node and its
+node and all its descendants. The level numbers of the node and its
 descendants are automatically adjusted to the new position in the outline.
 
 Most operations can be performed on a range of sibling nodes using Visual
@@ -976,8 +977,8 @@ To insert new node while in a Tree buffer (Normal mode):
 <LocalLeader>I      Insert new node as first child of current node.
 
                     By default, the new headline is "---NewHeadline---".
-                    The cursor is moved in Body buffer on the new headline,
-                    where it can be edited ("caw", "caW", etc.).
+                    The cursor is moved to Body window and placed on the new
+                    headline, where it can be edited ("caw", "caW", etc.).
 
 Often, it's easier to just edit Body buffer to insert a numbered fold marker.
 I wrote a simple plugin that helps with that:
@@ -1010,8 +1011,8 @@ With the exception of Paste, these Tree buffer mappings are available in
 Normal and Visual modes. In Visual mode, the range is checked for being valid:
 top level nodes in the range must be siblings.
 
-These commands always apply to trees, that is to top level nodes and all their
-descendant nodes, even when only part of a tree is selected.
+These commands always apply to branches, that is to top level nodes and all
+their descendant nodes, even when only part of a branch is selected.
 
 Cut/Copy/Paste commands use Vim's + register, that is system clipboard. The
 Paste command checks clipboard for being a valid VOOF outline or a range of
@@ -1033,7 +1034,7 @@ adding/removing 'x' in Body headline after the start fold marker level number
                     Visual mode: unmark all nodes in the range.
                     'x' is removed from Body headlines.
 
-The above commands apply to individual nodes only, not to descendants.
+The above commands apply to individual nodes only, not to their descendants.
 
 To unmark all: ggVG<LocalLeader>M
 
@@ -1108,6 +1109,23 @@ There as also the following Tree buffer mappings, Normal mode:
                     Same as :%VoofFoldingRestore.
 
 Mnemonics for mappings:  Foldins Save/Restore, Folding All Save/Restore.
+
+==============================================================================
+Known Problems   [[[3~
+
+There are some pitfalls to be aware of when editing very large outlines:
+
+1) Memory used by Vim can increase significantly when outline operations Move
+Up/Down are applied repetitively to a large node or a block of nodes (>1MB).
+These commands delete and then insert lines in Body buffer. If the range being
+moved is large, this can cause dramatic increase in memory used by the undo
+history. Thus, to move a large node over a long distance it's better to use
+Cut/Paste rather than keep pressing Ctrl-Up/Down.
+This problem doesn't exist if 'undolevels' is set to -1, 0, 1.
+
+2) Undoing some outline operations can take a longer than usual time if a
+large number of Body folds (>1000) is affected. The workaround is to
+temporarily set Body 'foldmethod' to manual (:set fdm=manual).
 
 ==============================================================================
 EXECUTING NODES (:Voofexec)   [[[1~
@@ -1257,7 +1275,7 @@ The filetype of the PyLog buffer is set to "log". Some syntax highlighting is
 added automatically to highlight Python error messages and common VOOF
 messages.
 
-When Python attemps to print a unicode string, e.g. >
+When Python attempts to print a unicode string, e.g. >
     :py print u'ascii test'
     :py print u'\u042D \u042E \u042F \u2248 \u2260'
 the string is encoded using the value of Vim option 'encoding' at the time
@@ -1265,7 +1283,7 @@ when the __PyLog__ buffer was created.
 
 
 ==============================================================================
-Known Problems:   [[[2~
+Known Problems    [[[2~
 
 1) All output lines appear in the __PyLog__ buffer simultaneously after the
 script is finished, not in real time. Example (executable with :Voofe py):
@@ -1277,10 +1295,13 @@ time.sleep(5)
 print datetime.datetime.now()
 ### ]]]
 
-2) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
+2) Visiting other tabpages is very slow on Linux in GUI Vim (GTK). It's better
+to have PyLog only in the current tabpage.
+
+3) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
 The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
 
-3) In versions before 1.7 there was problem with the output of help(), which
+4) In versions before 1.7 there was problem with the output of help(), which
 apparently uses Lib/pydoc.py, which does something strange to output trailing
 \n. Steps to reproduce:
     1. Open new instance of Vim.
@@ -1293,8 +1314,6 @@ The culprit is in Lib/pydoc.py:
     help = Helper(sys.stdin, sys.stdout)
 The current workaround is to delete pydoc from sys.modules when changing stdin
 and stdout.
-
-4) Visiting other tabpages seems to be slow in GUI Vim (GTK?) on Linux.
 
 ==============================================================================
 Implementation notes   [[[1~
@@ -1489,11 +1508,10 @@ Checking Bodies for ticks   [[[2~
 
 Tree buffer and associated outline data are updated on entering Tree via
 BufEnter autocommand. To perform update only when the Body has changed since
-the last update, Body's b:changedtick is used as shown in the docs. The
-problem is that, for some reason,  b:changedtick cannot be read with
-getbufvar(), so it's not accessible from Tree on BufEnter. The workaround is
-to use Body's BufLeave autocommand to save Body's b:changedtick. So the entire
-update scheme is:
+the last update, Body's b:changedtick is used as shown in the docs.
+Unfortunately, b:changedtick cannot be read with getbufvar(), so it's not
+accessible from Tree on BufEnter. The workaround is to use Body's BufLeave
+autocommand to save Body's b:changedtick. So the entire update scheme is:
     - on Body BufLeave save Body's b:changedtick as "tick"
     - on Tree BufEnter compare "tick_" to "tick"
     - if different, do outline update and set "tick_" to "tick"
@@ -1525,7 +1543,43 @@ when an error occurs during the update.
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v1.91, 2010-02-06   [[[3x~
+v1.92, 2010-03-03   [[[3x~
+
+PROBLEM: outline operations Mark/Unmark, Move Right/Left can be slow when they
+involve a large number of folds.
+EXAMPLE: mark/unmark all nodes in calendar_outline.txt takes about 3 seconds.
+But set Body foldmethod to "manual" and the time is reduced to 0.85 seconds.
+Set Tree foldmethod to "manual" and the time is reduced further to 0.16 sec.
+FIX: Set Tree and Body foldmethod to "manual" during Mark/Unmark. Set Body
+foldmethod to manual during Move Right/Left. Other operations are not
+susceptible.
+
+Command :VoofFoldingSave is now much faster when applied to huge and deeply
+nested branches with lots of closed folds. The problem was recursive function
+foldingGet(). Got rid of recursion -- unnecessary and inefficient.
+foldingGet() and foldingGetAll() were merged into foldingGet(). 
+
+If Body "foldmethod" is not "marker", Body node could be hidden in fold after
+selecting node.
+FIX: do "zv" in Body after: selecting node in Tree, outline operations, on
+startup. In other words, if foldmethod is marker, do "zMzvzt" to show selected
+Body node. Otherwise do "zvzt".
+
+Fixed stupid code in Voof_ToTreeOrBodyWin(), which is the <Tab> command -- no
+need to visit all windows to find the target. It was causing confusion when
+working with split windows.
+
+Code tweaks to save precious microseconds:
+voof.vim
+    - Use stridx(line,'|') instead of match(line,'|') in various Tree
+      functions, including foldexpr.
+    - Compacted and simplified Tree foldexpr function.
+voof.py
+    - xrange() is now used in many places instead of other iteration methods.
+    - Cleaned up some code, especially for outline operations.
+
+
+v1.91, 2010-02-06   [[[3~
 Command :Voofgrep can now perform boolean AND and NOT searches.
 
 Increased maximum number of matches when doing Voofgrep to 10000 from 1000.
@@ -1636,7 +1690,7 @@ New commands: Voofgrep, Voofunl.
 
 Fixed blunder in "Move Down" outline operation that could cause outline
 corruption. To find node after which to move, the cursor must be put on the
-last node of the tree. That was done in Visual mode, but not in Normal mode.
+last node of the branch. That was done in Visual mode, but not in Normal mode.
 
 <Return> and <Tab> in Tree buffers now also work in Visual mode.
 

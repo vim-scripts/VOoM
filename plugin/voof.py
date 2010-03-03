@@ -8,7 +8,7 @@
 #          and/or modify it under the terms of the Do What The Fuck You Want To
 #          Public License, Version 2, as published by Sam Hocevar.
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
-# Version: 1.91, 2010-02-06
+# Version: 1.92, 2010-03-03
 
 '''This module is meant to be imported by voof.vim .'''
 
@@ -26,7 +26,6 @@ import bisect
 # default start fold marker and regexp
 MARKER = '{{{'  # }}}
 MARKER_RE = re.compile(r'{{{(\d+)(x?)')    # }}}
-
 voof_dir = vim.eval('s:voof_dir')
 voof_script = vim.eval('s:voof_script_py')
 
@@ -58,28 +57,23 @@ class VoofData: #{{{1
 
 
 def voofOutline(body, lines): #{{{2
-    '''Return (treelines, nodes, levels) for list of Body lines.'''
+    '''Return (treelines, nodes, levels) for list of Body lines.
+    Optimized for lists in which most items don't have fold markers.'''
     marker = VOOF.markers.get(body, MARKER)
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
-
     treelines, nodes, levels = [], [], []
-    lnum=0
-    for line in lines:
-        lnum+=1
-        if not marker in line: continue
+    for i in xrange(len(lines)):
+        if not marker in lines[i]: continue
+        line = lines[i]
         match = marker_re.search(line)
         if not match: continue
-        level = int(match.group(1))
-        checkbox = match.group(2) or ' '
-        # Strip the fold marker and possible line comment chars before it.
-        tline = line[:match.start()].strip().rstrip('"#/*% \t')
-        # Strip fillchars. They are useful in Body, but not in Tree.
-        # Consider: strip fillchars after line comment chars.
-        tline = tline.strip('-=~').strip()
-        tline = ' %s%s%s%s' %(checkbox, '. '*(level-1), '|', tline)
+        lev = int(match.group(1))
+        check = match.group(2) or ' '
+        tline = line[:match.start()].strip().rstrip('"#/*% \t').strip('-=~').strip()
+        tline = ' %s%s%s%s' %(check, '. '*(lev-1), '|', tline)
         treelines.append(tline)
-        nodes.append(lnum)
-        levels.append(level)
+        nodes.append(i+1)
+        levels.append(lev)
     return (treelines, nodes, levels)
 
 
@@ -117,31 +111,21 @@ def voofUpdate(body): #{{{2
         Tree[:] = treelines
         return
 
-    # This causes complete redraw after editing a single headline.
-    #if not treelines_==treelines:
-        #Tree[:] = treelines
-
     # If only one line is modified, draw that line only. This ensures that
     # editing (and inserting) a single headline in a large outline is fast.
     # If more than one line is modified, draw all lines from first changed line
     # to the end of buffer.
     draw_one = False
-    draw_many = False
-    idx=0
-    for h in treelines:
-        if not h==treelines_[idx]:
+    for i in xrange(len(treelines)):
+        if not treelines[i]==treelines_[i]:
             if draw_one==False:
                 draw_one = True
-                diff_idx = idx
+                diff = i
             else:
-                draw_one = False
-                draw_many = True
-                break
-        idx+=1
-    if draw_many:
-        Tree[diff_idx:] = treelines[diff_idx:]
-    elif draw_one:
-        Tree[diff_idx] = treelines[diff_idx]
+                Tree[diff:] = treelines[diff:]
+                return
+    if draw_one:
+        Tree[diff] = treelines[diff]
 
 
 def computeSnLn(body, blnr): #{{{2
@@ -207,7 +191,7 @@ def voof_TreeCreate(): #{{{2
     Body = VOOF.buffers[body]
     # current Body lnum
     blnr = int(vim.eval('s:voof_bodies[a:body].blnr'))
-    L = len(nodes)
+    z = len(nodes)
 
     ### compute snLn, create Tree folding
 
@@ -216,29 +200,29 @@ def voof_TreeCreate(): #{{{2
     snLn = 0
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
     oFolds = []
-    for ln in range(2,L+1):
-        bline = Body[nodes[ln-1]-1]
+    for i in xrange(1,z):
+        bline = Body[nodes[i]-1]
         # part of Body headline after marker+level+'x'
         bline2 = bline[marker_re.search(bline).end():]
         if not bline2: continue
         if bline2[0]=='=':
-            snLn = ln
+            snLn = i+1
         elif bline2[0]=='o':
-            oFolds.append(ln)
+            oFolds.append(i+1)
             if bline2[1:] and bline2[1]=='=':
-                snLn = ln
+                snLn = i+1
 
     # create Tree folding
     if oFolds:
-        cFolds = foldingFlip(2,L,oFolds,body)
-        foldingCreate(2,L,cFolds)
+        cFolds = foldingFlip(2,z,oFolds,body)
+        foldingCreate(2,z,cFolds)
 
     if snLn:
         vim.command('let s:voof_bodies[%s].snLn=%s' %(body, snLn))
         VOOF.snLns[body] = snLn
         # set blnShow if it's different from current Body node
         # TODO: really check for current Body node?
-        if L>2 and (blnr==1 or blnr<nodes[1]):
+        if z>2 and (blnr==1 or blnr<nodes[1]):
             vim.command('let blnShow=%s' %nodes[snLn-1])
     else:
         # no Body headline is marked with =
@@ -263,70 +247,61 @@ def voof_UnVoof(): #{{{2
 # helpers for outline traversal
 
 
+def nodeHasChildren(body, lnum): #{{{2
+    '''Determine if node at Tree line lnum has children.'''
+    levels = VOOF.levels[body]
+    if lnum==1 or lnum==len(levels): return False
+    elif levels[lnum-1] < levels[lnum]: return True
+    else: return False
+
+
 def nodeSubnodes(body, lnum): #{{{2
     '''Number of all subnodes for node at Tree line lnum.'''
     levels = VOOF.levels[body]
-    if lnum==1 or lnum==len(levels):
-        return 0
-    level = levels[lnum-1]
-    idx = 0
-    for lev in levels[lnum:]:
-        if lev<=level:
-            return idx
-        idx+=1
-    return idx
+    z = len(levels)
+    if lnum==1 or lnum==z: return 0
+    lev = levels[lnum-1]
+    for i in xrange(lnum,z):
+        if levels[i]<=lev:
+            return i-lnum
+    return z-lnum
 
 
 def nodeParent(body, lnum): #{{{2
-    '''Return lnum of parent of node at Tree line lnum.'''
-
+    '''Return lnum of closest parent of node at Tree line lnum.'''
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
-
-    lev0 = levels[lnum-1]
-    if lev0==1:
-        return None
-    ln = lnum-1
-    lev = levels[ln-1]
-    while lev>=lev0:
-        ln-=1
-        lev = levels[ln-1]
-    return ln
+    lev = levels[lnum-1]
+    if lev==1: return None
+    for i in xrange(lnum-2,0,-1):
+        if levels[i] < lev: return i+1
 
 
-def nodeHasChildren(body, ln): #{{{2
-    '''Determine if node at Tree line ln has children.'''
-    levels = VOOF.levels[body]
-    if ln==1 or ln==len(levels):
-        return False
-    elif levels[ln-1] < levels[ln]:
-        return True
-    else:
-        return False
+def nodeParents(body, lnum): #{{{2
+    '''Return lnums of parents of node at Tree line lnum.'''
+    nodes, levels = VOOF.nodes[body], VOOF.levels[body]
+    lev = levels[lnum-1]
+    if lev==1: return []
+    parents = []
+    for i in xrange(lnum-2,0,-1):
+        levi = levels[i]
+        if levi < lev:
+            lev = levi
+            parents.append(i+1)
+            if lev==1:
+                parents.reverse()
+                return parents
 
 
 def nodeUNL(body, lnum): #{{{2
     '''Compute UNL of node at Tree line lnum.
     Returns list of headlines.'''
-
     tree = int(vim.eval('s:voof_bodies[%s].tree' %body))
     Tree = VOOF.buffers[tree]
     nodes, levels = VOOF.nodes[body], VOOF.levels[body]
-
-    if lnum==1:
-        return ['top-of-file']
-
-    lnums = []
-    parent = lnum
-    while parent:
-        lnums.append(parent)
-        parent = nodeParent(body, parent)
-
-    lnums.reverse()
-    heads = []
-    for ln in lnums:
-        heads.append( Tree[ln-1].split('|', 1)[1] )
-    #UNL = ' -> '.join(heads)
-    #return UNL
+    if lnum==1: return ['top-of-file']
+    parents = nodeParents(body,lnum)
+    parents.append(lnum)
+    heads = [Tree[ln-1].split('|',1)[1] for ln in parents]
     return heads
 
 
@@ -360,19 +335,19 @@ def voof_TreeToStartupNode(): #{{{2
     nodes = VOOF.nodes[body]
     Body = VOOF.buffers[body]
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
-    L = len(nodes)
+    z = len(nodes)
     # find Body headlines marked with '='
     lnums = []
-    for ln in range(2,L+1):
-        bline = Body[nodes[ln-1]-1]
-        # part of Body headline after marker+level+'x'
+    for i in xrange(1,z):
+        bline = Body[nodes[i]-1]
+        # part of Body headline after marker+level+'x'+'o'
         bline2 = bline[marker_re.search(bline).end():]
         if not bline2: continue
         if bline2[0]=='=':
-            lnums.append(ln)
+            lnums.append(i+1)
         elif bline2[0]=='o':
             if bline2[1:] and bline2[1]=='=':
-                lnums.append(ln)
+                lnums.append(i+1)
     vim.command('let l:lnums=%s' %repr(lnums))
 
 
@@ -387,7 +362,6 @@ def voof_GetUNL(): #{{{2
     heads = nodeUNL(body,lnum)
     UNL = ' -> '.join(heads)
     vim.command("let @n='%s'" %UNL.replace("'", "''"))
-    #print '  ' + UNL
     for h in heads[:-1]:
         h = h.replace("'", "''")
         vim.command("echohl ModeMsg")
@@ -400,7 +374,7 @@ def voof_GetUNL(): #{{{2
     vim.command("echohl None")
 
 
-def voof_Grep(): #{{{2=
+def voof_Grep(): #{{{2
     body = int(vim.eval('body'))
     nodes = VOOF.nodes[body]
     matchesAND, matchesNOT = vim.eval('matchesAND'), vim.eval('matchesNOT')
@@ -500,10 +474,11 @@ def changeLevTreeHead(h, delta): #{{{2
     '''Increase of decrese level of Tree headline by delta:
     insert or delete  delta*". "  string.'''
     if delta>0:
-        h = '%s%s%s' %(h[:2], '. '*delta, h[2:])
+        return '%s%s%s' %(h[:2], '. '*delta, h[2:])
     elif delta<0:
-        h = '%s%s' %(h[:2], h[2-2*delta:])
-    return h
+        return '%s%s' %(h[:2], h[2-2*delta:])
+    else:
+        return h
 
 
 def changeLevBodyHead(h, delta, body): #{{{2
@@ -512,8 +487,7 @@ def changeLevBodyHead(h, delta, body): #{{{2
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
     m = marker_re.search(h)
     level = int(m.group(1))
-    h = '%s%s%s' %(h[:m.start(1)], level+delta, h[m.end(1):])
-    return h
+    return '%s%s%s' %(h[:m.start(1)], level+delta, h[m.end(1):])
 
 
 def setClipboard(s): #{{{2
@@ -525,33 +499,23 @@ def setClipboard(s): #{{{2
 
 
 def oopSelEnd(): #{{{2
-    '''This is part of  Voof_Oop() checks.
+    '''This is part of Voof_Oop() checks.
     Selection in Tree starts at line ln1 and ends at line ln2.
     Selection can have many sibling nodes: nodes with the same level as ln1 node.
-    Return lnum of last node in the last sibling node's tree.
+    Return lnum of last node in the last sibling node's branch.
     Return 0 if selection is invalid.'''
-
     body = int(vim.eval('body'))
-    ln1  = int(vim.eval('ln1'))
-    ln2  = int(vim.eval('ln2'))
+    ln1, ln2  = int(vim.eval('ln1')), int(vim.eval('ln2'))
     if ln1==1: return 0
-
     levels = VOOF.levels[body]
-    # this takes care of various selection-includes-last-node problems
-    levels.append(-1)
-
-    topLevel = levels[ln1-1]
-    ln = ln1
-    for lev in levels[ln1-1:]:
-        # invalid selection: there is node with level higher than that of ln1 node
-        if ln<=ln2 and lev<topLevel:
-            levels.pop()
-            return 0
-        # last node of the last sibling node's tree
-        elif ln>ln2 and lev<=topLevel:
-            levels.pop()
-            return ln-1
-        ln+=1
+    z, lev0 = len(levels), levels[ln1-1]
+    for i in xrange(ln1,z):
+        lev = levels[i]
+        # invalid selection: there is node with level lower than that of ln1 node
+        if i+1 <= ln2 and lev < lev0: return 0
+        # node after the last sibling node's branch
+        elif i+1 > ln2 and lev <= lev0: return i
+    return z
 
 
 def oopInsert(as_child=False): #{{{2
@@ -561,25 +525,23 @@ def oopInsert(as_child=False): #{{{2
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     levels = VOOF.levels[body]
 
-    # Compute where and to insert and at what level.
+    # Compute where to insert and at what level.
     # Insert new headline after node at ln.
     # If node is folded, insert after the end of node's tree.
     # default level
-    level = levels[ln-1]
+    lev = levels[ln-1]
     # after first Tree line
-    if ln==1: level=1
-    # as_child always inserts as child after current node, even when it's folded
-    elif as_child: level+=1
+    if ln==1: lev=1
+    # as_child always inserts as first child of current node, even if it's folded
+    elif as_child: lev+=1
     # after last Tree line, same level
     elif ln==len(levels): pass
     # node has children, it can be folded
-    elif level < levels[ln]:
-        # folded: insert after current node's tree, same level
-        if ln_status=='folded':
-            ln += nodeSubnodes(body,ln)
+    elif lev < levels[ln]:
+        # folded: insert after current node's branch, same level
+        if ln_status=='folded': ln += nodeSubnodes(body,ln)
         # not folded, insert as child
-        else:
-            level+=1
+        else: lev+=1
 
     # remove = mark before modifying Tree
     snLn = VOOF.snLns[body]
@@ -588,9 +550,9 @@ def oopInsert(as_child=False): #{{{2
     # insert headline in Tree and Body
     # bLnum is new headline ln in Body
     marker = VOOF.markers.get(body, MARKER)
-    treeLine = '= %s%sNewHeadline' %('. '*(level-1), '|')
-    bodyLine = '---NewHeadline--- %s%s' %(marker, level)
-    if ln==len(Tree[:]):
+    treeLine = '= %s%sNewHeadline' %('. '*(lev-1), '|')
+    bodyLine = '---NewHeadline--- %s%s' %(marker, lev)
+    if ln==len(levels):
         Tree.append(treeLine)
         bLnum = len(Body[:])
         Body.append([bodyLine, ''])
@@ -608,10 +570,8 @@ def oopInsert(as_child=False): #{{{2
 
 
 def oopPaste(): #{{{2
-    ### local vars
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln, ln_status = int(vim.eval('ln')), vim.eval('ln_status')
-
     Tree, Body = VOOF.buffers[tree], VOOF.buffers[body]
     levels, nodes = VOOF.levels[body], VOOF.nodes[body]
 
@@ -642,24 +602,22 @@ def oopPaste(): #{{{2
         lev_ = lev
 
     ### compute where to insert and at what level
-    # insert nodes after node at ln at level level
+    # insert nodes after node at ln at level lev
     # if node is folded, insert after the end of node's tree
-    level = levels[ln-1] # default level
+    lev = levels[ln-1] # default level
     # after first Tree line
-    if ln==1: level=1
+    if ln==1: lev=1
     # after last Tree line, same level
     elif ln==len(levels): pass
     # node has children, it can be folded
-    elif level < levels[ln]:
-        # folded: insert after current node's tree, same level
-        if ln_status=='folded':
-            ln += nodeSubnodes(body,ln)
+    elif lev < levels[ln]:
+        # folded: insert after current node's branch, same level
+        if ln_status=='folded': ln += nodeSubnodes(body,ln)
         # not folded, insert as child
-        else:
-            level+=1
+        else: lev+=1
 
     ### adjust levels of nodes being inserted
-    levDelta = level - pLevels[0]
+    levDelta = lev - pLevels[0]
     if levDelta:
         pHeads = [changeLevTreeHead(h, levDelta) for h in pHeads]
         pLevels = [(lev+levDelta) for lev in pLevels]
@@ -675,10 +633,8 @@ def oopPaste(): #{{{2
     levels[ln:ln] = pLevels
 
     ### insert body lines in Body
-    if ln==len(nodes):
-        bln = len(Body[:])
-    else:
-        bln = nodes[ln]-1
+    if ln==len(nodes): bln = len(Body[:])
+    else             : bln = nodes[ln]-1
     Body[bln:bln] = bLines
     vim.command('let blnShow=%s' %(bln+1))
 
@@ -693,21 +649,17 @@ def oopPaste(): #{{{2
 
     ### update nodes
     # increment nodes being pasted
-    idx = 0
-    for n in pNodes:
-        pNodes[idx]+=bln
-        idx+=1
+    for i in xrange(0,len(pNodes)):
+        pNodes[i]+=bln
     # increment nodes after pasted region
     delta = len(bLines)
-    idx = ln
-    for n in nodes[ln:]:
-        nodes[idx]+=delta
-        idx+=1
+    for i in xrange(ln,len(nodes)):
+        nodes[i]+=delta
     # insert pNodes after ln
     nodes[ln:ln] = pNodes
 
 
-def oopUp(): #{{{2
+def oopUp(): #{{{2=
     tree, body = int(vim.eval('tree')), int(vim.eval('body'))
     ln1, ln2 = int(vim.eval('ln1')), int(vim.eval('ln2'))
     lnUp1, lnUp2 = int(vim.eval('lnUp1')), int(vim.eval('lnUp2'))
@@ -732,13 +684,11 @@ def oopUp(): #{{{2
 
     ### tree lines to move; levels in VOOF.levels to move
     tLines = Tree[ln1-1:ln2]
-    if levDelta:
-        tLines = [changeLevTreeHead(h, levDelta) for h in tLines]
-    #print '-------------'
-    #print '\n'.join(tLines)
     nLevels = levels[ln1-1:ln2]
     if levDelta:
+        tLines = [changeLevTreeHead(h, levDelta) for h in tLines]
         nLevels = [(lev+levDelta) for lev in nLevels]
+    #print '-'*10; print '\n'.join(tLines)
 
     ### move tree lines; update VOOF.levels
     # cut, then insert
@@ -753,17 +703,13 @@ def oopUp(): #{{{2
 
     ### body lines to move
     bln1 = nodes[ln1-1]
-    if ln2==len(nodes):
-        bln2 = len(Body[:])
-    else:
-        bln2 = nodes[ln2]-1
+    if ln2==len(nodes): bln2 = len(Body[:])
+    else              : bln2 = nodes[ln2]-1
     bLines = Body[bln1-1:bln2]
     if levDelta:
         for bl in nodes[ln1-1:ln2]:
             bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta, body)
-    #print '-------------'
-    #print '\n'.join(bLines)
-    #print '-------------'
+    #print '-'*10; print '\n'.join(bLines); print '-'*10
 
     ### move body lines: cut, then insert
     blnUp1 = nodes[lnUp1-1] # insert before this line
@@ -773,16 +719,12 @@ def oopUp(): #{{{2
     ###update nodes
     # increment lnums in the range before which the move is made
     delta = bln2-bln1+1
-    idx = lnUp1-1
-    for n in nodes[lnUp1-1:ln1-1]:
-        nodes[idx]+=delta
-        idx+=1
+    for i in xrange(lnUp1-1,ln1-1):
+        nodes[i]+=delta
     # decrement lnums in the range which is being moved
     delta = bln1-blnUp1
-    idx = ln1-1
-    for n in nodes[ln1-1:ln2]:
-        nodes[idx]-=delta
-        idx+=1
+    for i in xrange(ln1-1,ln2):
+        nodes[i]-=delta
     # cut, insert
     nLines = nodes[ln1-1:ln2]
     nodes[ln1-1:ln2] = []
@@ -792,18 +734,18 @@ def oopUp(): #{{{2
     blnShow = blnUp1
     vim.command('let blnShow=%s' %blnShow)
 
-    #  ..............
-    #  .............. blnUp1-1
-    #  ============== blnUp1=nodes[lnUp1-1]
-    #  range before
-    #  which to move
-    #  ..............
-    #  ============== bln1=nodes[ln1-1]
-    #  range being
-    #  moved
-    #  .............. bln2=nodes[ln2]-1, can be last line
-    #  ==============
-    #  ..............
+#  ..............
+#  .............. blnUp1-1
+#  ============== blnUp1=nodes[lnUp1-1]
+#  range before
+#  which to move
+#  ..............
+#  ============== bln1=nodes[ln1-1]
+#  range being
+#  moved
+#  .............. bln2=nodes[ln2]-1, can be last line
+#  ==============
+#  ..............
 
 
 def oopDown(): #{{{2
@@ -835,11 +777,11 @@ def oopDown(): #{{{2
     snLn = VOOF.snLns[body]
     Tree[snLn-1] = ' ' + Tree[snLn-1][1:]
 
-    ### tree lines to move; levels in VOOF.levels to move
+    ### tree lines to move; levels to move
     tLines = Tree[ln1-1:ln2]
     if levDelta:
         tLines = [changeLevTreeHead(h, levDelta) for h in tLines]
-    nLevels = VOOF.levels[body][ln1-1:ln2]
+    nLevels = levels[ln1-1:ln2]
     if levDelta:
         nLevels = [(lev+levDelta) for lev in nLevels]
 
@@ -865,26 +807,20 @@ def oopDown(): #{{{2
             bLines[bl-bln1] = changeLevBodyHead(bLines[bl-bln1], levDelta, body)
 
     ### move body lines: insert, then cut
-    if lnIns==len(nodes): # insert after the end of file
-        blnIns = len(Body)
-    else:
-        blnIns = nodes[lnIns]-1 # insert after this line
+    if lnIns==len(nodes): blnIns = len(Body)
+    else                : blnIns = nodes[lnIns]-1
     Body[blnIns:blnIns] = bLines
     Body[bln1-1:bln2] = []
 
     ###update nodes
     # increment lnums in the range which is being moved
     delta = blnIns-bln2
-    idx = ln1-1
-    for n in nodes[ln1-1:ln2]:
-        nodes[idx]+=delta
-        idx+=1
+    for i in xrange(ln1-1,ln2):
+        nodes[i]+=delta
     # decrement lnums in the range after which the move is made
     delta = bln2-bln1+1
-    idx = ln2
-    for n in nodes[ln2:lnIns]:
-        nodes[idx]-=delta
-        idx+=1
+    for i in xrange(ln2,lnIns):
+        nodes[i]-=delta
     # insert, cut
     nLines = nodes[ln1-1:ln2]
     nodes[lnIns:lnIns] = nLines
@@ -894,16 +830,16 @@ def oopDown(): #{{{2
     blnShow = nodes[snLn-1]
     vim.command('let blnShow=%s' %blnShow)
 
-    #  ..............
-    #  ============== bln1=nodes[ln1-1]
-    #  range being
-    #  moved
-    #  .............. bln2=nodes[ln2]-1
-    #  ============== blnDn1=nodes[lnDn1-1]
-    #  range after
-    #  which to move
-    #  .............. blnIns=nodes[lnIns]-1 or last Body line
-    #  ==============
+#  ..............
+#  ============== bln1=nodes[ln1-1]
+#  range being
+#  moved
+#  .............. bln2=nodes[ln2]-1
+#  ============== blnDn1=nodes[lnDn1-1]
+#  range after
+#  which to move
+#  .............. blnIns=nodes[lnIns]-1 or last Body line
+#  ==============
 
 
 def oopRight(): #{{{2
@@ -915,14 +851,14 @@ def oopRight(): #{{{2
     ### Move right means increment level by 1 for all nodes in the range.
 
     # can't move right if ln1 node is child of previous node
-    if levels[ln1-1] == levels[ln1-2]+1:
+    if levels[ln1-1] > levels[ln1-2]:
         vim.command('let l:blnShow=-1')
         return
 
     ### change levels of Tree lines, VOOF.levels
     tLines = Tree[ln1-1:ln2]
     tLines = [changeLevTreeHead(h, 1) for h in tLines]
-    nLevels = VOOF.levels[body][ln1-1:ln2]
+    nLevels = levels[ln1-1:ln2]
     nLevels = [(lev+1) for lev in nLevels]
     Tree[ln1-1:ln2] = tLines
     levels[ln1-1:ln2] = nLevels
@@ -965,7 +901,7 @@ def oopLeft(): #{{{2
     ### change levels of Tree lines, VOOF.levels
     tLines = Tree[ln1-1:ln2]
     tLines = [changeLevTreeHead(h, -1) for h in tLines]
-    nLevels = VOOF.levels[body][ln1-1:ln2]
+    nLevels = levels[ln1-1:ln2]
     nLevels = [(lev-1) for lev in nLevels]
     Tree[ln1-1:ln2] = tLines
     levels[ln1-1:ln2] = nLevels
@@ -996,10 +932,8 @@ def oopCopy(): #{{{2
 
     # body lines to copy
     bln1 = nodes[ln1-1]
-    if ln2==len(nodes):
-        bln2 = len(Body[:])
-    else:
-        bln2 = nodes[ln2]-1
+    if ln2==len(nodes): bln2 = len(Body[:])
+    else              : bln2 = nodes[ln2]-1
     bLines = Body[bln1-1:bln2]
 
     setClipboard('\n'.join(bLines))
@@ -1026,10 +960,8 @@ def oopCut(): #{{{2
 
     ### copy and delete body lines
     bln1 = nodes[ln1-1]
-    if ln2==len(nodes):
-        bln2 = len(Body[:])
-    else:
-        bln2 = nodes[ln2]-1
+    if ln2==len(nodes): bln2 = len(Body[:])
+    else              : bln2 = nodes[ln2]-1
     bLines = Body[bln1-1:bln2]
 
     setClipboard('\n'.join(bLines))
@@ -1038,10 +970,8 @@ def oopCut(): #{{{2
     ###update nodes
     # decrement lnums after deleted range
     delta = bln2-bln1+1
-    idx = ln2
-    for n in nodes[ln2:]:
-        nodes[idx]-=delta
-        idx+=1
+    for i in xrange(ln2,len(nodes)):
+        nodes[i]-=delta
     # cut
     nodes[ln1-1:ln2] = []
 
@@ -1049,16 +979,16 @@ def oopCut(): #{{{2
     blnShow = nodes[lnUp1-1]
     vim.command('let blnShow=%s' %blnShow)
 
-    #  ..............
-    #  .............. blnUp1-1
-    #  ============== blnUp1=nodes[lnUp1-1]
-    #  ..............
-    #  ============== bln1=nodes[ln1-1]
-    #  range being
-    #  deleted
-    #  .............. bln2=nodes[ln2]-1, can be last line
-    #  ==============
-    #  ..............
+#  ..............
+#  .............. blnUp1-1
+#  ============== blnUp1=nodes[lnUp1-1]
+#  ..............
+#  ============== bln1=nodes[ln1-1]
+#  range being
+#  deleted
+#  .............. bln2=nodes[ln2]-1, can be last line
+#  ==============
+#  ..............
 
 
 def oopMark(): # {{{2
@@ -1069,13 +999,13 @@ def oopMark(): # {{{2
 
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
-    for idx in range(ln1-1,ln2):
+    for i in xrange(ln1-1,ln2):
         # insert 'x' in Tree line
-        tline = Tree[idx]
+        tline = Tree[i]
         if tline[1]!='x':
-            Tree[idx] = '%sx%s' %(tline[0], tline[2:])
+            Tree[i] = '%sx%s' %(tline[0], tline[2:])
             # insert 'x' in Body headline
-            bln = nodes[idx]
+            bln = nodes[i]
             bline = Body[bln-1]
             end = marker_re.search(bline).end(1)
             Body[bln-1] = '%sx%s' %(bline[:end], bline[end:])
@@ -1089,13 +1019,13 @@ def oopUnmark(): # {{{2
 
     marker_re = VOOF.markers_re.get(body, MARKER_RE)
 
-    for idx in range(ln1-1,ln2):
+    for i in xrange(ln1-1,ln2):
         # remove 'x' from Tree line
-        tline = Tree[idx]
+        tline = Tree[i]
         if tline[1]=='x':
-            Tree[idx] = '%s %s' %(tline[0], tline[2:])
+            Tree[i] = '%s %s' %(tline[0], tline[2:])
             # remove 'x' from Body headline
-            bln = nodes[idx]
+            bln = nodes[i]
             bline = Body[bln-1]
             end = marker_re.search(bline).end(1)
             # remove one 'x', not enough
@@ -1144,11 +1074,12 @@ def oopMarkSelected(): # {{{2
 
 #---Tree Folding Operations-------------------{{{1
 # Opened/Closed Tree buffer folds are equivalent to Expanded/Contracted nodes.
-# By default, folds are closed. Opened folds are marked by 'o' in Body
-# headlines (after 'x', before '=').
+# By default, folds are closed.
+# Opened folds are marked by 'o' in Body headlines (after 'x', before '=').
 #
-# To determine which folds are currently closed/opened, we recursively visit
-# every visible closed fold and open it. This gives a list of closed folds.
+# To determine which folds are currently closed/opened, we open all closed
+# folds one by one, from top to bottom, starting from top level visible folds.
+# This produces list of closed folds.
 #
 # To restore folding according to a list of closed folds:
 #   open all folds;
@@ -1176,7 +1107,7 @@ def voof_OopFolding(action): #{{{2
             if ln1==ln2: return
 
     if action=='save':
-        cFolds = foldingGetAll(ln1, ln2)
+        cFolds = foldingGet(ln1, ln2)
         foldingWrite(ln1, ln2, cFolds, body)
     elif action=='restore':
         cFolds = foldingRead(ln1, ln2, body)
@@ -1185,40 +1116,34 @@ def voof_OopFolding(action): #{{{2
         foldingCleanup(body)
 
 
-def foldingGet(ln, cFolds): #{{{2
-    '''Recursive function for finding closed folds at line ln, which is first
-    line of a closed fold. Recursively open it and all closed subfolds. Save
-    their lnums in cFolds.'''
-    # line ln is not a closed fold--do nothing
-    if int(vim.eval('foldclosed(%s)' %ln))!=ln:
-        return
-    # line ln is first line of a closed fold
-    cFolds.append(ln)
-    foldend = int(vim.eval('foldclosedend(%s)' %ln))
-    vim.command('keepj normal! %sGzo' %ln)
-    l = ln+1
-    while l < foldend:
-        foldingGet(l,cFolds)
-        l+=1
-
-
-def foldingGetAll(ln1, ln2): #{{{2
-    '''Get all closed folds in line range ln1-ln2.'''
-    cFolds=[]
-    ln=ln1
-    while ln < ln2+1:
-        if int(vim.eval('foldclosed(%s)' %ln))!=ln:
-            ln+=1
+def foldingGet(ln1, ln2): #{{{2
+    '''Get all closed folds in line range ln1-ln2, including subfolds.
+    If line ln2 is visible and is folded, its subfolds are included.'''
+    cFolds = []
+    lnum = ln1
+    # go through top level folded lines (visible closed folds)
+    while lnum < ln2+1:
+        # line lnum is first line of a closed fold
+        if int(vim.eval('foldclosed(%s)' %lnum))==lnum:
+            cFolds.append(lnum)
+            # line after this fold and subfolds
+            foldend = int(vim.eval('foldclosedend(%s)' %lnum))+1
+            lnum0 = lnum
+            lnum = foldend
+            vim.command('keepj normal! %sGzo' %lnum0)
+            # open every folded line in this fold
+            for ln in xrange(lnum0+1, foldend):
+                # line ln is first line of a closed fold
+                if int(vim.eval('foldclosed(%s)' %ln))==ln:
+                    cFolds.append(ln)
+                    vim.command('keepj normal! %sGzo' %ln)
         else:
-            cfold = ln
-            ln = int(vim.eval('foldclosedend(%s)' %ln))+1
-            foldingGet(cfold, cFolds)
+            lnum+=1
 
     cFolds.reverse()
     # close back opened folds
     for ln in cFolds:
         vim.command('keepj normal! %sGzc' %ln)
-
     return cFolds
 
 
@@ -1228,7 +1153,7 @@ def foldingFlip(ln1, ln2, folds, body): #{{{2
     # This also eliminates lnums of nodes without children.
     folds = {}.fromkeys(folds)
     folds_flipped = []
-    for ln in range(ln1,ln2+1):
+    for ln in xrange(ln1,ln2+1):
         if nodeHasChildren(body, ln) and not ln in folds:
             folds_flipped.append(ln)
     folds_flipped.reverse()
@@ -1253,7 +1178,7 @@ def foldingRead(ln1, ln2, body): #{{{2
     nodes = VOOF.nodes[body]
     Body = VOOF.buffers[body]
 
-    for ln in range(ln1,ln2+1):
+    for ln in xrange(ln1,ln2+1):
         if not nodeHasChildren(body, ln):
             continue
         bline = Body[nodes[ln-1]-1]
@@ -1275,7 +1200,7 @@ def foldingWrite(ln1, ln2, cFolds, body): #{{{2
     nodes = VOOF.nodes[body]
     Body = VOOF.buffers[body]
 
-    for ln in range(ln1,ln2+1):
+    for ln in xrange(ln1,ln2+1):
         if not nodeHasChildren(body, ln):
             continue
         bln = nodes[ln-1]
@@ -1303,7 +1228,7 @@ def foldingCleanup(body): #{{{2
     nodes = VOOF.nodes[body]
     Body = VOOF.buffers[body]
 
-    for ln in range(2,len(nodes)+1):
+    for ln in xrange(2,len(nodes)+1):
         if nodeHasChildren(body, ln): continue
         bln = nodes[ln-1]
         bline = Body[bln-1]

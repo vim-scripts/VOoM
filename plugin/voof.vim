@@ -8,7 +8,7 @@
 "          and/or modify it under the terms of the Do What The Fuck You Want To
 "          Public License, Version 2, as published by Sam Hocevar.
 "          See http://sam.zoy.org/wtfpl/COPYING for more details.
-" Version: 1.91, 2010-02-06
+" Version: 1.92, 2010-03-03
 
 
 "---Conventions-------------------------------{{{1
@@ -31,7 +31,7 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voof_did_load')
-    let s:voof_did_load = 'v1.91'
+    let s:voof_did_load = 'v1.92'
     com! Voof  call Voof_Init()
     com! Vooflog  call Voof_LogInit()
     com! Voofhelp  call Voof_Help()
@@ -331,11 +331,10 @@ func! Voof_ToTreeOrBodyWin() "{{{2
 " If in Tree window, move to Body window.
 " If in Body window, move to Tree window.
 " If possible, use previous window.
-
     let bnr = bufnr('')
-    " current buffer is  Tree
+    " current buffer is Tree
     if has_key(s:voof_trees, bnr)
-        let target_bnr = s:voof_trees[bnr]
+        let target = s:voof_trees[bnr]
     " current buffer is Body
     else
         " This happens after Tree is wiped out.
@@ -343,23 +342,19 @@ func! Voof_ToTreeOrBodyWin() "{{{2
             call Voof_BodyUnMap()
             return
         endif
-        let target_bnr = s:voof_bodies[bnr].tree
+        let target = s:voof_bodies[bnr].tree
     endif
-
-    " Try previous window.
+    " Try previous window. It's the most common case.
     let wnr = winnr('#')
-    if winbufnr(wnr)==target_bnr
+    if winbufnr(wnr)==target
         exe wnr.'wincmd w'
         return
     endif
-    " Search among all windows.
-    let wnr_ = winnr()
-    while 1
-        wincmd w
-        if winnr()==wnr_ || bufnr('')==target_bnr
-            break
-        endif
-    endwhile
+    " Use any other window.
+    if bufwinnr(target)!=-1
+        exe bufwinnr(target).'wincmd w'
+        return
+    endif
 endfunc
 
 
@@ -580,23 +575,11 @@ endfunc
 
 
 func! Voof_TreeFoldexpr(lnum) "{{{2
-" 'foldexpr' function for emulating tree widget.
-    " match() is affected by encoding, but probably not in this case.
-    let indent  = match(getline(a:lnum)  , '|') / 2
-    let indentn = match(getline(a:lnum+1), '|') / 2
-
-    " Start new fold if next line has bigger indent:
-    " tree starts, node has children.
-    if indentn > indent
-        return '>' . indent
-    " End all higher level folds if next line has smaller indent:
-    " tree ends, node is childless and is the last sibling.
-    elseif indentn < indent
-        return '<' . indentn
-    " Next line has the same indent.
-    else
-        return (indent-1)
-    endif
+    let ind = stridx(getline(a:lnum),'|') / 2
+    let indn = stridx(getline(a:lnum+1),'|') / 2
+    return indn>ind ? '>'.ind : ind-1
+    "return indn>ind ? '>'.ind : indn<ind ? '<'.indn : ind-1
+    "return indn==ind ? ind-1 : indn>ind ? '>'.ind : '<'.indn
 endfunc
 
 
@@ -661,7 +644,7 @@ func! Voof_TreeCreate(body) "{{{2
         if &fdm==#'marker'
             normal! zMzvzt
         else
-            normal! zt
+            normal! zvzt
         endif
         " go back to Tree
         let wnr_ = winnr('#')
@@ -905,11 +888,12 @@ func! Voof_TreeSelect(lnum, focus) "{{{3
     if ((bodyLnr < l:nodeStart) || (bodyLnr > l:nodeEnd))
         let new_node_selected = 1
         exe 'normal! '.nodeStart.'G'
+        " zt is affected by 'scrolloff'.
         if &fdm ==# 'marker'
-            normal! zMzv
+            normal! zMzvzt
+        else
+            normal! zvzt
         endif
-        " Position headline near window top. Affected by 'scrolloff'.
-        normal! zt
     endif
 
     """" Go back to Tree after showing a different node in the Body.
@@ -930,7 +914,7 @@ endfunc
 func! Voof_TreePlaceCursor() "{{{3
 " Place cursor before the headline.
     "let lz_ = &lz | set lz
-    let col = match(getline('.'), '|') + 1
+    let col = stridx(getline('.'),'|') + 1
     if col==0
         let col = 1
     endif
@@ -999,7 +983,7 @@ func! Voof_TreeToggleFold() "{{{3
     if ln_status=='folded'
         normal! zo
     elseif ln_status=='notfolded'
-        if match(getline(lnum), '|') < match(getline(lnum+1), '|')
+        if stridx(getline(lnum),'|') < stridx(getline(lnum+1),'|')
             normal! zc
         endif
     elseif ln_status=='hidden'
@@ -1010,7 +994,7 @@ endfunc
 
 func! Voof_TreeOnLeftClick() "{{{3
 " Toggle fold on mouse click after or before headline text.
-    if virtcol('.')+1 >= virtcol('$') || col('.')-1 < match(getline('.'), '|')
+    if virtcol('.')+1 >= virtcol('$') || col('.')-1 < stridx(getline('.'),'|')
         call Voof_TreeToggleFold()
     endif
     call Voof_TreeSelect(line('.'), 'tree')
@@ -1029,14 +1013,14 @@ func! Voof_TreeLeft() "{{{3
             let fc = foldclosed(lnum)
         endwhile
         normal! zz
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
         return
     endif
 
-    let ind = match(getline(lnum), '|')
+    let ind = stridx(getline(lnum),'|')
     if ind==-1 | return | endif
-    let indn = match(getline(lnum+1), '|')
+    let indn = stridx(getline(lnum+1),'|')
 
     " line is in an opened fold and next line has bigger indent: close fold
     if fc==-1 && (ind < indn)
@@ -1047,7 +1031,7 @@ func! Voof_TreeLeft() "{{{3
 
     " root node: do not move
     if ind==2
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
         return
     endif
@@ -1056,10 +1040,10 @@ func! Voof_TreeLeft() "{{{3
     let indp = ind
     while indp>=ind
         normal! k
-        let indp = match(getline('.'), '|')
+        let indp = stridx(getline('.'),'|')
     endwhile
     "normal! zz
-    call cursor('.', match(getline('.'), '|') + 1)
+    call cursor('.', stridx(getline('.'),'|') + 1)
     call Voof_TreeSelect(line('.'), 'tree')
 endfunc
 
@@ -1075,7 +1059,7 @@ func! Voof_TreeRight() "{{{3
             let fc = foldclosed(lnum)
         endwhile
         normal! zz
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
         return
     endif
@@ -1083,11 +1067,11 @@ func! Voof_TreeRight() "{{{3
     " line is in a closed fold
     if fc==lnum
         normal! zoj
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
     " line is not in a closed fold and next line has bigger indent
-    elseif match(getline(lnum), '|') < match(getline(lnum+1), '|')
+    elseif stridx(getline(lnum),'|') < stridx(getline(lnum+1),'|')
         normal! j
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
     endif
     call Voof_TreeSelect(line('.'), 'tree')
 endfunc
@@ -1106,7 +1090,7 @@ func! Voof_TreeNextMark(back) "{{{3
         call Voof_WarningMsg("VOOF: there are no marked nodes")
     else
         call Voof_TreeZV()
-        call cursor('.', match(getline('.'), '|') + 1)
+        call cursor('.', stridx(getline('.'),'|') + 1)
         call Voof_TreeSelect(line('.'), 'tree')
     endif
 endfunc
@@ -1255,9 +1239,12 @@ func! Voof_OopMark(op, mode) "{{{3
     " }}}
 
     let lz_ = &lz | set lz
+    let fdm_t = &fdm
     if Voof_ToBody(body,'noa')==-1 | let &lz=lz_ | return | endif
     if Voof_BodyCheckTicks(body)==-1 | let &lz=lz_ | return | endif
 
+    let fdm_b=&fdm | setl fdm=manual
+    call setbufvar(tree, '&fdm', 'manual')
     call setbufvar(tree, '&ma', 1)
     if a:op=='mark'
         keepj py voof.oopMark()
@@ -1265,8 +1252,10 @@ func! Voof_OopMark(op, mode) "{{{3
         keepj py voof.oopUnmark()
     endif
     call setbufvar(tree, '&ma', 0)
+    let &fdm=fdm_b
 
     call Voof_OopFromBody(body,tree, 0)
+    let &fdm=fdm_t
     let &lz=lz_
 
     if g:voof_verify_oop==1
@@ -1308,9 +1297,9 @@ func! Voof_OopMarkSelected() "{{{3
 endfunc
 
 
-func! Voof_Oop(op, mode) "{{{3
+func! Voof_Oop(op, mode) "{{{3=
 " Outline operations that can be perfomed on current node or on nodes in visual
-" selection. All apply to trees, not to single nodes.
+" selection. All apply to branches, not to single nodes.
 
     " Checks and init vars. {{{
     let tree = bufnr('')
@@ -1324,17 +1313,15 @@ func! Voof_Oop(op, mode) "{{{3
     endif
     " normal mode: use current line
     if a:mode=='n'
-        let ln1 = ln
-        let ln2 = ln
+        let [ln1,ln2] = [ln,ln]
     " visual mode: use range
     elseif a:mode=='v'
-        let ln1 = line("'<")
-        let ln2 = line("'>")
+        let [ln1,ln2] = [line("'<"),line("'>")]
         " before op: move cursor to ln1 or ln2
     endif
     " don't touch first line
     if ln1==1 | return | endif
-    " set ln2 to last node in current tree of last tree in selection
+    " set ln2 to last node in the last sibling branch in selection
     " check validity of selection
     py vim.command('let ln2=%s' %voof.oopSelEnd())
     if ln2==0
@@ -1343,6 +1330,7 @@ func! Voof_Oop(op, mode) "{{{3
     endif
     " }}}
 
+    "let start = reltime()
     let lz_ = &lz | set lz
     if     a:op=='up' " {{{
         if ln1<3 | let &lz=lz_ | return | endif
@@ -1400,9 +1388,11 @@ func! Voof_Oop(op, mode) "{{{3
         if Voof_ToBody(body,'noa')==-1 | let &lz=lz_ | return | endif
         if Voof_BodyCheckTicks(body)==-1 | let &lz=lz_ | return | endif
 
+        let fdm_b=&fdm | setl fdm=manual
         call setbufvar(tree, '&ma', 1)
         keepj py voof.oopRight()
         call setbufvar(tree, '&ma', 0)
+        let &fdm=fdm_b
 
         call Voof_OopFromBody(body,tree, l:blnShow)
         " can't move right
@@ -1421,9 +1411,11 @@ func! Voof_Oop(op, mode) "{{{3
         if Voof_ToBody(body,'noa')==-1 | let &lz=lz_ | return | endif
         if Voof_BodyCheckTicks(body)==-1 | let &lz=lz_ | return | endif
 
+        let fdm_b=&fdm | setl fdm=manual
         call setbufvar(tree, '&ma', 1)
         keepj py voof.oopLeft()
         call setbufvar(tree, '&ma', 0)
+        let &fdm=fdm_b
 
         call Voof_OopFromBody(body,tree, l:blnShow)
         " can't move left
@@ -1466,6 +1458,7 @@ func! Voof_Oop(op, mode) "{{{3
         " }}}
     endif
     let &lz=lz_
+    "echom reltimestr(reltime(start))
 
     if g:voof_verify_oop==1
         py voof.voofVerify(int(vim.eval('body')))
@@ -1550,7 +1543,7 @@ func! Voof_OopFromBody(body, tree, blnr) "{{{3
         if &fdm==#'marker'
             normal! zMzvzt
         else
-            normal! zt
+            normal! zvzt
         endif
     endif
 
@@ -1825,11 +1818,11 @@ func! Voof_GetUNL() "{{{2
 endfunc
 
 
-func! Voof_Grep(input) "{{{2=
+func! Voof_Grep(input) "{{{2
 " Seach Body for pattern(s). Show list of UNLs of nodes with matches.
 " Input can have several patterns separated by boolean 'AND' and 'NOT'.
-" Stop searches after the first 10,000 matches.
-" Set search register to first pattern.
+" Stop each search after 10,000 matches.
+" Set search register to the first AND pattern.
 
 "    let start = reltime()
     if a:input==''
@@ -1941,7 +1934,7 @@ endfunc
 
 
 func! Voof_GrepSearch(pattern) "{{{2
-" Seach Body for pattern. Return [lnums of matching lines].
+" Seach buffer for pattern. Return [lnums of matching lines].
 " Stop search after first 10000 matches.
     let matches = []
     " always search from start
