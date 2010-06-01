@@ -5,8 +5,7 @@ Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: This documentation is released under the Do What The Fuck You Want To
          Public License, Version 2. See http://sam.zoy.org/wtfpl/COPYING
-Version: 2.0, 2010-04-01
-
+Version: 2.1, 2010-06-01
 
 Overview  . . . . . . . . . . . . . . . . . . . .|voom_overview|
 Requirements  . . . . . . . . . . . . . . . . . .|voom_requirements|
@@ -16,6 +15,7 @@ ALL MAPPINGS & COMMANDS . . . . . . . . . . . . .|voom_map|
 OUTLINING (:Voom) . . . . . . . . . . . . . . . .|voom_Voom|
 EXECUTING NODES (:Voomexec) . . . . . . . . . . .|voom_Voomexec|
 __PyLog__ BUFFER (:Voomlog) . . . . . . . . . . .|voom_Voomlog|
+Add-ons . . . . . . . . . . . . . . . . . . . . .|voom_addons|
 Implementation notes  . . . . . . . . . . . . . .|voom_notes|
 
 ==============================================================================
@@ -152,8 +152,8 @@ Start fold markers with levels have many advantages:
     - Fast folding suitable for Mb-sized files with >1000 headlines.
     - More flexible than indent-based or syntax-based folding. Suitable for
       outlining of most file types, including source code.
-    - Easy to parse in a script and to search for. Area after level number is
-      a natural place for storing node attributes.
+    - Easy to parse and to search for. Area after level number is a natural
+      place for storing node attributes.
     - Fold markers without levels are handy for folding smaller regions.
 
 One drawback of numbered fold markers is that inserting them is somewhat
@@ -190,8 +190,8 @@ Leo outlining editor:
     http://webpages.charter.net/edreamleo/front.html
     - The __PyLog__ buffer, which is created by the command :Voomlog, is the
       equivalent of Leo's log pane.
-    - The :Voomexec command is like Leo's Execute Script command when
-      performed on a node which contains the @others directive.
+    - The :Voomexec command is like Leo's Execute Script command when executed
+      in a node which contains the @others directive.
     - Mark/Unmark nodes operations are modeled after identical Leo commands.
 
 The "Tag List" Vim plugin:
@@ -206,7 +206,7 @@ VO, VimOutliner:
 TVO, The Vim Outliner:
     http://vim.sourceforge.net/scripts/script.php?script_id=517
 
-Various Vim scripts with outlining-like functionality
+Various Vim scripts with outlining functionality
 (there are probably many other):
     ywtxt : Ease vim to write plain documents
         http://www.vim.org/scripts/script.php?script_id=2993
@@ -327,16 +327,22 @@ Options   [[[1o~
 ==============================================================================
 Vim Options   [[[2~
 
+When outline of the current buffer is created by the command :Voom, the
+following Vim options determine how outline is constructed:
+
+    - 'foldmarker' is used to obtain the start fold marker string. There is
+      rarely a reason to change this option from default, which is {{{,}}} .
+
+    - 'commentstring' and 'filetype' affect how Tree headline text is
+      constructed. For details, see node
+      OUTLINING (:Voom) -> Create Outline -> Tree Headline Text
+
 'foldmethod' for the buffer for which the command :Voom is executed should be
 "marker" (:set fdm=marker). This, however, is not required to create an
 outline or to use it. Outline operations do not rely on Vim folds, they use
 start fold markers with levels. Other folding options (|fold-options|), such
 as 'foldtext', can be set according to personal preferences and are usually
 'filetype'-specific.
-
-'foldmarker' (local to window) is used by the command :Voom to obtain the
-start fold marker string. There is rarely a reason to change this option from
-default, which is {{{,}}} .
 
 <LocalLeader> is used to start many outline operations while in a Tree buffer.
 By default, it's backslash. For example, "\i" inserts new node. To change it
@@ -440,7 +446,7 @@ Example, use Ctrl-Return and Ctrl-Tab: >
     let g:voom_tab_key = '<C-Tab>'
 
 ==============================================================================
-g:voom_verify_oop   [[[3~
+Various options   [[[3~
 
 g:voom_verify_oop   ~
     Verify outline after every outline operation.
@@ -452,12 +458,23 @@ g:voom_verify_oop   ~
     if there is a bug in outline operation. The downside is that there is a
     performance hit when the outline is large (>500 headlines).
 
+
+g:voom_user_command   ~
+    This option allows to execute an arbitrary user-defined command when file
+    voom.vim is sourced. It is a string to be executed via |execute| at the
+    very end of voom.vim. It does not exist by default. This option is intended
+    for loading user add-ons. For details, see |voom_addons|.
+
+
+g:voom_create_devel_commands   ~
+    If this variable exists, several commands are created to help during VOoM
+    development. See "Commands" node in voom.vim for details.
+
 ==============================================================================
-Customizing Tree and __PyLog__ buffers   [[[3~
+Customization tips   [[[3~
 
 When a Tree buffer is created, its 'filetype' is set to "voomtree"
 When __PyLog__ buffer is created, its 'filetype' is set to "log".
-
 This should allow user customization of these buffers (syntax, wrap/norwap,
 list/nolist, etc.) via standard Vim configuration files: >
     $HOME/.vim/ftplugin/voomtree.vim
@@ -465,23 +482,17 @@ list/nolist, etc.) via standard Vim configuration files: >
     $HOME/.vim/after/syntax/log.vim
     etc.
 
-==============================================================================
-Other Options   [[[3~
 
 Most VOoM commands can be mapped to key shortcuts in .vimrc: >
     nnoremap <LocalLeader><LocalLeader> :Voom<CR>
     nnoremap <LocalLeader>n :Voomunl<CR>
+
 
 To make Body headlines stand out, lines with fold markers can be highlighted.
 Since I use .txt files for notes, I have the following line in .vimrc  >
     au BufWinEnter *.txt if &ft==#'text' | exe 'syn match ModeMsg /\V\.\*' . split(&fmr, ',')[0] . '\.\*/' | endif
 This method is better than using syntax/txt.vim because it also works when a
 nonstandard foldmarker is specified on file's modeline.
-
-Option "g:voom_user_command" can be used to execute any user defined command
-when file voom.vim is sourced. It does not exist by default. It is intended
-for loading user add-ons. For details, see node
-    Implementation notes -> Extending VOoM with add-ons
 
 ==============================================================================
 # ALL MAPPINGS & COMMANDS #   [[[1x=  ~
@@ -601,8 +612,6 @@ pp                  Paste node(s) after current node. (n)
 
 <LocalLeader>e      Execute node. Same as :Voomexec. (n)
 
-<F1>                Open help file voom.txt as outline in a new tabpage.
-                    Same as :Voomhelp. (n)
 
         VARIOUS (TREE OR BODY BUFFER)~
 
@@ -615,8 +624,9 @@ pp                  Paste node(s) after current node. (n)
                     patterns separated by words "and" or "not". Uses word at
                     cursor if no patterns are provided. |voom_Voomgrep|
 
-There is a bunch of commented out commands in the "Commands" node of voom.vim.
-They are useful only during VOoM development.
+A bunch of extra commands is created if there exists variable
+"g:voom_create_devel_commands". These commands are useful only during VOoM
+development. See "Commands" node in voom.vim for details.
 
 ==============================================================================
 OUTLINING (:Voom)   [[[1o~
@@ -739,7 +749,8 @@ Special Node Marks   [[[3~
 The following characters in Body headline immediately after the start fold
 marker level number have special meaning. They are used by VOoM to indicate
 node properties:
-    'x'     - Node is marked. This is like a checked checkbox.
+    'x'     - Node is marked. This is like a checked checkbox. If the node is
+              marked, 'x' is displayed in the second column of Tree buffer.
     'o'     - Node is opened (expanded). The corresponding Tree buffer fold
               will be opened when outline is created with the command :Voom.
               Obviously, this applies only to nodes with children.
@@ -759,19 +770,53 @@ foldmarker is set to <<<,>>> : >
     headline <<<1 xo= --all marks are ignored
 
 ==============================================================================
-~~~===--- Tree Headline Text ---===~~~  "#//% /*[[[3*/ ~
+~~~===--- Tree Headline Text ---===~~~   [[[3~
 
-The headline text as displayed in a Tree buffer is constructed from the
-corresponding Body headline as follows:
-    - Part of the Body headline before the first start fold marker with level
-      number is taken. If there is 'x' after level number (node is marked),
-      'x' is displayed in the second column of Tree buffer.
-    - Trailing white space and line comment chars #"/*% are removed.
-    - Leading and trailing white space is removed.
-    - Leading and trailing filler chars -=~ are removed.
-    - White space is trimmed again.
+Tree headline text is constructed from the corresponding Body buffer headline.
+The default procedure is to take part before the matching fold marker and to
+strip whitespace and other superfluous characters. The exact procedure depends
+on Body 'filetype' and can be customized by the user. For most filetypes, the
+following happens:
+    - Part of the Body line before the first start fold marker with level
+      number is taken.
+    - Whitespace is stripped from the left side.
+    - Spaces, tabs, and comment characters are stripped from the right side.
+      Which chars are comment chars is determined from option 'commentstring'.
+      This step can be customized via user dictionary "g:voom_rstrip_chars",
+      see below.
+    - Leading and trailing filler chars -=~ are removed. These chars can be
+      used as decorators to make headlines stand out.
+    - Whitespace is stripped again on both ends.
 
-This is done by makeOutline() in voom.py .
+In step 3, characters that are stripped from the right side of headline (from
+before the fold marker) are obtained as follows:
+    - Dictionary "g:voom_rstrip_chars" is checked: key is Body filetype, value
+      is string of characters to be stripped from the right side (space and tab
+      must be included).
+    - If "g:voom_rstrip_chars" has no key for Body filetype, comment characters
+      are obtained from option 'commentstring'. They, spaces, and tabs are
+      stripped from the right side.
+
+By default, "g:voom_rstrip_chars" contains entries for "text" and "help".
+For most source code filetypes 'commentstring' is set correctly by the
+corresponding ftplugin.  If not defined, 'commentstring' defaults to /*%s*/,
+which makes no sense for filetypes like text and help.
+
+So, to change what characters are stripped from the right side of Tree
+headlines for particular Body filetypes, you can either set 'commentstring' or
+you can define your own dictionary "g:voom_rstrip_chars" in vimrc. You can also
+add items to "g:voom_rstrip_chars" via an add-on as shown in sample add-on
+"custom_headlines.vim".
+
+The above procedure can be replaced completely by a custom Python function
+which returns Tree headline text. The function must be registered in Python
+dictionary voom.MAKE_HEAD: key is Body filetype, value is the function to be
+used with this filetype. By default, this is done for "html" files (we can't
+just strip <!-- characters from the right side). For other filetypes, this
+should be done via an add-on. Sample add-on "custom_headlines.vim" shows how,
+see comments there.
+
+For implementation details, see makeOutline() in voom.py.
 
 ==============================================================================
 Selected Node   [[[3~
@@ -806,7 +851,7 @@ folded lines--the Folded hi group overrides all other highlighting. The
 current headline is easy to highlight, but it doesn't work for contracted
 nodes: >
     :syn match Pmenu /^=.\{-}|\zs.*/
-This code is commented out in Voom_TreeConfigure().
+This code is commented out in Voom_TreeSyntax().
 
 ==============================================================================
 Delete Outline   [[[2~
@@ -1174,7 +1219,7 @@ There as also the following Tree buffer mappings, Normal mode:
 Mnemonics for mappings:  Foldins Save/Restore, Folding All Save/Restore.
 
 ==============================================================================
-Known Problems   [[[3~
+Known Issues   [[[3~
 
 There are some pitfalls to be aware of when editing very large outlines:
 
@@ -1296,7 +1341,7 @@ print '   in node 1.1'
 print '   in node 1.1.1'
 
 #============================================================================~
-Known Problems   [[[2~
+Known Issues   [[[2~
 
 1) Vim script code executed this way cannot use |line-continuation|.
 
@@ -1346,7 +1391,7 @@ the string is encoded using the value of Vim option 'encoding' at the time
 when the __PyLog__ buffer was created.
 
 ==============================================================================
-Known Problems    [[[2~
+Known Issues    [[[2~
 
 1) All output lines appear in the __PyLog__ buffer simultaneously after the
 script is finished, not in real time. Example (executable with :Voome py):
@@ -1377,6 +1422,69 @@ The culprit is in Lib/pydoc.py:
     help = Helper(sys.stdin, sys.stdout)
 The current workaround is to delete pydoc from sys.modules when changing
 stdout and stderr.
+
+==============================================================================
+Add-ons   [[[1~
+                                                 *voom_addons*
+VOoM add-ons are Vim or Python scripts that use "voom.vim" and "voom.py"
+functions and data. Add-ons allow to add new functionality or to customize
+default features without modifying the core files.
+
+LOADING ADD-ONS
+
+Some Vim script add-ons can be sourced at any time, which means they can be
+placed in $HOME/.vim/plugin/ like any other plugin.
+
+For finer control, user option "g:voom_user_command" can be used to load
+add-ons only when file voom.vim is being sourced. This option defines a string
+to be executed via |execute|. This is the last thing done in voom.vim: >
+    if exists('g:voom_user_command')
+        execute g:voom_user_command
+    endif
+
+There is no default "g:voom_user_command", it must be created by the user.
+
+METHOD 1: Add-ons are .vim files located in $HOME/.vim/add-ons/voom/
+To load them all via |runtime|, put this in vimrc: >
+    let g:voom_user_command = "runtime! add-ons/voom/*.vim"
+
+METHOD 2: Add-ons are in one file, D:/SCRIPTS/VOoM/voom_addons.vim
+To source the file, put this in vimrc: >
+    let g:voom_user_command = "source D:/SCRIPTS/VOoM/voom_addons.vim"
+
+METHOD 3: Add-ons are in Python module voom_addons.py somewhere in Python
+search path. To import the module, put this in vimrc: >
+    let g:voom_user_command = "python import voom_addons.py"
+
+WRITING ADD-ONS
+
+There is no special API. The following applies:
+    - Python-side functions and data are available as attributes of module voom
+      and class instance VOOM respectively.
+    - All Vim function in voom.vim are global and start with "Voom_".
+    - Vim-side data are script-local. Two functions in voom.vim allow external
+      scripts to read voom.vim script-local data: Voom_GetBufInfo() and
+      Voom_GetData(). Sample add-on "voom_info.vim" shows how to use them.
+
+USING ADD-ONS TO ADD NEW FUNCTIONALITY
+
+Add-ons can create global commands, menus and mappings. There is no easy way to
+create Tree-local mappings or commands. It might be possible to use the fact
+that Tree buffer filetype is set to "voomtree" and write a ftplugin.
+
+Any command created by a VOoM add-on must first check that the current buffer
+is a VOoM buffer (Tree or Body) and refuse to execute if it's not. It should
+update outline if current buffer is a Body. Sample add-on "voom_info.vim" shows
+how to do this.
+
+USING ADD-ONS TO CUSTOMIZE VOoM
+
+Add-ons can overwrite and modify core code functions and some data. Add-on
+"custom_headlines.vim" is an example of this approach. It shows how to
+customize construction of Tree headline text for individual filetypes.
+
+Such add-ons must be loaded after "voom.vim" has been sourced completely, that
+is via option g:voom_user_command as explained above.
 
 ==============================================================================
 Implementation notes   [[[1~
@@ -1605,47 +1713,34 @@ inside try/finally/endtry. This ensures that "tick_" will not be set to "tick"
 when an error occurs during the update.
 
 ==============================================================================
-Extending VOoM with add-ons   [[[2~
-
-VOoM add-ons are Vim scripts that use voom.vim and voom.py functions and data.
-Often, they can be sourced at any time, which means they can be placed in
-$HOME/.vim/plugin/ like any other plugin. For finer control, user option
-"g:voom_user_command" can be used to load add-ons only when voom.vim is being
-sourced. This option defines a string to be executed via |execute|. This is
-the last thing done in voom.vim: >
-    if exists('g:voom_user_command')
-        execute g:voom_user_command
-    endif
-
-There is no default "g:voom_user_command", it must be created in vimrc.
-
-Example 1: Add-ons are located in $HOME/.vim/voom_add-ons/
-To load them all via |runtime|, put this in vimrc: >
-    let g:voom_user_command = "runtime! voom_add-ons/*.vim"
-
-Example 2: Add-ons are in one file, D:/SCRIPTS/VOoM/voom_addons.vim
-To source the file, put this in vimrc : >
-    let g:voom_user_command = "source D:/SCRIPTS/VOoM/voom_addons.vim"
-
-Python-side functions and data are available as attributes of voom and VOOM
-respectively. All voom.vim functions are global and start with "Voom_".
-Vim-side data are script-local. Two functions in voom.vim allow external
-scripts to read voom.vim script-local data: Voom_GetBufInfo() and
-Voom_GetData(). Sample add-on "voom_info.vim" shows how to use them.
-
-Add-ons should create a command and/or global mapping. There is no easy way to
-create a Tree-local mapping. It might be possible to use the fact that Tree
-buffer filetype is set to "voomtree" and write a ftplugin.
-
-Any command created by an add-on must first check that the current buffer is a
-VOoM buffer (Tree or Body) and refuse to execute if it's not. It should update
-outline if current buffer is a Body. Sample add-on "voom_info.vim" shows how
-to do this.
-
-==============================================================================
 CHANGELOG   [[[2o~
 
-v2.0, 2010-04-01   [[[3x~
+v2.1, 2010-06-01   [[[3x~
+
+The procedure for constructing Tree headline text was modifed to permit
+customization for individual filetypes:
+    - Comment chars that are stripped from the right side of Tree headlines
+      are by default obtained from Body's 'commentstring' option.
+    - User dictionary g:voom_rstrip_chars can be used to control exactly which
+      characters are stripped from the right side of Tree headlines. This is
+      done for individual filetypes and will overide 'commentstring' option.
+    - Finally, an arbitrary headline constructing function can be defined for
+      individual filetypes in an add-on. Add-on "custom_headlines.vim" shows
+      how.
+For details, see node
+    OUTLINING (:Voom) -> Create Outline -> Tree Headline Text
+
+New user option "g:voom_create_devel_commands" controls if development helper
+commands are created. They are commented out in previous versions.
+
+Removed <F1> Tree-local mapping (same as :Voomhelp).
+
+Bug in PyLog buffer creation/destruction: Python original sys.stdout and
+sys.stderr can be lost after some actions, e.g. after command :VoomReloadAll.
+FIX: changed how original sys.stdout and sys.stderr are saved.
+
+
+v2.0, 2010-04-01   [[[3~
 
 The name of this plugin was changed from VOOF (Vim Outliner Of Folds) to VOoM
 (Vim Outliner of Markers):

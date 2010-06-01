@@ -99,6 +99,7 @@ findme
 ---tests--- {{{1o
 
 --- syntax tests --- {{{2
+Since v2.1 comment chars before foldmarker are stripped according to filetype.
 
 //---TODO comment--- //{{{3
 
@@ -115,6 +116,8 @@ print 'py ok'
 */---not comment--- /*{{{3*/
 
 <!-- Comment  {{{3 -->
+
+html head <!--{{{3-->
 
 --- Voomgrep tests--- {{{2
 :Voomg Spam and ham not bacon

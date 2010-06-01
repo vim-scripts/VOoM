@@ -1,11 +1,11 @@
 " This is a sample VOoM add-on.
-" It creates command :VoomInfo which prints various outline information about
-" the current buffer if it's a VOoM buffer (Tree or Body).
+" It creates global command :VoomInfo which prints various outline information
+" about the current buffer if it's a VOoM buffer (Tree or Body).
 
 com! VoomInfo call Voom_Info()
 
 func! Voom_Info()
-    """"""" stanadard code for every VOoM add-on command
+    """"""" standard code for every VOoM add-on command
     " Determine if current buffer is a Tree or Body buffer.
     " Exit if neither. An info message will be printed by Voom_GetBufInfo.
     " Get Tree and Body buffer numbers.

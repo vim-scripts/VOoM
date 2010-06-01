@@ -8,7 +8,7 @@
 "          and/or modify it under the terms of the Do What The Fuck You Want To
 "          Public License, Version 2, as published by Sam Hocevar.
 "          See http://sam.zoy.org/wtfpl/COPYING for more details.
-" Version: 2.0, 2010-04-01
+" Version: 2.1, 2010-06-01
 
 
 "---Conventions-------------------------------{{{1
@@ -23,15 +23,15 @@
 " wnr, tnr  --window number, tab number
 " lnr(s), lnum(s), ln --line number(s), usually Tree
 " blnr, bln --Body line number
-" tline, tLine --Tree line
-" bline, bLine --Body line
+" tline(s)  --Tree line(s)
+" bline(s)  --Body line(s)
 " snLn      --selected node line number, a Tree line number
 " var_      --previous value of var
 
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voom_did_load')
-    let s:voom_did_load = 'v2.0'
+    let s:voom_did_load = 'v2.1'
     com! Voom  call Voom_Init()
     com! Voomlog  call Voom_LogInit()
     com! Voomhelp  call Voom_Help()
@@ -65,7 +65,6 @@ if not voom_dir in sys.path:
     sys.path.append(voom_dir)
 import voom
 VOOM = sys.modules['voom'].VOOM = voom.VoomData()
-VOOM.vim_stdout, VOOM.vim_stderr = sys.stdout, sys.stderr
 EOF
     au! FuncUndefined Voom_*
     let s:voom_did_init = 1
@@ -118,6 +117,12 @@ if !exists('g:voom_tab_key')
     let g:voom_tab_key = '<Tab>'
 endif
 
+" {filetype: chars to strip from right side of Tree headlines, ...}
+" If defined, these will be used instead of 'commentstring' chars.
+if !exists('g:voom_rstrip_chars')
+    let g:voom_rstrip_chars = {"text": " \t", "help": " \t" }
+endif
+
 
 "---Commands----------------------------------{{{1
 " Main Voom commands should be defined in Quickload section.
@@ -129,16 +134,19 @@ com! -range VoomFoldingSave    call Voom_OopFolding(<line1>,<line2>, 'save')
 com! -range VoomFoldingRestore call Voom_OopFolding(<line1>,<line2>, 'restore')
 com! -range VoomFoldingCleanup call Voom_OopFolding(<line1>,<line2>, 'cleanup')
 
-"""" development helpers
-"com! VoomPrintData  call Voom_PrintData()
-"" source voom.vim, reload voom.py
-"com! VoomReload    exe 'so '.s:voom_path.' | py reload(voom)'
-"" source voom.vim
-"com! VoomReloadVim exe 'so '.s:voom_path
-"" reload voom.py
-"com! VoomReloadPy  py reload(voom)
-"" complete reload: delete Trees and Voom data, source voom.vim, reload voom.py
-"com! VoomReloadAll call Voom_ReloadAllPre() | exe 'so '.s:voom_path | call Voom_Init()
+""" development helpers
+if exists('g:voom_create_devel_commands')
+    " print Vim-side data
+    com! VoomPrintData  call Voom_PrintData()
+    " source voom.vim, reload voom.py
+    com! VoomReload    exe 'so '.s:voom_path.' | py reload(voom)'
+    " source voom.vim
+    com! VoomReloadVim exe 'so '.s:voom_path
+    " reload voom.py
+    com! VoomReloadPy  py reload(voom)
+    " complete reload: delete Trees and Voom data, source voom.vim, reload voom.py
+    com! VoomReloadAll call Voom_ReloadAllPre() | exe 'so '.s:voom_path | call Voom_Init()
+endif
 
 
 "---Voom_Init(), various helpers--------------{{{1
@@ -708,7 +716,20 @@ func! Voom_TreeConfigure() "{{{2
     setl nobuflisted buftype=nofile noswapfile bufhidden=hide
     setl noro ma ff=unix noma
 
-    """" Syntax.
+    call Voom_TreeSyntax()
+
+    let b:voom_tree = 1
+
+    "augroup VoomTree
+        "au! * <buffer>
+        "au BufEnter   <buffer> call Voom_TreeBufEnter()
+        "au BufUnload  <buffer> nested call Voom_TreeBufUnload()
+    "augroup END
+endfunc
+
+
+func! Voom_TreeSyntax() "{{{2
+" Default Tree buffer syntax highlighting.
     " first line
     syn match Title /\%1l.*/
     " line comment chars: "  #  //  /*  %  <!--
@@ -718,14 +739,6 @@ func! Voom_TreeConfigure() "{{{2
     " selected node
     "syn match Pmenu /^=.\{-}|\zs.*/
     "syn match Pmenu /^=/
-
-    let b:voom_tree = 1
-
-    "augroup VoomTree
-        "au! * <buffer>
-        "au BufEnter   <buffer> call Voom_TreeBufEnter()
-        "au BufUnload  <buffer> nested call Voom_TreeBufUnload()
-    "augroup END
 endfunc
 
 
@@ -874,7 +887,7 @@ func! Voom_TreeMap() "{{{2
     " }}}
 
     " Various commands. {{{
-    nnoremap <buffer><silent> <F1> :<C-u>call Voom_Help()<CR>
+    "nnoremap <buffer><silent> <F1> :<C-u>call Voom_Help()<CR>
     nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
     " }}}
 
@@ -2000,7 +2013,7 @@ func! Voom_LogInit() "{{{2
     """" Log buffer exists, show it.
     if exists('s:voom_logbnr')
         if !bufloaded(s:voom_logbnr)
-            py sys.stdout, sys.stderr = VOOM.vim_stdout, VOOM.vim_stderr
+            py sys.stdout, sys.stderr = _voom_py_sys_stdout, _voom_py_sys_stderr
             py if 'pydoc' in sys.modules: del sys.modules['pydoc']
             if bufexists(s:voom_logbnr)
                 exe 'noautocmd bwipeout '.s:voom_logbnr
@@ -2031,8 +2044,7 @@ func! Voom_LogInit() "{{{2
     call Voom_LogSyntax()
     au BufUnload <buffer> call Voom_LogBufUnload()
 python << EOF
-# this is done once in Initialize
-#VOOM.vim_stdout, VOOM.vim_stderr = sys.stdout, sys.stderr
+_voom_py_sys_stdout, _voom_py_sys_stderr = sys.stdout, sys.stderr
 sys.stdout = sys.stderr = voom.LogBufferClass()
 if 'pydoc' in sys.modules: del sys.modules['pydoc']
 EOF
@@ -2046,7 +2058,7 @@ func! Voom_LogBufUnload() "{{{2
         echoerr 'VOoM: internal error'
         return
     endif
-    py sys.stdout, sys.stderr = VOOM.vim_stdout, VOOM.vim_stderr
+    py sys.stdout, sys.stderr = _voom_py_sys_stdout, _voom_py_sys_stderr
     py if 'pydoc' in sys.modules: del sys.modules['pydoc']
     exe 'bwipeout '.s:voom_logbnr
     unlet! s:voom_logbnr
@@ -2054,7 +2066,7 @@ endfunc
 
 
 func! Voom_LogSyntax() "{{{2
-" Syntax highlighting for common messages in the Log.
+" Log buffer syntax highlighting.
 
     " Python tracebacks
     syn match WarningMsg /^Traceback (most recent call last):/
