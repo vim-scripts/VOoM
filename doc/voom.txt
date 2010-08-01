@@ -5,7 +5,7 @@ Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: This documentation is released under the Do What The Fuck You Want To
          Public License, Version 2. See http://sam.zoy.org/wtfpl/COPYING
-Version: 2.1, 2010-06-01
+Version: 3.0, 2010-08-01
 
 Overview  . . . . . . . . . . . . . . . . . . . .|voom_overview|
 Requirements  . . . . . . . . . . . . . . . . . .|voom_requirements|
@@ -113,7 +113,7 @@ purposes: 3.1MB, 56527 lines, 4160 headlines.
 To try Python Log Buffer feature: >
     :Vooml
     :py assert 2==3
-    :py print VOOM.nodes
+    :py print VOOM.bnodes
     :py print u'\u2248 \u2260'
 
 ==============================================================================
@@ -176,12 +176,16 @@ outline, does not modify the current buffer (Body) in any substantial way: it
 does not set Body syntax highlighting, indent settings, folding settings,
 mappings (with the exception of |voom_shuttle_keys|).
 
+In other words, VOoM is designed to have (almost) no side effects on the buffer
+being outlined (Body). All mappings are bound to the Tree pane (except for
+shuttle keys).
+
 In contrast, other text outliners are usually geared toward taking notes and
 managing tasks (VO, TVO, Emacs OrgMode). They use special format and typically
 have features such as: custom syntax highlighting and folding, a tagging
-system, clickable URLs, inter-outline linking, mappings to insert dates and
-other things. VOoM does not provide such features because they should be
-'filetype'-specific.
+system, clickable URLs, intra- and inter-outline linking, mappings to insert
+dates and other things. VOoM does not provide such features because they should
+be 'filetype'-specific.
 
 ==============================================================================
 Other Text Outliners  [[[2~
@@ -193,6 +197,9 @@ Leo outlining editor:
     - The :Voomexec command is like Leo's Execute Script command when executed
       in a node which contains the @others directive.
     - Mark/Unmark nodes operations are modeled after identical Leo commands.
+    - Like Leo, VOoM can save which nodes in the Tree are expanded/contracted
+      and which node is the selected node. The difference from Leo is that this
+      is done manually via Tree commands and mappings.
 
 The "Tag List" Vim plugin:
     http://vim.sourceforge.net/scripts/script.php?script_id=273
@@ -206,8 +213,8 @@ VO, VimOutliner:
 TVO, The Vim Outliner:
     http://vim.sourceforge.net/scripts/script.php?script_id=517
 
-Various Vim scripts with outlining functionality
-(there are probably many other):
+Various Vim scripts with outlining functionality (there are probably many
+other):
     ywtxt : Ease vim to write plain documents
         http://www.vim.org/scripts/script.php?script_id=2993
     TxtBrowser : Browse plain text easily
@@ -458,13 +465,20 @@ g:voom_verify_oop   ~
     if there is a bug in outline operation. The downside is that there is a
     performance hit when the outline is large (>500 headlines).
 
+g:voom_rstrip_chars   ~
+    This is a dictionary: key is Body filetype, value is string of characters
+    to be stripped from the right side of Tree headlines (from before fold
+    marker) when default Tree headline construction procedure is used for this
+    particular filetype. Usually, the chars to be stripped are comment chars,
+    space and tab. For details, see node
+        OUTLINING (:Voom) -> Create Outline -> Tree Headline Text
+    Default: {"vim": "\"# \t", "text": " \t", "help": " \t" }
 
 g:voom_user_command   ~
     This option allows to execute an arbitrary user-defined command when file
     voom.vim is sourced. It is a string to be executed via |execute| at the
     very end of voom.vim. It does not exist by default. This option is intended
     for loading user add-ons. For details, see |voom_addons|.
-
 
 g:voom_create_devel_commands   ~
     If this variable exists, several commands are created to help during VOoM
@@ -474,9 +488,9 @@ g:voom_create_devel_commands   ~
 Customization tips   [[[3~
 
 When a Tree buffer is created, its 'filetype' is set to "voomtree"
-When __PyLog__ buffer is created, its 'filetype' is set to "log".
-This should allow user customization of these buffers (syntax, wrap/norwap,
-list/nolist, etc.) via standard Vim configuration files: >
+When __PyLog__ buffer is created, its 'filetype' is set to "voomlog".
+This should allow user customization of these buffers (bufhidden, syntax,
+wrap/norwap, list/nolist, etc.) via standard Vim configuration files: >
     $HOME/.vim/ftplugin/voomtree.vim
     $HOME/.vim/syntax/voomtree.vim
     $HOME/.vim/after/syntax/log.vim
@@ -584,17 +598,23 @@ pp                  Paste node(s) after current node. (n)
 <LocalLeader>=      Mark node as startup node: add '=' to Body headline
                     and remove '=' from all other headlines. (n)
 
+
+:VoomSort [options] Sort siblings of the current node. |voom_sort|
+                    Options are: "deep" (also sort all descendant nodes),
+                    "i" (ignore-case), "u" (Unicode-aware), "r" (reverse-sort),
+                    "flip" (reverse), "shuffle".
+
         SAVE/RESTORE TREE BUFFER FOLDING (TREE BUFFER)~
 
 :[range]VoomFoldingSave
-                    Save Tree folding. |voom_VoomFoldingSave|
+                    Save Tree folding. |voom_tree_folding|
 
 :[range]VoomFoldingRestore
-                    Restore Tree folding. |voom_VoomFoldingRestore|
+                    Restore Tree folding. |voom_tree_folding|
 
 :VoomFoldingCleanup
                     Cleanup 'o' node marks: remove them from nodes without
-                    children. |voom_VoomFoldingCleanup|
+                    children. |voom_tree_folding|
 
 <LocalLeader>fs     Save Tree folding for current node and all descendant
                     nodes. Same as :VoomFoldingSave. (n)
@@ -774,7 +794,7 @@ foldmarker is set to <<<,>>> : >
 
 Tree headline text is constructed from the corresponding Body buffer headline.
 The default procedure is to take part before the matching fold marker and to
-strip whitespace and other superfluous characters. The exact procedure depends
+strip whitespace and other distracting characters. The exact procedure depends
 on Body 'filetype' and can be customized by the user. For most filetypes, the
 following happens:
     - Part of the Body line before the first start fold marker with level
@@ -797,9 +817,9 @@ before the fold marker) are obtained as follows:
       are obtained from option 'commentstring'. They, spaces, and tabs are
       stripped from the right side.
 
-By default, "g:voom_rstrip_chars" contains entries for "text" and "help".
-For most source code filetypes 'commentstring' is set correctly by the
-corresponding ftplugin.  If not defined, 'commentstring' defaults to /*%s*/,
+By default, "g:voom_rstrip_chars" contains entries for "vim", "text" and
+"help". For most source code filetypes 'commentstring' is set correctly by the
+corresponding ftplugin. If not defined, 'commentstring' defaults to /*%s*/,
 which makes no sense for filetypes like text and help.
 
 So, to change what characters are stripped from the right side of Tree
@@ -857,16 +877,74 @@ This code is commented out in Voom_TreeSyntax().
 Delete Outline   [[[2~
 
 To delete VOoM outline for a particular Body buffer: unload, delete, or wipe
-out the corresponding Tree buffer (:bun, :bd, :bw). Tree buffers are
-configured to be wiped out when deleted or unloaded.
+out the corresponding Tree buffer (:bun, :bd, :bw).
+Tree buffers are configured to be wiped out when unloaded or deleted.
 
-When a Tree is wiped out, the associated Body buffer should become mostly as
-it was before the outline creation. Buffer-local mappings and autocommands
-created by the command :Voom are removed. Outline data associated with this
-Body buffer (Vim and Python dictionary items) are deleted.
+Outline is also deleted and Tree buffer is wiped out when it is no longer
+displayed in any window. This is because Tree buffers have 'bufhidden' set to
+"wipe". If this is inconvenient, change 'bufhidden' to "hide". To do this by
+default for all Tree buffers, configure filetype "voomtree": add line
+"setl bufhidden=hide" in file ~/.vim/ftplugin/voomtree.vim .
 
-When a Body buffer is unloaded, deleted or wiped out, the corresponding Tree
-buffer is wiped out.
+When outline is deleted, the associated Body buffer loses VOoM-specific
+settings: buffer-local mappings (Return and Tab) and autocommands created by
+the command :Voom. (Mappings may remain at first, but they will unmap
+themselves next time they are invoked and Tree buffer is not found.) Outline
+data associated with this Body (Vim and Python dictionary items) are deleted.
+
+==============================================================================
+Unloaded Body buffers   [[[3~
+
+A buffer cannot be outlined if it is not loaded in memory. A Body buffer is
+unloaded after commands :bun :bd :bw . It can also become unloaded after it is
+no longer displayed in any window (this depends on options 'hidden' and
+'bufhidden').
+
+If Body buffer is not loaded, the outline is locked. The following actions in
+the corresponding Tree buffer are blocked:
+    - Automatic outline update on Tree BufEnter.
+    - Selecting nodes.
+    - All outline operations.
+    - Commands :Voomgrep, :Voomunl, etc.
+
+Everything should be back to normal once the Body buffer is loaded again.
+
+If a Body buffer has been wiped out (:bw) it can not be loaded again. The
+corresponding Tree buffer is useless and you should delete it.
+
+One way to load an unloaded Body buffer is to execute the command :Voom in
+Tree: it will create a new window, load Body there, and update outline. If Body
+buffer no longer exists, outline will be deleted.
+
+==============================================================================
+Custom commands for deleting outline   [[[3~
+
+It would be convenient if outline was automatically deleted and Tree buffer
+wiped out when Body buffer is unloaded, deleted, and definitely when it is
+wiped out. This is how VOoM worked prior to version 3.0. Such design turned out
+to be unsafe and had to be abandoned.
+
+The workaround is function Voom_DeleteOutline(ex_command). It can be used to
+create custom commands and mappings for deleting outline. This function does
+the following:
+    - if current buffer is a Tree, it deletes outline and wipes out Tree.
+    - if current buffer is a Body, it deletes outline, wipes out Tree, and then
+      executes argument as an Ex command via |:execute|
+    - if current buffer is not a VOoM buffer, it executes argument as an Ex
+      command
+
+Argument (a string) should be an Ex command you use most often to get rid of
+buffers: "q", "bd", "bw", etc.
+
+Example 1 >
+    com! Voomclose call Voom_DeleteOutline('')
+Command Voomclose deletes outline and wipes out Tree when executed in Body or
+Tree buffer. It does nothing in a non-VOoM buffer.
+
+Example 2 >
+    nnoremap <silent> <M-w> :call Voom_DeleteOutline('bw')<CR>
+Mapping ALT-w is identical to command :bw (wipe out buffer), except that if
+current buffer is a Body it also deletes outline and wipes out Tree.
 
 ==============================================================================
 Outline Navigation   [[[2o~
@@ -896,6 +974,10 @@ only. If windows are split, previous window (^Wp) is used if possible.
 Note: <Return> and <Tab> are the only keys mapped by VOoM in Bodies. Other
 keys or key combinations can be used by defining "g:voom_return_key" and
 "g:voom_tab_key". See |voom_shuttle_keys|.
+
+(The command :Voom also cycles between Tree and Body. This is like <Return> but
+without selecting a node.)
+
 
 All other mappings are for Tree buffers only, Normal mode.
 
@@ -1052,7 +1134,7 @@ mode. The range is checked for being a valid range: all top level nodes should
 be at the same level.
 
 Where the moved or inserted nodes end up depends on the expanded/contracted
-status of the node after which the nodes are inserted.  This should be obvious
+status of the node after which the nodes are inserted. This should be obvious
 and replicates default behavior of the tree pane in Leo outlining editor.
 
 Most outline operations usually modify the corresponding Body buffer. Thus,
@@ -1167,9 +1249,7 @@ Related Tree mappings, Normal mode:
 
 ==============================================================================
 Save/Restore Tree Folding   [[[3~
-                                                 *voom_VoomFoldingSave*
-                                                 *voom_VoomFoldingRestore*
-                                                 *voom_VoomFoldingCleanup*
+                                                 *voom_tree_folding*
 Opened/closed folds in a Tree buffer are equivalent to expanded/contracted
 nodes. VOoM allows to save and restore Tree buffer folding. To do this, it
 relies on special marks in Body headlines: character 'o' immediately after the
@@ -1219,21 +1299,72 @@ There as also the following Tree buffer mappings, Normal mode:
 Mnemonics for mappings:  Foldins Save/Restore, Folding All Save/Restore.
 
 ==============================================================================
+Sort Outline   [[[3~
+                                                 *voom_sort*
+The command :VoomSort sorts sibling nodes according to their Tree headline text
+(string after character | in Tree buffer). Nodes are siblings if they have the
+same level and the same parent. This command must be executed in Tree buffer.
+
+:VoomSort           Sort siblings of the current node (node under the cursor).
+                    Headlines are sorted by byte value, in ascending order.
+
+:VoomSort [options]
+                    Sort according to options. Options are any combination of
+                    the following words, separated by whitespace:
+                             deep, i, u, r, flip, shuffle.
+    OPTIONS:
+
+    deep            Deep (recursive) sort. Sort siblings of the current node
+                    and siblings of all descendants. When cursor is on the 1st
+                    or 2nd Tree line, entire outline is sorted.
+
+    i               Ignore-case. Case-insensitive sort. Without the "u" option
+                    this should affect only A-Za-z letters. To handle other
+                    letters, include the "u" option.
+
+    u               Unicode-aware sort. Convert headlines to Python Unicode
+                    objects before sorting. This option is probably needed only
+                    for case-insensitive sorts.
+
+    r               Reverse-sort, sort in descending order.
+
+    flip            Reverse the order of nodes without sorting anything.
+
+    shuffle         Shuffle nodes randomly.
+
+
+Example: perform deep sort, ignore-case, unicode-aware >
+    :VoomSort deep i u
+
+Sorting and reverse-sorting do not change relative order of nodes with equal
+headlines.
+
+Options "r", "flip", "shuffle" cannot be combined.
+
+It is easy to create custom commands that perform sorting with a particular set
+of options. For example, if you often do case-insensitive, non-recursive sort
+you can add the following line to vimrc: >
+    com! VoomSortI call Voom_OopSort('i u')
+The command :VoomSortI will be identical to ":VoomSort i u".
+
+==============================================================================
 Known Issues   [[[3~
 
 There are some pitfalls to be aware of when editing very large outlines:
 
-1) Memory used by Vim can increase significantly when outline operations Move
-Up/Down are applied repetitively to a large node or a block of nodes (>1MB).
-These commands delete and then insert lines in Body buffer. If the range being
-moved is large, this can cause dramatic increase in memory used by the undo
-history. Thus, to move a large node over a long distance it's better to use
-Cut/Paste rather than keep pressing Ctrl-Up/Down.
-This problem doesn't exist if 'undolevels' is set to -1, 0, 1.
+1) Memory used by Vim can increase significantly when outline operations
+   Move Up/Down are applied repetitively to a large node or a block of nodes
+   (>1MB). These commands delete and then insert lines in Body buffer. If the
+   range being moved is large, this can cause dramatic increase in memory used
+   by the undo history. Thus, to move a large node over a long distance it's
+   better to use Cut/Paste rather than keep pressing Ctrl-Up/Down.
 
-2) Undoing some outline operations can take a longer than usual time if a
-large number of Body folds (>1000) is affected. The workaround is to
-temporarily set Body 'foldmethod' to manual (:set fdm=manual).
+   This problem doesn't exist if 'undolevels' is set to -1, 0, 1.
+   A handy way to clear undo history: save the file, :e .
+
+2) Undoing some outline operations can take a longer than usual time if a large
+   number of Body folds (>1000) is affected. The workaround is to temporarily
+   set Body 'foldmethod' to manual (:set fdm=manual).
 
 ==============================================================================
 EXECUTING NODES (:Voomexec)   [[[1~
@@ -1378,17 +1509,18 @@ To restore original stdout and stderr (that is Vim command line): unload,
 delete, or wipeout the __PyLog__ buffer (:bun, :bd, :bw).
 
 NOTE: the __PyLog__ buffer is configured to be wiped out when unloaded or
-deleted.
+deleted. 'bufhidden' is set to "wipe".
 
-The filetype of the PyLog buffer is set to "log". Some syntax highlighting is
-added automatically to highlight Python error messages and common VOoM
+The filetype of the PyLog buffer is set to "voomlog". Some syntax highlighting
+is added automatically to highlight Python error messages and common VOoM
 messages.
 
 When Python attempts to print a unicode string, e.g. >
     :py print u'ascii test'
     :py print u'\u042D \u042E \u042F \u2248 \u2260'
-the string is encoded using the value of Vim option 'encoding' at the time
-when the __PyLog__ buffer was created.
+the string is encoded using internal Vim encoding at the time of __PyLog__
+buffer creation. Internal encoding is determined from Vim option 'encoding':
+"utf-8" if &encoding is a Unicode encoding, &encoding otherwise.
 
 ==============================================================================
 Known Issues    [[[2~
@@ -1430,12 +1562,13 @@ VOoM add-ons are Vim or Python scripts that use "voom.vim" and "voom.py"
 functions and data. Add-ons allow to add new functionality or to customize
 default features without modifying the core files.
 
+
 LOADING ADD-ONS
 
 Some Vim script add-ons can be sourced at any time, which means they can be
 placed in $HOME/.vim/plugin/ like any other plugin.
 
-For finer control, user option "g:voom_user_command" can be used to load
+For finer control, user option "g:voom_user_command" should be used to load
 add-ons only when file voom.vim is being sourced. This option defines a string
 to be executed via |execute|. This is the last thing done in voom.vim: >
     if exists('g:voom_user_command')
@@ -1453,18 +1586,24 @@ To source the file, put this in vimrc: >
     let g:voom_user_command = "source D:/SCRIPTS/VOoM/voom_addons.vim"
 
 METHOD 3: Add-ons are in Python module voom_addons.py somewhere in Python
-search path. To import the module, put this in vimrc: >
-    let g:voom_user_command = "python import voom_addons.py"
+search path (directory of voom.vim/voom.py will do). To import the module, put
+this in vimrc: >
+    let g:voom_user_command = "python import voom_addons"
+The voom.py module should be accessed from within voom_addons.py as follows: >
+    import sys
+    voom = sys.modules['voom']
+
 
 WRITING ADD-ONS
 
 There is no special API. The following applies:
     - Python-side functions and data are available as attributes of module voom
       and class instance VOOM respectively.
-    - All Vim function in voom.vim are global and start with "Voom_".
+    - All Vim functions in voom.vim are global and start with "Voom_".
     - Vim-side data are script-local. Two functions in voom.vim allow external
       scripts to read voom.vim script-local data: Voom_GetBufInfo() and
       Voom_GetData(). Sample add-on "voom_info.vim" shows how to use them.
+
 
 USING ADD-ONS TO ADD NEW FUNCTIONALITY
 
@@ -1476,6 +1615,7 @@ Any command created by a VOoM add-on must first check that the current buffer
 is a VOoM buffer (Tree or Body) and refuse to execute if it's not. It should
 update outline if current buffer is a Body. Sample add-on "voom_info.vim" shows
 how to do this.
+
 
 USING ADD-ONS TO CUSTOMIZE VOoM
 
@@ -1491,7 +1631,7 @@ Implementation notes   [[[1~
                                                  *voom_notes*
 
 ==============================================================================
-Why VOoM uses Python   [[[2~
+why VOoM uses Python   [[[2~
 
 The main reason VOoM uses Python is because some critical code is much faster
 in Python than in Vim script.
@@ -1600,7 +1740,7 @@ echo 'Python: ' . reltimestr(reltime(start))
 Thus, Python code should be much faster when handling large lists.
 
 ==============================================================================
-Separate Trees or Single Tree   [[[2~
+separate Trees or single Tree   [[[2~
 
 A single Tree buffer could be used to display outlines of many files. Tlist
 does that. This makes sense when working with several related files. Also,
@@ -1611,72 +1751,7 @@ more appropriate for text notes, when outline files are likely to be
 unrelated. Searching headlines is easier.
 
 ==============================================================================
-When to wipe out Tree buffer   [[[2~
-
-A Tree buffer should be wiped out and the corresponding VOoM data deleted
-after:
-
-1) Body is wiped out. Tree has no reason to exist.
-2) Body is deleted. Body buffer-local mappings are lost.
-3) Body is unloaded or deleted. When Body is loaded again, its b:changedtick
-   is different.
-4) Tree is unloaded. All content is lost, Tree reverts to blank buffer.
-5) Tree is deleted. As above, plus buffer local mappings are lost.
-
-This is accomplished via BufUnload autocommands for Tree and Body.
-BufUnload is also triggered on BufDelete and BufWipeout.
-
-Also, when a buffer is unloaded but still exists, that is after :bunload and
-:bdelete, there is potential for big trouble when trying to modify the buffer
-via Python--see next node.
-
-There are several fail-safe measures that ensure that nothing damaging will
-happen if BufUnload autocommands are not triggered, as after "noa bun", "noa
-bd", "noa bw". Tree and Body buffers are always checked for being loaded
-(bufloaded()) during most Voom commands.
-
-Functions Voom_ToBody() and Voom_ToTree(), which are called when selecting
-nodes and before every outline operation, will detect if the Body or Tree
-buffer is no longer loaded and will perform cleanup.
-
-The b:changedtick check (see "Checking Bodies for ticks") also will prevent
-potential troubles after improper unloading of Body with "noa bun!", etc.
-This is because b:changedtick changes after unloading a buffer and loading it
-again.
-
-When Tree or Body local mappings and syntax are lost after "noa bd", it is
-possible to restore them by executing the command :Voom from the Body buffer.
-
-The PyLog buffer should also be wiped out when unloaded or deleted. There is a
-check that ensures that PyLog is loaded before printing to it.
-
-==============================================================================
-unloaded buffer + python == trouble   [[[2~
-
-Bad things happen when attempting to modify an unloaded buffer via Python
-vim.buffer object. (This might be a Vim bug.) Example:
-    - Create two buffers: buf1 and buf2. They can be new, no-file buffers.
-    - With cursor in buf2
-      :py buf2=vim.current.buffer
-    - Buffer 2 can now be modified via Python:
-      :py buf2[0]="xxxxxxxxx"
-    - Unload buffer 2
-      :bun!
-      Buffer 1 is the current buffer.
-    - Try writing to buffer 2, which is not loaded
-      :py buf2[0]="yyyyy"
-    - Buffer 1 is modified instead of buffer 2, and the change cannot be undone!
-      Buffer 2 is no longer unloaded, so subsequent writes to it via buf2
-      happen correctly.
-
-VOoM's BufUnload autocommands ensure that Tree, Body, and PyLog buffers are
-never unloaded when they are being written to. Buffers can become unloaded
-when they are closed improperly with "noa bun" or "noa bd" or when something
-goes wrong with autocommands. There are fail-safe checks that make sure that
-the buffer is loaded (bufloaded()) before it is modified via Python.
-
-==============================================================================
-Checking Bodies for ticks   [[[2~
+checking Bodies for ticks   [[[2~
 
 Tree buffer and associated outline data are updated on entering Tree via
 BufEnter autocommand. To perform update only when the Body has changed since
@@ -1713,9 +1788,297 @@ inside try/finally/endtry. This ensures that "tick_" will not be set to "tick"
 when an error occurs during the update.
 
 ==============================================================================
+unloaded buffer + python == trouble   [[[2~
+
+Bad things happen when attempting to modify an unloaded buffer via Python
+vim.buffer object. (This might be considered a Vim bug.) Example:
+    - Create two buffers: buf1 and buf2. They can be new, no-file buffers.
+    - With cursor in buf2
+      :py buf2=vim.current.buffer
+    - Buffer 2 can now be modified via Python:
+      :py buf2[0]="xxxxxxxxx"
+    - Unload buffer 2
+      :bun!
+      Buffer 1 is the current buffer.
+    - Try writing to buffer 2, which is not loaded
+      :py buf2[0]="yyyyy"
+    - Buffer 1 is modified instead of buffer 2, and the change cannot be undone!
+      Buffer 2 is no longer unloaded, so subsequent writes to it via buf2
+      happen correctly.
+
+VOoM uses Python vim.buffer methods to modify Tree, Body, and PyLog buffers.
+It is essential that these buffers are loaded (bufloaded())before being written
+to. Writing to a non-existing (wiped out) buffer is not as dangerous because it
+produces an error.
+
+Tree and PyLog BufUnload autocommands make it unlikely that a Tree or PyLog
+buffer is unloaded -- they are wiped out on BufUnload.
+These buffers can still become unloaded when they are closed improperly with
+"noa bun" or "noa bd" or when something goes wrong with autocommands.
+
+Body buffers can be unloaded since v3.0.
+
+There are checks that ensure that the buffer is loaded (bufloaded()) before it
+is modified via Python vim.buffer object.
+
+==============================================================================
+wipe out Tree on BufUnload   [[[2~
+
+A Tree buffer should be wiped out and the corresponding VOoM data deleted
+after:
+
+1) Tree is unloaded. All content is lost, Tree reverts to blank buffer.
+2) Tree is deleted. As above, plus buffer-local mappings are lost.
+2) Tree is wiped out. VOoM data need to be cleaned up.
+
+This is accomplished via BufUnload autocmd for Tree, which is also triggered on
+BufDelete and BufWipeout.
+
+Unloaded, deleted, and wiped out Body buffers are obviously also a problem, see
+next node. Prior to v3.0 there was Body BufUnload au that wiped out Tree. That
+was found to be too risky.
+
+There are several fail-safe measures that ensure that nothing damaging will
+happen if Tree BufUnload autocommand is not triggered, as after "noa bun", "noa
+bd", "noa bw".
+
+Most Voom commands check that: Tree is loaded, Body exists, Body is loaded (see
+next). This relies on bufloaded() and bufexists().
+
+Functions Voom_ToBody() and Voom_ToTree(), which are called when selecting
+nodes and before almost every outline operation, perform all of the above
+checks and will do cleanup if checks fail.
+
+
+The PyLog buffer should also be wiped out when unloaded or deleted. There is a
+check that ensures that PyLog is loaded before printing to it.
+
+==============================================================================
+unloaded, deleted, wiped out Bodies   [[[2~
+
+Unloaded Body buffers are a problem:
+
+It is not possible to outline a buffer if it is unloaded.
+Python vim.buffer object is useless for unloaded buffer, it's [""].
+
+When unloaded Body is loaded again the following events are hard to detect:
+    - buffer changes were abandoned after q!, bun!, bd!
+    - file was modified by external process
+
+Thus, a global outline update must be done after loading Body. This means we
+should abort outline command if Body is found unloaded, even if we can load it
+and force outline update.
+
+PERFECT: Body b:changedtick is incremented by 2 after unloading/loading.
+Outline update is guarantied on Tree BufEnter or when updating from Body.
+
+We deal with unloaded Bodies by disabling Tree buffer commands -- as soon as
+Body bufnr is computed, check if it's loaded and abort the command if it's not.
+Helper function is Voom_BufLoaded(body). It will also detect if Body does not
+exist. This must be done for:
+    outline update on BufEnter
+    all outline operations
+    node selection (always done by Voom_TreeSelect())
+    Voomgrep, Voomunl, Body text getters (Voomexec)
+    any other command that requires up-to-date outline, or reads/writes Body
+
+The next line of defense is Voom_ToBody(), which is called by almost all Tree
+commands. When it detects Body is unloaded it loads it in new window as usual,
+runs outline update, returns -1. If Body does not exist it performs clean up.
+
+The b:changedtick check (see "Checking Bodies for ticks") also should prevent
+potential troubles after Body unload/reload. This is because b:changedtick
+changes after unloading a buffer and loading it again.
+
+
+When Body buffer is deleted (:bd) it is unloaded. In addition, buffer-local
+mappings are lost. The loss of Body-local mappings (shuttle keys) is detected
+by Body BufEnter au. It checks for hasmapto('Voom_ToTreeOrBodyWin') and
+restores mappings if needed.
+
+The command :Voom checks hasmapto('Voom_ToTreeOrBodyWin') when executed in Tree
+or Body. If not found, it reconfigures Tree/Body. In theory, this can be used
+to restore Tree and Body configurations after some perverted unloads/reloads
+with ":noa bd", "noa b", etc.
+
+
+Wiped out Bodies are also unloaded. Tree has no reason to exist after Body has
+been wiped out. Sadly, wiping out Tree from Body BufWipeout au is too risky,
+see v3.0 notes.
+
+==============================================================================
 CHANGELOG   [[[2o~
 
-v2.1, 2010-06-01   [[[3x~
+v3.0, 2010-08-01   [[[3xo~
+
+New command :VoomSort [options] for sorting outline, |voom_sort|.
+
+Tree buffer is no longer automatically wiped out when its Body buffer is
+unloaded, deleted, or wiped out. Instead, outline is locked until Body is
+loaded again. This change was needed to eliminate crashes after :q, :q! and
+related problems. This can also make working with outlines easier when buffers
+routinely get unloaded, as when 'hidden' and 'bufhidden' are not set.
+
+Option 'bufhidden' for Tree buffers is set to "wipe" instead of "hide".
+This should make it less likely that an orphan Tree is hanging around long
+after its Body is gone.
+
+PyLog buffer has 'bufhidden' set to "wipe" instead of "hide".
+PyLog filetype is set to "voomlog" instead of "log".
+PyLog syntax: better highlighting of Python tracebacks.
+
+In several places in voom.py a new list of Body lines was created for no good
+reason: VOOM.buffers[body][:]. These were changed to VOOM.buffers[body], which
+is Vim buffer object. This substantially reduces memory usage, especially when
+working with large buffers. This affects outline update. Timing tests with
+calendar_outline.txt: makeOutline() is slower (0.15 vs 0.11 sec). But the
+overall time to run update on Tree BufEnter is about the same (0.16 sec if no
+outline change), so it's definitely worth it.
+Similarly, there is no need to create a new list of current Tree lines in
+updateTree() (tlines_ = Tree[:]) since we compare Tree lines one by one.
+
+PROBLEM: Tree window-local settings can be wrong if new window is created
+manually.  Example: cursor is in Body, :split, :b[Tree bufnr].
+FIX: On Tree BufEnter check if w:voom_tree exists. If not, call
+Voom_TreeConfigWin()--it sets window-local options and creates w:voom_tree.
+
+Added "vim" filetype to default g:voom_rstrip_chars: # is stripped in addition
+to " because it's comment char in Python etc. sections of .vim files.
+
+    Various code changes
+
+Renamed VOOM.nodes to VOOM.bnodes to make clearer it is list of Body lnums.
+
+voom.py functions no longer access voom.vim script-local variables directly.
+This means all voom.py functions can be called from add-ons.
+Some functions used to compute tree from body like this
+    tree = int(vim.eval('s:voom_bodies[%s].tree' %body))
+These now  require both body and tree as arguments. (updateTree, verifyTree,
+nodeUNL)
+In several places snLn was set:
+    vim.command('let s:voom_bodies[%s].snLn=%s' %(body, snLn))
+These now call Voom_SetSnLn(body,snLn) instead.
+
+When converting buffer lines to/from Python Unicode objects encoding is set to
+"utf-8" if &encoding is any Unicode encoding. It turns out Vim uses utf-8
+internally in such cases. See voom.getVimEnc()
+
+Vim code changes due to new scheme of dealing with unloaded and deleted Body
+buffers. Body BufUnload au is gone. New Body BufEnter au detects loss of
+buffer-local mappings.
+
+Tree autocmds are now buffer-local. This seems more robust than relying on Tree
+name pattern, easier to disable for individual Trees should we need to do so.
+s:voom_TreeBufEnter is not needed anymore.
+
+Got rid of b:voom_tree and b:voom_body. Use hasmapto('Voom_ToTreeOrBodyWin') to
+detect loss of buffer-local mappings.
+
+
+crash after :q, :q!   [[[4  ~
+
+(reported by William Fugy)
+Current tabpage has two windows: Body and corresponding Tree.
+There are no other windows with Body or Tree.
+'hidden' is off, Body 'bufhidden' is "".
+With cursor in Body, :q or :q! produce spectacular crash--sometimes gvim.exe
+crashes, sometimes stream of E315 errors.
+-------------------------------------------------
+The culprit is Body BufUnload autocmd: it wipes out Tree buffer and thus can
+close windows and tabs. This confuses :q but not :bun :bd :bw.
+
+Setting hidden or bufhidden doesn't help because :q! always unloads buffer.
+
+Kludge attempt in Body BufUnload, before Tree wipeout: 
+    if winnr('$')==2 && bufwinnr(body)>0 && bufwinnr(tree)>0
+        new
+    endif
+No crashes after :q or q!. New crash after :bd, :bw in Body.
+Creating new window on BufUnload is as dangerous as closing one.
+
+Not wiping out Tree on Body BufUnload is the only solution.
+-------------------------------------------------
+Got rid of Body BufUnload au.
+Try Body BufWipeout au -- wipe out Tree when Body is wiped out.
+
+Crash after :q still happens if Body 'bufhidden' is "wipe" -- obviously same
+situation as with BufUnload. Such setting seems unlikely. :Voom can refuse to
+create outline if current buffer has such setting.
+
+ANOTHER NASTY GLITCH:
+gvim.exe test_outline.txt
+:Voom
+:bw1
+Tree is gone, window still shows test_outline.txt -- this is horribly wrong.
+:Voom
+Both Body and Tree are empty.
+
+**CONCLUSION: DON'T DO IT**
+The workaround is function Voom_Delete('ex_command') to be used in custom
+mappings.
+Also, set Tree 'bufhidden' to wipe instead of hide.
+
+-------------------------
+Possible Body BufWipeout au, should be safe:
+if Tree is shown in a window: set Tree bufhidden to wipe
+if not: wipe out Tree
+This is too convoluted.
+
+
+Tree folds are wrong in split windows after outline operation   [[[4~
+
+gvim.exe test_outline.txt
+:Voom
+:set fdc=6
+:split
+:split
+Copy node "5", Paste after "5.2"
+Folds are wrong in 2nd and 3rd window.
+
+Also affects Tree windows in other tabs.
+Folds in the current window are fixed after :setl fdm=expr
+--------------------------
+Sorting is not afflicted with this bug.
+Sorting is different from other Oops--Tree is drawn while in Tree, on BufEnter.
+Change 
+    call Voom_OopFromBody(body,tree,l:blnShow,'')
+to 
+    if Voom_BodyUpdateTree()==-1 | let &lz=lz_ | return | endif
+    call Voom_OopFromBody(body,tree,l:blnShow,'noa')
+and folds are wrong in split windows
+--------------------------
+Thus, the fix is to draw Tree lines while in Tree.
+
+Current Oop scheme for most Oops, start in Tree, Vim code:
+    perform checks, get data
+    go to Body
+    check ticks
+    run Python code:
+        change Body lines; change Tree lines; adjust bnodes and levels
+    call Voom_OopFromBody() -- adjust Body view and go back to Tree
+    adjust Tree view
+
+New Oop scheme, start in Tree, Vim code:
+    perform checks, get data
+    go to Body
+    check ticks
+    run Python code:
+        change Body lines; (adjust bnodes and levels)
+        call Voom_OopFromBody() -- adjust Body view and go back to Tree
+        change Tree lines; (adjust bnodes and levels)
+    adjust Tree view
+
+Changed the following Oops: Paste, Cut, Up, Down, Right, Left.
+
+These Oops do not change Tree folds: Mark/Unmark, Mark as selected
+No change is needed for: Insert new node (done from Tree), Copy.
+Save/Restore/Cleanup Folding do not modify Tree, they are done from Tree.
+--------------------------
+Folds can also be wrong in split Tree windows after outline update was forced
+from Body after :Voomgrep, :Voomunl, etc. This is rare and no big deal.
+
+
+v2.1, 2010-06-01   [[[3~
 
 The procedure for constructing Tree headline text was modifed to permit
 customization for individual filetypes:

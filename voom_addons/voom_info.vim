@@ -1,6 +1,6 @@
 " This is a sample VOoM add-on.
 " It creates global command :VoomInfo which prints various outline information
-" about the current buffer if it's a VOoM buffer (Tree or Body).
+" about the current buffer if it's a VOoM buffer (Tree or Body)
 
 com! VoomInfo call Voom_Info()
 
@@ -8,6 +8,7 @@ func! Voom_Info()
     """"""" standard code for every VOoM add-on command
     " Determine if current buffer is a Tree or Body buffer.
     " Exit if neither. An info message will be printed by Voom_GetBufInfo.
+    " bufType is also 'None' when Body is not loaded or doesn't exist.
     " Get Tree and Body buffer numbers.
     " If current buffer is a Body, outline is updated if needed.
     let [bufType,body,tree] = Voom_GetBufInfo()
@@ -36,12 +37,12 @@ endfunc
 python << EOF
 def voom_Info():
     body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
-    nodes, levels = VOOM.nodes[body], VOOM.levels[body]
+    bnodes, levels = VOOM.bnodes[body], VOOM.levels[body]
     vim.command("let l:maxLevel=%s" %(max(levels)))
-    vim.command("let l:nodesNumber=%s" %(len(nodes)))
-    nodesWithChildren = len([i for i in xrange(1,len(nodes)+1) if voom.nodeHasChildren(body,i)])
+    vim.command("let l:nodesNumber=%s" %(len(bnodes)))
+    nodesWithChildren = len([i for i in xrange(1,len(bnodes)+1) if voom.nodeHasChildren(body,i)])
     vim.command("let l:nodesWithChildren=%s" %nodesWithChildren)
-    nodesWithoutChildren = len([i for i in xrange(1,len(nodes)+1) if not voom.nodeHasChildren(body,i)])
+    nodesWithoutChildren = len([i for i in xrange(1,len(bnodes)+1) if not voom.nodeHasChildren(body,i)])
     vim.command("let l:nodesWithoutChildren=%s" %nodesWithoutChildren)
     snLn = VOOM.snLns[body]
     treeline = VOOM.buffers[tree][snLn-1]
