@@ -1,10 +1,13 @@
 " This VOoM add-on shows how to customize Tree headline text for individual
 " Body filetypes.
-" Important: This file must be sourced after entire voom.vim has been sourced.
+" IMPORTANT: This file must be sourced after entire voom.vim has been sourced.
 " Use option g:voom_user_command as explained in |voom_addons|.
-" Example: Move this file to $HOME/.vim/voom_add-ons/
+" EXAMPLE: Move this file to $HOME/.vim/voom_add-ons/
 " and add the following line to .vimrc:
 "   let g:voom_user_command = "runtime! voom_add-ons/*.vim"
+"
+" NOTE: this add-on works only when outlining start fold markers with levels,
+" doesn't work when using markup modes
 
 
 " Alternative to defining dictionary g:voom_rstrip_chars in vimrc: add entries

@@ -13,7 +13,7 @@ func! Voom_Info()
     " If current buffer is a Body, outline is updated if needed.
     let [bufType,body,tree] = Voom_GetBufInfo()
     if bufType=='None' | return | endif
-    " Get voom.vim data.
+    " Get Vim-side outline data (local to voom.vim).
     let [voom_bodies, voom_trees] = Voom_GetData()
 
 
@@ -37,20 +37,21 @@ endfunc
 python << EOF
 def voom_Info():
     body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
-    bnodes, levels = VOOM.bnodes[body], VOOM.levels[body]
+    VO = VOOMS[body]
+    bnodes, levels = VO.bnodes, VO.levels
     vim.command("let l:maxLevel=%s" %(max(levels)))
     vim.command("let l:nodesNumber=%s" %(len(bnodes)))
     nodesWithChildren = len([i for i in xrange(1,len(bnodes)+1) if voom.nodeHasChildren(body,i)])
     vim.command("let l:nodesWithChildren=%s" %nodesWithChildren)
     nodesWithoutChildren = len([i for i in xrange(1,len(bnodes)+1) if not voom.nodeHasChildren(body,i)])
     vim.command("let l:nodesWithoutChildren=%s" %nodesWithoutChildren)
-    snLn = VOOM.snLns[body]
-    treeline = VOOM.buffers[tree][snLn-1]
+    snLn = VO.snLn
+    treeline = VO.Tree[snLn-1]
     if snLn>1:
         selectedHeadline = treeline[treeline.find('|')+1:]
     else:
         selectedHeadline = "top-of-file"
     vim.command("let [l:selectedNode,l:selectedHeadline]=[%s,'%s']" %(snLn, selectedHeadline.replace("'","''")))
-    vim.command("let l:selectedNodeLevel=%s" %VOOM.levels[body][snLn-1])
+    vim.command("let l:selectedNodeLevel=%s" %levels[snLn-1])
 EOF
 
