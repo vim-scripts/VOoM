@@ -1,40 +1,23 @@
+# voom_mode_wiki.py
+# VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+# plugin for Python-enabled Vim version 7.x
+# Website: http://www.vim.org/scripts/script.php?script_id=2657
+# Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+# License: This program is free software. It comes without any warranty,
+#          to the extent permitted by applicable law. You can redistribute it
+#          and/or modify it under the terms of the Do What The Fuck You Want To
+#          Public License, Version 2, as published by Sam Hocevar.
+#          See http://sam.zoy.org/wtfpl/COPYING for more details.
+
 """
-VOoM markup mode for MediaWiki headline markup. This is the most common Wiki
-format. Should be suitable for Wikipedia, vim.wikia.com, etc.
+VOoM markup mode for MediaWiki headline markup. See |voom_mode_wiki|.
 
 = headline level 1 =
-body text
-== headline level 2 ==
-body text
-=== headline level 3 ===
-
-First = must be at start of line.
-Trailing whitespace is ok.
-Closing = are required.
-
-HTML comment tags are ok if they are after the headline:
-==== headline level 4 ==== <!--{{{4-->  
-===== headline level 5 ===== <!--comment--> <!--comment-->
-
-
-DIFFERENCES FROM ACTUAL MEDIAWIKI FORMAT
-
-1) Headlines are not ignored inside <pre>, <nowiki> and other special blocks.
-
-2) Only trailing HTML comment tags are stripped.
-This valid headline is not recognized:
-<!-- comment -->=== missed me ===
-
-This is ok, but comment is displayed in Tree buffer:
-=== headline level 3 <!-- comment --> ===
-
-
-REFERENCES
-http://www.mediawiki.org/wiki/Help:Formatting
-http://www.mediawiki.org/wiki/Markup_spec
-http://meta.wikimedia.org/wiki/Help:Section
-http://en.wikipedia.org/wiki/Help:Section
-http://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style#Section_headings
+some text
+== headline level 2 == 
+more text
+=== headline level 3 === <!--comment-->
+==== headline level 4 ====<!--comment-->
 
 """
 
@@ -49,13 +32,13 @@ comment_tag_sub = re.compile('<!--.*?-->\s*$').sub
 headline_match = re.compile(r'^(=+).*(\1)\s*$').match
 
 
-def hook_makeOutline(body, blines):
+def hook_makeOutline(VO, blines):
     """Return (tlines, bnodes, levels) for list of Body lines.
     blines can also be Vim buffer object.
     """
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
-    tlines_add, nodes_add, levels_add = tlines.append, bnodes.append, levels.append
+    tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
     for i in xrange(Z):
         if not blines[i].startswith('='):
             continue
@@ -70,12 +53,12 @@ def hook_makeOutline(body, blines):
         head = bline[lev:-lev].strip()
         tline = '  %s|%s' %('. '*(lev-1), head)
         tlines_add(tline)
-        nodes_add(i+1)
+        bnodes_add(i+1)
         levels_add(lev)
     return (tlines, bnodes, levels)
 
 
-def hook_newHeadline(body, level):
+def hook_newHeadline(VO, level, blnum, tlnum):
     """Return (tree_head, bodyLines, column).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
@@ -87,14 +70,14 @@ def hook_newHeadline(body, level):
     return (tree_head, bodyLines, column)
 
 
-def hook_changeLevBodyHead(body, h, delta):
-    """Increase of decrease level number of Body headline by delta."""
-    if delta==0: return h
+def hook_changeLevBodyHead(VO, h, levDelta):
+    """Increase of decrease level number of Body headline by levDelta."""
+    if levDelta==0: return h
     hs = h # need to strip trailing comment tags first
     if '<!--' in h:
         hs = comment_tag_sub('',hs)
     m = headline_match(hs)
     level = len(m.group(1))
-    s = '='*(level+delta)
+    s = '='*(level+levDelta)
     return '%s%s%s%s' %(s, h[m.end(1):m.start(2)], s, h[m.end(2):])
 

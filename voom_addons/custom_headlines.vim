@@ -10,10 +10,10 @@
 " doesn't work when using markup modes
 
 
-" Alternative to defining dictionary g:voom_rstrip_chars in vimrc: add entries
-" for filetypes of interest. Note that Space and Tab must be included.
+" g:voom_rstrip_chars_{filetype} can be defined here instead of vimrc.
+" Note that Space and Tab must be included.
 if 0
-    let g:voom_rstrip_chars["autohotkey"] = "; \t"
+    let g:voom_rstrip_chars_autohotkey = "; \t"
 endif
 
 

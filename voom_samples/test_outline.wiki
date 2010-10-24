@@ -1,5 +1,5 @@
- vim:fdm=marker:
- vim:foldtext=getline(v\:foldstart).'...'.(v\:foldend-v\:foldstart):
+ wiki markup mode test file (MediaWiki)
+ converted from test_outline.txt
 
 findme findme2
 

@@ -37,13 +37,13 @@ endfunc
 python << EOF
 def voom_Info():
     body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
-    VO = VOOMS[body]
+    VO = voom.VOOMS[body]
     bnodes, levels = VO.bnodes, VO.levels
     vim.command("let l:maxLevel=%s" %(max(levels)))
     vim.command("let l:nodesNumber=%s" %(len(bnodes)))
-    nodesWithChildren = len([i for i in xrange(1,len(bnodes)+1) if voom.nodeHasChildren(body,i)])
+    nodesWithChildren = len([i for i in xrange(1,len(bnodes)+1) if voom.nodeHasChildren(VO,i)])
     vim.command("let l:nodesWithChildren=%s" %nodesWithChildren)
-    nodesWithoutChildren = len([i for i in xrange(1,len(bnodes)+1) if not voom.nodeHasChildren(body,i)])
+    nodesWithoutChildren = len([i for i in xrange(1,len(bnodes)+1) if not voom.nodeHasChildren(VO,i)])
     vim.command("let l:nodesWithoutChildren=%s" %nodesWithoutChildren)
     snLn = VO.snLn
     treeline = VO.Tree[snLn-1]
