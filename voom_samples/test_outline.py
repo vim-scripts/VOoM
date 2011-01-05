@@ -1,3 +1,4 @@
+# :Voom python
 # VOoM test file for Python outlining mode
 # no gotchas--oultine operations do not kill or create headlines
 # vim: et ts=4 sw=4 sts=4 fdm=manual

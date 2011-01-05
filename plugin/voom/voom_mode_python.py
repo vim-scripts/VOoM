@@ -1,8 +1,9 @@
 # voom_mode_python.py
-# VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+# Last Modified: 2010-12-09
+# VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
-# Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+# Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
 #          to the extent permitted by applicable law. You can redistribute it
 #          and/or modify it under the terms of the Do What The Fuck You Want To
@@ -10,20 +11,29 @@
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
 
 """
-VOoM markup mode for Python code. See |voom_mode_python|.
+VOoM markup mode for Python code.
+See |voom_mode_python|,  ../../doc/voom.txt#*voom_mode_python*
 """
 
 import token, tokenize
+#import traceback
 import vim
 
 def hook_makeOutline(VO, blines):
-    """Return (tlines, bnodes, levels) for list of Body lines.
-    blines can also be Vim buffer object.
+    """Return (tlines, bnodes, levels) for Body lines blines.
+    blines is either Vim buffer object (Body) or list of buffer lines.
     """
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
 
+#    try:
+#        ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
+#    except (IndentationError, tokenize.TokenError):
+#        # ??? printing traceback causes vim.error ???
+#        #traceback.print_exc()
+#        print traceback.format_exc()
+#        return (tlines, bnodes, levels)
     ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
 
     gotHead = False # True if current line is a headline
@@ -70,6 +80,7 @@ def hook_makeOutline(VO, blines):
             tlines_add(tline)
             bnodes_add(i+1)
             levels_add(lev)
+
     return (tlines, bnodes, levels)
 
 
@@ -175,7 +186,7 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
     if not levDelta: return
 
     indent = abs(levDelta) * ind
-    #--- copy/pasted from thevimoutliner mode ----------------------------
+    #--- copied from voom_mode_thevimoutliner.py -----------------------------
     if blnum1:
         assert blnum1 == VO.bnodes[tlnum1-1]
         if tlnum2 < len(VO.bnodes):

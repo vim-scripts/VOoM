@@ -1,8 +1,9 @@
 # voom_mode_rest.py
-# VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+# Last Modified: 2011-01-01
+# VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
-# Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+# Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
 #          to the extent permitted by applicable law. You can redistribute it
 #          and/or modify it under the terms of the Do What The Fuck You Want To
@@ -10,7 +11,9 @@
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
 
 """
-VOoM markup mode for reStructuredText, see |voom_mode_rest|.
+VOoM markup mode for reStructuredText.
+See |voom_mode_rest|,  ../../doc/voom.txt#*voom_mode_rest*
+
 http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html#sections
     The following are all valid section title adornment characters:
     ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~
@@ -24,7 +27,7 @@ Python recommended styles:   ##  **  =  -  ^  "
 try:
     import vim
     ENC = vim.eval('&enc')
-    if ENC in ['utf-8', 'ucs-2', 'ucs-2le', 'utf-16', 'utf-16le', 'ucs-4', 'ucs-4le']:
+    if ENC in ('utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'):
         ENC = 'utf-8'
 except ImportError:
     ENC = 'utf-8'
@@ -53,8 +56,8 @@ AD_CHARS = {}.fromkeys(AD_CHARS)
 
 
 def hook_makeOutline(VO, blines):
-    """Return (tlines, bnodes, levels) for list of Body lines.
-    blines can also be Vim buffer object.
+    """Return (tlines, bnodes, levels) for Body lines blines.
+    blines is either Vim buffer object (Body) or list of buffer lines.
     """
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
@@ -77,7 +80,7 @@ def hook_makeOutline(VO, blines):
     for i in xrange(Z):
         L2, L3 = L1, L2
         L1 = blines[i].rstrip()
-        # current line must be undereline and title line cannot be blank
+        # current line must be underline and title line cannot be blank
         if not (L1 and L2 and (L1[0] in AD_CHARS) and L1.lstrip(L1[0])==''):
             continue
         # underline must be as long as headline text
@@ -85,14 +88,14 @@ def hook_makeOutline(VO, blines):
             continue
         # there is no overline; L3 must be blank line; L2 must be not inset
         if not L3 and len(L2)==len(L2.lstrip()):
-            #if len(L2) <= len(L1):
+            #if len(L1) < len(L2.decode(ENC,'replace')): continue
             gotHead = True
             ad = L1[0]
             head = L2.strip()
             bnode = i
         # there is overline -- bnode is lnum of overline!
         elif L3==L1:
-            #if len(L2) <= len(L1):
+            #if len(L1) < len(L2.decode(ENC,'replace')): continue
             gotHead = True
             ad = L1[0]*2
             head = L2.strip()
@@ -130,7 +133,10 @@ def hook_newHeadline(VO, level, blnum, tlnum):
     ads_levels = VO.ads_levels
     levels_ads = dict([[v,k] for k,v in ads_levels.items()])
 
-    ad = get_adornment(levels_ads, ads_levels, level)
+    if level in levels_ads:
+        ad = levels_ads[level]
+    else:
+        ad = get_new_ad(levels_ads, ads_levels, level)
 
     if len(ad)==1:
         bodyLines = ['NewHeadline', ad*11, '']
@@ -138,7 +144,7 @@ def hook_newHeadline(VO, level, blnum, tlnum):
         ad = ad[0]
         bodyLines = [ad*11, 'NewHeadline', ad*11, '']
 
-    # Add blank line when Body line after which inserting is not blank.
+    # Add blank line when inserting after non-blank Body line.
     if VO.Body[blnum-1].strip():
         bodyLines[0:0] = ['']
 
@@ -146,9 +152,7 @@ def hook_newHeadline(VO, level, blnum, tlnum):
 
 
 #def hook_changeLevBodyHead(VO, h, levDelta):
-#    """Increase of decrease level number of Body headline by levDelta."""
-#    if levDelta==0: return h
-#    return h
+#    DO NOT CREATE THIS HOOK
 
 
 def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnumCut, tlnumCut):
@@ -197,8 +201,8 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
         update_bnodes(VO, tlnum2+1 ,1)
         b_delta+=1
 
-    ### Adjust levels of headlines in the affected region.
-    # Have to do this after Paste even if level is unchanged -- adornments can
+    ### Change levels and/or styles of headlines in the affected region.
+    # Always do this after Paste, even if level is unchanged -- adornments can
     # be different when pasting from other outlines.
     # Examine each headline, from bottom to top, and change adornment style.
     # To change from underline to overline style:
@@ -211,15 +215,19 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
     if levDelta or oop=='paste':
         ads_levels = VO.ads_levels
         levels_ads = dict([[v,k] for k,v in ads_levels.items()])
-        levels_ads_ = {}
+        # Add adornment styles for new levels. Can't do this in the main loop
+        # because it goes backwards and thus will add styles in reverse order.
+        for i in xrange(tlnum1, tlnum2+1):
+            lev = levels[i-1]
+            if not lev in levels_ads:
+                ad = get_new_ad(levels_ads, ads_levels, lev)
+                levels_ads[lev] = ad
+                ads_levels[ad] = lev
         for i in xrange(tlnum2, tlnum1-1, -1):
             # required level (VO.levels has been updated)
             lev = levels[i-1]
             # required adornment style
-            ad = levels_ads_.get(lev, None)
-            if not ad:
-                ad = get_adornment(levels_ads, ads_levels, lev)
-                levels_ads_[lev] = ad
+            ad = levels_ads[lev]
 
             # deduce current adornment style
             bln = bnodes[i-1]
@@ -298,22 +306,21 @@ def update_bnodes(VO, tlnum, delta):
         bnodes[i-1] += delta
 
 
-def get_adornment(levels_ads, ads_levels, level):
-    """Return adornment style for given level."""
-    if level in levels_ads:
-        ad = levels_ads[level]
-    else:
-        ad = None
-        for s in AD_STYLES:
-            if not s in ads_levels:
-                ad = s
-                break
-    return ad or levels_ads[len(levels_ads)]
+def get_new_ad(levels_ads, ads_levels, level):
+    """Return adornment style for new level, that is level missing from
+    levels_ads and ads_levels.
+    """
+    for ad in AD_STYLES:
+        if not ad in ads_levels:
+            return ad
+    # all 64 adornment styles are in use, return style for level 64
+    assert len(levels_ads)==64
+    return levels_ads[64]
 
 
 def deduce_ad_style(L1,L2,L3):
     """Deduce adornment style given first 3 lines of Body node.
-    1st line is headline, that is bnode line.
+    1st line is bnode line. Lines must be rstripped.
     """
     # '--' style    '-' style
     #
@@ -324,10 +331,10 @@ def deduce_ad_style(L1,L2,L3):
 
     # bnode is overline
     if L1==L3 and (L1[0] in AD_CHARS) and L1.lstrip(L1[0])=='' and (len(L1) >= len(L2.decode(ENC,'replace'))):
-        ad_ = 2*L1[0]
+        ad = 2*L1[0]
     # bnode is headline text
     elif (L2[0] in AD_CHARS) and L2.lstrip(L2[0])=='' and (len(L2) >= len(L1.decode(ENC,'replace'))):
-        ad_ = L2[0]
+        ad = L2[0]
     else:
         print L1
         print L2
@@ -335,7 +342,7 @@ def deduce_ad_style(L1,L2,L3):
         print ENC
         assert None
 
-    return ad_
+    return ad
 
     # wrong if perverse headline like this (correct ad style is '-')
     #

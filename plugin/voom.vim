@@ -1,14 +1,15 @@
 " voom.vim
-" VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+" Last Modified: 2011-01-02
+" VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 " plugin for Python-enabled Vim version 7.x
+" Version: 4.0b3
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
-" Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+" Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
 "          to the extent permitted by applicable law. You can redistribute it
 "          and/or modify it under the terms of the Do What The Fuck You Want To
 "          Public License, Version 2, as published by Sam Hocevar.
 "          See http://sam.zoy.org/wtfpl/COPYING for more details.
-" Version: 4.0b2, 2010-10-24
 
 
 "---Conventions-------------------------------{{{1
@@ -34,8 +35,8 @@
 
 
 "---Quickload---------------------------------{{{1
-if !exists('s:voom_did_load')
-    let s:voom_did_load = 'v4.0b2'
+if !exists('s:voom_did_quickload')
+    let s:voom_did_quickload = 'v4.0b3'
     com! -complete=custom,Voom_Complete -nargs=? Voom call Voom_Init(<q-args>)
     com! Voomhelp call Voom_Help()
     com! Voomlog  call Voom_LogInit()
@@ -50,6 +51,8 @@ if !exists('s:voom_did_init')
     let s:script_path = expand("<sfile>:p")
     let s:script_dir = expand("<sfile>:p:h")
     let s:voom_script_py = s:script_dir.'/voom/_voomScript_.py'
+
+    let s:voom_logbnr = 0
 
     " {tree : associated body,  ...}
     let s:voom_trees = {}
@@ -141,7 +144,7 @@ endif
 com! Voomunl call Voom_EchoUNL()
 com! -nargs=? Voomgrep call Voom_Grep(<q-args>)
 
-com! -nargs=? VoomSort call Voom_OopSort(<q-args>)
+com! -range -nargs=? VoomSort call Voom_OopSort(<line1>,<line2>, <q-args>)
 
 com! -range VoomFoldingSave    call Voom_OopFolding(<line1>,<line2>, 'save')
 com! -range VoomFoldingRestore call Voom_OopFolding(<line1>,<line2>, 'restore')
@@ -213,7 +216,7 @@ endfunc
 
 func! Voom_Complete(A,L,P) "{{{2
 " Argument completion for command :Voom.
-    return "wiki\nvimwiki\nviki\nrest\nhtml\npython\nthevimoutliner\nvimoutliner"
+    return "wiki\nvimwiki\nviki\nrest\nmarkdown\nhtml\npython\nthevimoutliner\nvimoutliner"
 endfunc
 
 
@@ -393,6 +396,15 @@ func! Voom_UnVoom(body,tree) "{{{2
 endfunc
 
 
+func! Voom_GetVar(var) "{{{2
+    return {a:var}
+" Allow external scripts to read script-local variables.
+" Example, move cursor to Log window in current tab
+" :let logwnr = bufwinnr(Voom_GetVar('s:voom_logbnr'))
+" :      if logwnr > 0 | exe logwnr.'wincmd w' | endif
+endfunc
+
+
 func! Voom_GetData() "{{{2
 " Allow external scripts and add-ons to read Vim-side Voom data.
     return [s:voom_bodies, s:voom_trees]
@@ -440,10 +452,7 @@ func! Voom_PrintData() "{{{2
 " Print Vim-side VOoM data.
     redir => voomData
     silent echo repeat('-', 60)
-    if exists('s:voom_logbnr')
-        silent echo 's:voom_logbnr --' s:voom_logbnr
-    endif
-    for v in ['s:voom_did_load', 's:voom_did_init', 's:script_dir', 's:script_path', 's:voom_script_py', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
+    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_script_py', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
         silent echo v '--' {v}
     endfor
     redir END
@@ -1477,9 +1486,6 @@ func! Voom_OopMarkStartup() "{{{3
         call Voom_ErrorMsg("VOoM: current line is hidden in fold")
         return
     endif
-    if ln==1
-        return
-    endif
 
     let lz_ = &lz | set lz
     if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
@@ -1504,11 +1510,11 @@ func! Voom_Oop(op, mode) "{{{3=
     let tree = bufnr('')
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 && a:op!='copy' | return | endif
+    if a:op!='copy' && Voom_BufEditable(body) < 0 | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     if ln_status=='hidden'
-        call Voom_ErrorMsg("VOoM: current line is hidden in fold")
+        call Voom_ErrorMsg("VOoM: node is hidden in fold")
         return
     endif
     " normal mode: use current line
@@ -1519,8 +1525,10 @@ func! Voom_Oop(op, mode) "{{{3=
         let [ln1,ln2] = [line("'<"),line("'>")]
         " before op: move cursor to ln1 or ln2
     endif
-    " don't touch first line
-    if ln1==1 | return | endif
+    if ln1==1
+        call Voom_ErrorMsg("VOoM (".a:op."): first Tree line cannot be operated on")
+        return
+    endif
     " set ln2 to last node in the last sibling branch in selection
     " check validity of selection
     python vim.command('let ln2=%s' %voom.voom_OopSelEnd())
@@ -1687,7 +1695,7 @@ func! Voom_OopFolding(ln1, ln2, action) "{{{3
 
     " can't deal with folds of node hidden in a fold
     if a:action!=#'cleanup' && Voom_FoldStatus(a:ln1)=='hidden'
-        call Voom_ErrorMsg("VOoM: current line is hidden in fold")
+        call Voom_ErrorMsg("VOoM: node is hidden in fold")
         return
     endif
 
@@ -1716,7 +1724,7 @@ func! Voom_OopFolding(ln1, ln2, action) "{{{3
     let &lz=lz_
 endfunc
 
-func! Voom_OopSort(qargs) "{{{3
+func! Voom_OopSort(ln1,ln2,qargs) "{{{3
 " Sort siblings of the currrent node according to options in qargs.
 " If one of the options is 'deep' -- also sort siblings in all subnodes.
 " Options are dealt with in the Python code.
@@ -1724,16 +1732,18 @@ func! Voom_OopSort(qargs) "{{{3
     " must be in Tree buffer
     let tree = bufnr('')
     if !has_key(s:voom_trees, tree)
-        call Voom_ErrorMsg("VOoM (VoomSort): this command must be executed in Tree buffer")
+        call Voom_ErrorMsg("VOoM (sort): this command must be executed in Tree buffer")
         return
     endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     if Voom_BufEditable(body) < 0 | return | endif
-    let ln = line('.')
-    let ln_status = Voom_FoldStatus(ln)
-    if ln_status=='hidden'
-        call Voom_ErrorMsg("VOoM (VoomSort): current line is hidden in fold")
+    if a:ln1 < 2 || a:ln2 < 2
+        call Voom_ErrorMsg("VOoM (sort): first Tree line cannot be operated on")
+        return
+    endif
+    if Voom_FoldStatus(a:ln1)=='hidden'
+        call Voom_ErrorMsg("VOoM (sort): line is hidden in fold")
         return
     endif
 
@@ -1748,10 +1758,10 @@ func! Voom_OopSort(qargs) "{{{3
     let l:blnShow = -1
     " Modify Body buffer. Tree buffer and outline data are not adjusted.
     keepj python voom.voom_OopSort()
-    " IMPORTANT: we rely on BufEnter au to update outline
+    " IMPORTANT: we rely on Tree BufEnter au to update outline
     call Voom_OopFromBody(body,tree,l:blnShow,0)
     if l:blnShow > 0
-        call Voom_OopShowTree(l:ln1, l:ln2, 'n')
+        call Voom_OopShowTree(l:lnum1, l:lnum2, a:ln1==a:ln2 ? 'n' : 'v')
     endif
 
     let &lz=lz_
@@ -1759,7 +1769,7 @@ func! Voom_OopSort(qargs) "{{{3
     " Sorting must not change the number of headlines!
     " (This is problem with reST and Python modes.)
     if Z != line('$')
-        call Voom_ErrorMsg("VOoM (VoomSort): ERROR has occurred during sorting!!!", "The number of headlines has changed!!!", "You must undo this sort!!!")
+        call Voom_ErrorMsg("VOoM (sort): ERROR has occurred during sorting!!!", "The number of headlines has changed!!!", "You must undo this sort!!!")
     endif
 endfunc
 
@@ -2202,7 +2212,7 @@ func! Voom_LogInit() "{{{2
 " Redirect Python stdout and stderr to Log buffer.
     let bnr_ = bufnr('')
     """" Log buffer exists, show it.
-    if exists('s:voom_logbnr')
+    if s:voom_logbnr
         if !bufloaded(s:voom_logbnr)
             python sys.stdout, sys.stderr = _voom_py_sys_stdout, _voom_py_sys_stderr
             python if 'pydoc' in sys.modules: del sys.modules['pydoc']
@@ -2211,7 +2221,7 @@ func! Voom_LogInit() "{{{2
                 exe 'bwipeout '.s:voom_logbnr
             endif
             let bnr = s:voom_logbnr
-            unlet s:voom_logbnr
+            let s:voom_logbnr = 0
             echoerr "VOoM: PyLog buffer" bnr "was not shut down properly. Cleanup has been performed. Execute the command :Voomlog again."
             return
         endif
@@ -2227,7 +2237,7 @@ func! Voom_LogInit() "{{{2
     """" Create Log buffer.
     call Voom_ToLogWin()
     silent edit __PyLog__
-    let s:voom_logbnr=bufnr('')
+    let s:voom_logbnr = bufnr('')
     " Configure Log buffer
     augroup VoomLog
         au! * <buffer>
@@ -2250,7 +2260,7 @@ endfunc
 
 
 func! Voom_LogBufUnload() "{{{2
-    if !exists('s:voom_logbnr') || expand("<abuf>")!=s:voom_logbnr
+    if !s:voom_logbnr || expand("<abuf>")!=s:voom_logbnr
         echoerr 'VOoM: internal error'
         return
     endif
@@ -2258,7 +2268,7 @@ func! Voom_LogBufUnload() "{{{2
     python if 'pydoc' in sys.modules: del sys.modules['pydoc']
     exe 'au! VoomLog * <buffer='.s:voom_logbnr.'>'
     exe 'bwipeout '.s:voom_logbnr
-    unlet! s:voom_logbnr
+    let s:voom_logbnr = 0
 endfunc
 
 
@@ -2266,13 +2276,17 @@ func! Voom_LogSyntax() "{{{2
 " Log buffer syntax highlighting.
 
     " Python tracebacks
-    syn match Title /^Traceback (most recent call last)/
-    syn match Title /^\u\h*Error/
-    syn region WarningMsg start="^Traceback (most recent call last)" end="^\u\h*Error.*" contains=Title keepend
+    syn match ErrorMsg /^Traceback (most recent call last):/
+    syn match ErrorMsg /^\u\h*Error/
+    syn match ErrorMsg /^vim\.error/
+    syn region WarningMsg start="^Traceback (most recent call last):" end="\%(^\u\h*Error.*\)\|\%(^\s*$\)\|\%(^vim\.error\)" contains=ErrorMsg keepend
+
+    "Vim exceptions
+    syn match ErrorMsg /^Vim.*:E\d\+:.*/
 
     " VOoM messages
+    syn match ErrorMsg /^ERROR: .*/
     syn match WarningMsg /^VOoM.*/
-    syn match WarningMsg /^ERROR: .*/
 
     syn match PreProc /^---end of Python script---/
     syn match PreProc /^---end of Vim script---/
@@ -2280,8 +2294,6 @@ func! Voom_LogSyntax() "{{{2
     " -> UNL separator
     syn match Title / -> /
 
-    syn match Type /^vim\.error/
-    syn match WarningMsg /^Vim.*:E\d\+:.*/
 endfunc
 
 
@@ -2295,7 +2307,7 @@ func! Voom_LogScroll() "{{{2
     if mode()=='c' | return | endif
 
     " This should never happen.
-    if !exists('s:voom_logbnr') || !bufloaded(s:voom_logbnr)
+    if !s:voom_logbnr || !bufloaded(s:voom_logbnr)
         echoerr "VOoM: internal error"
         return
     endif
@@ -2466,7 +2478,7 @@ func! Voom_Exec(qargs) "{{{2
         try
             @z
             echo '---end of Vim script---'
-        catch /.*/
+        catch
             call Voom_ErrorMsg(v:exception)
         endtry
         call setreg('z', reg_z, reg_z_mode)
@@ -2476,7 +2488,16 @@ func! Voom_Exec(qargs) "{{{2
         let fenc = &fenc!='' ? &fenc : &enc
         call insert(lines, '# -*- coding: '.fenc.' -*-')
         if writefile(lines, s:voom_script_py)==0
-            python voom.execScript()
+            " do not change, see ./voom/voom.py#id_20101214100357
+            if s:voom_logbnr
+                try
+                    python voom.execScript()
+                catch
+                    python print vim.eval('v:exception')
+                endtry
+            else
+                python voom.execScript()
+            endif
         endif
     endif
 endfunc

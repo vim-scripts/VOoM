@@ -1,5 +1,5 @@
- vimwiki markup mode test file
- converted from test_outline.txt
+  :Voom vimwiki
+  This is VOoM markup mode test file. Converted from **test_outline.txt**.
 
 findme findme2
 

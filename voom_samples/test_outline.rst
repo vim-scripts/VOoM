@@ -1,5 +1,6 @@
- rest markup mode test file, no gotchas
- converted from test_outline.txt
+  :Voom rest
+  This is VOoM markup mode test file. Converted from **test_outline.txt**.
+  NOTE: no gotchas, suitable for test suite
 
 findme findme2
 

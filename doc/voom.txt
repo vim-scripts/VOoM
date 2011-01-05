@@ -1,22 +1,25 @@
 *voom.txt*      Two-pane outliner and related utilities
-VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+Last Modified: 2011-01-04
+VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 plugin for Python-enabled Vim version 7.x
+Version: 4.0b3
 Website: http://www.vim.org/scripts/script.php?script_id=2657
-Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: This documentation is released under the Do What The Fuck You Want To
          Public License, Version 2. See http://sam.zoy.org/wtfpl/COPYING
-Version: 4.0b2, 2010-10-24
 
-Overview  . . . . . . . . . . . . . . . . . . . .|voom_overview|
-Requirements  . . . . . . . . . . . . . . . . . .|voom_requirements|
-Installation  . . . . . . . . . . . . . . . . . .|voom_install|
-Options . . . . . . . . . . . . . . . . . . . . .|voom_options|
-ALL MAPPINGS & COMMANDS . . . . . . . . . . . . .|voom_map|
-OUTLINING (:Voom) . . . . . . . . . . . . . . . .|voom_Voom|
-EXECUTING NODES (:Voomexec) . . . . . . . . . . .|voom_Voomexec|
-__PyLog__ BUFFER (:Voomlog) . . . . . . . . . . .|voom_Voomlog|
-Add-ons . . . . . . . . . . . . . . . . . . . . .|voom_addons|
-Implementation notes  . . . . . . . . . . . . . .|voom_notes|
+
+    Overview  . . . . . . . . . . . . . . . . . . . .|voom_overview|
+    Requirements  . . . . . . . . . . . . . . . . . .|voom_requirements|
+    Installation  . . . . . . . . . . . . . . . . . .|voom_install|
+    Options . . . . . . . . . . . . . . . . . . . . .|voom_options|
+    ALL MAPPINGS & COMMANDS . . . . . . . . . . . . .|voom_map|
+    OUTLINING (:Voom) . . . . . . . . . . . . . . . .|voom_Voom|
+    EXECUTING NODES (:Voomexec) . . . . . . . . . . .|voom_Voomexec|
+    __PyLog__ BUFFER (:Voomlog) . . . . . . . . . . .|voom_Voomlog|
+    Add-ons . . . . . . . . . . . . . . . . . . . . .|voom_addons|
+    Implementation notes  . . . . . . . . . . . . . .|voom_notes|
+
 
 ==============================================================================
 Overview   [[[1~
@@ -33,36 +36,48 @@ allows features not possible with other markups. See |fold-marker|. Markers are
 specified by option 'foldmarker'. End fold markers with levels are not
 supported.
 
-Current VOoM version can also work with several other markup formats that have
+Current VOoM version can handle several other markup formats that have
 headlines and support an outline structure. (Headlines are also called
-headings, headers, section headers, titles.) The following markup modes are
-available:
-    wiki (MediaWiki, headlines are surrounded by strings of =)
-    vimwiki
-    viki (Viki/Deplate plugin, Emacs Org-mode)
-    html (HTML heading tags, single line only).
-    rest (reStructuredText section titles)
-    python (Python code, kind of like a class browser)
-    thevimoutliner (The Vim Outlier plugin)
-    vimoutliner (VimOutliner plugin)
+headings, headers, section headers, titles.) Available markup modes:
+    wiki           |voom_mode_wiki|
+    vimwiki        |voom_mode_vimwiki|
+    viki           |voom_mode_viki|
+    rest           |voom_mode_rest|
+    markdown       |voom_mode_markdown|
+    html           |voom_mode_html|
+    thevimoutliner |voom_mode_thevimoutliner|
+    vimoutliner    |voom_mode_vimoutliner|
+    python         |voom_mode_python|
+
+
+FEATURES:
+    - Works with Vim buffers, not with files on disk as ctags-based tools.
+    - Automatic outline update on entering the Tree buffer.
+    - Not a 'filetype' plugin. Not tied to a particular outline format.
+      Has (almost) no side effects on the buffer being outlined.
+    - Fast and efficient enough to handle MB-sized files with >1000 headlines.
+      (Some modes can be slower.)
+    - Outline structure manipulation: move nodes Up/Down, Promote/Demote,
+      Copy/Cut/Paste, Insert New Headline, Sort in various ways.
+    - Command to search nodes, boolean AND/NOT search.
 
 
 There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
 
-:Voom       Create outline of the current buffer. Outline is constructed from
-            lines with start fold markers with level numbers, which become
-            headlines. Outline is displayed in a special buffer in a separate
-            window which emulates the tree pane of a two-pane outliner. Such
-            buffers are referred to as Tree buffers. The current buffer
-            becomes a Body buffer. Each Tree line is associated with a region
-            (usually a fold) of the corresponding Body called node. Nodes can
-            can be navigated and manipulated from the Tree: moved up/down,
-            promoted/demoted, copied/cut/pasted, marked/unmarked, etc.
-            See OUTLINING (|voom_Voom|) for details.
-
+:Voom
 :Voom {MarkupMode}
-            Create outline for headline markup other than start fold markers
-            with levels. See |voom_markup_modes|.
+            Scan the current buffer for headlines and construct an outline from
+            them. By default headlines are lines with start fold markers with
+            levels. Optional argument {MarkupMode} can specify a different
+            headline format, see above and |voom_markup_modes|.
+            Outline is displayed in a special buffer in a separate window which
+            emulates the tree pane of a two-pane outliner. Such buffers are
+            referred to as Tree buffers. The current buffer becomes a Body
+            buffer. Each Tree line is associated with a region (node) of the
+            corresponding source buffer (Body). Nodes can be navigated and
+            manipulated in the Tree: moved up/down, promoted/demoted,
+            copied/cut/pasted, marked/unmarked, sorted, etc.
+            See OUTLINING (|voom_Voom|) for details.
 
                                                  *voom_Voomhelp*
 :Voomhelp   Open help file voom.txt as outline in a new tabpage. If voom.txt
@@ -70,10 +85,12 @@ There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
             (:tab help voom.txt) so that all tags will be active.
 
 
-The VOoM plugin also includes two utilities useful when working with Vim and
-Python scripts. They can be used independently of the outlining functionality
-provided by the command :Voom. These utilities attempt to emulate similar
-features of Leo outlining editor.
+The VOoM plugin includes two utilities useful when working with Vim and Python
+scripts -- commands :Voomexec and :Voomlog. They can be used independently of
+the outlining functionality provided by the command :Voom. These commands
+attempt to emulate similar features of Leo outlining editor. A Python file with
+code snippets organized via fold markers, plus the command :Voomexec, plus the
+PyLog buffer is an alternative to running Python's interactive interpreter.
 
 :Voomexec   Execute text in the current node or fold as Vim script or Python
             script. This is useful for testing code snippets and for
@@ -82,12 +99,13 @@ features of Leo outlining editor.
             buffer that has folds and has fold method set to marker.
             See EXECUTING SCRIPTS (|voom_Voomexec|) for details.
 
-:Voomlog    Create scratch buffer __PyLog__ and redirect Python stdout and
-            stderr to that buffer. This is useful when developing Python
-            scripts and when scripting Vim with Python. This feature is not
-            related to folding or outlining and is completely independent from
-            the rest of the plugin.
+:Voomlog    Create scratch buffer __PyLog__ and redirect Python's stdout and
+            stderr to it. This is useful when developing Python scripts and
+            when scripting Vim with Python. This feature is not related to
+            folding or outlining and is completely independent from the rest of
+            the plugin.
             See __PyLog__ BUFFER (|voom_Voomlog|) for details.
+
 
 ==============================================================================
 QUICK DEMO (no installation needed)   [[[2~
@@ -136,8 +154,8 @@ To outline the most common Wiki format (headlines marked by strings of =) >
 To try Python Log Buffer feature: >
     :Vooml
     :py assert 2==3
-    :py for v in voom.VOOMS.values(): print v.bname
-    :py print u'\u2248 \u2260'
+    :py print u"\u042D \u042E \u042F"
+    :py import this
 
 ==============================================================================
 Limitations   [[[2~
@@ -236,6 +254,8 @@ VO, VimOutliner:
     http://www.vimoutliner.org/
 TVO, The Vim Outliner:
     http://vim.sourceforge.net/scripts/script.php?script_id=517
+VimOrganizer:
+    http://www.vim.org/scripts/script.php?script_id=3342
 
 Various Vim scripts with outlining functionality
 (there are probably many other):
@@ -349,6 +369,7 @@ Vim Options   [[[2~
 
 When outline of the current buffer is created by the command :Voom, the
 following Vim options determine how outline is constructed:
+(NOTE: not applicable when a markup mode is specified)
 
     - 'foldmarker' is used to obtain the start fold marker string. There is
       rarely a reason to change this option from default, which is {{{,}}} .
@@ -469,14 +490,14 @@ Example, use Ctrl-Return and Ctrl-Tab: >
 Various options   [[[3~
 
 g:voom_verify_oop   ~
-    Verify outline after every outline operation.
+    Verify outline after every outline operation (doesn't apply to :VoomSort).
     Default is 1 (enabled).
-    Set to 0 to disable.
+    Set to 0 to disable (not recommended, especially with markup modes).
 
     This option turns on outline verification after most outline operations.
     It will alert to outline corruption, which is very likely if there is a bug
-    in outline operation. The downside is that there is a performance hit when
-    the outline is large (>1000 headlines).
+    in outline operation. The downside is that there is a performance hit,
+    usually noticeable only with large outlines (>1000 headlines).
     NOTE: do not disable this option when using "rest" or "python" outlining
     modes -- these markups have some intrinsic problems.
 
@@ -613,7 +634,7 @@ yy                  Copy node(s). (n,v)
 
 pp                  Paste node(s) after current node. (n)
 
-        Mark/Unmark nodes
+        Mark/Unmark nodes |voom_special_marks|
 
 <LocalLeader>m      Mark node(s): add 'x' to Body headlines. (n,v)
 
@@ -623,10 +644,13 @@ pp                  Paste node(s) after current node. (n)
                     and remove '=' from all other headlines. (n)
 
 
-:VoomSort [options] Sort siblings of the current node. |voom_sort|
+:VoomSort [options] Sort siblings of node under the cursor. |voom_sort|
                     Options are: "deep" (also sort all descendant nodes),
                     "i" (ignore-case), "u" (Unicode-aware), "r" (reverse-sort),
                     "flip" (reverse), "shuffle".
+:[range]VoomSort [options]
+                    Sort siblings in the [range], start and end range lines
+                    must be different.
 
         SAVE/RESTORE TREE BUFFER FOLDING (TREE BUFFER)~
 
@@ -670,7 +694,7 @@ pp                  Paste node(s) after current node. (n)
 
 A bunch of extra commands is created if there exists variable
 "g:voom_create_devel_commands". These commands are useful only during VOoM
-development. See "Commands" node in voom.vim for details.
+development. See node "Commands" in ../plugin/voom.vim for details.
 
 ==============================================================================
 OUTLINING (:Voom)   [[[1o~
@@ -678,41 +702,52 @@ OUTLINING (:Voom)   [[[1o~
 ==============================================================================
 Create Outline   [[[2o~
                                                  *voom_Voom*
-:Voom       This command constructs outline of the current buffer and displays
-            it in a specially configured, non-modifiable buffer called Tree
-            buffer. The current buffer becomes a Body buffer.
+:Voom [MarkupMode]
+            Scan the current buffer for headlines, construct an indent-based
+            outline from them, and display it in a specially configured,
+            non-modifiable buffer called Tree buffer. The current buffer
+            becomes a Body buffer.
 
-The current buffer (Body) is scanned for lines with start fold markers with
-level numbers: {{{3, {{{1, etc. These lines, or headlines, are displayed
-in the corresponding Tree buffer as an outline using an indent-based folding.
-The level of each headline is set to the number after the fold marker.
+:Voom       By default headlines are lines with start fold markers with level
+            numbers: {{{3, {{{1, etc. The level of each headline is set to the
+            number after the fold marker. Headline text is part of line before
+            the fold marker (this can be customized).
 
-NOTE: End fold markers with levels, }}}1, }}}3, etc., are ignored and should
-not be used.
+            NOTE: End fold markers with levels, }}}1, }}}3, etc., are ignored
+            and should not be used.
 
-NOTE: Matching fold markers without level numbers, {{{ and }}}, are ignored.
-They are handy for folding small areas inside numbered folds, e.g. parts of
-functions. The region between {{{ and }}} should not contain fold markers with
-levels.
+            Matching fold markers without level numbers, {{{ and }}}, are
+            ignored. They are handy for folding small areas inside numbered
+            folds, e.g. parts of functions. The region between {{{ and }}}
+            should not contain fold markers with levels.
+
+            For best results, Body 'foldmethod' should be "marker"
+            (|fold-marker|). If this is the case, Body nodes are also folds.
+            This is not required. Body buffer folding has no effect on outline
+            construction or outline operations.
+
+:Voom {MarkupMode}
+            The format of headlines is specified by the {MarkupMode}, see
+            |voom_markup_modes|.
+
+NOTE: A TREE BUFFER IS NOT MODIFIABLE AND SHOULD NEVER BE EDITED DIRECTLY.
+It has many buffer-local mappings for navigating the outline and for performing
+outline operations. Most of Vim standard Normal and Visual text change commands
+are either disabled or remapped.
 
 Tree buffers are named {bufname}_VOOM{bufnr} where {bufname} and {bufnr} are
-the name and number of the corresponding Body buffer. Tree buffers have their
-'filetype' set to "voomtree".
+the name and number of the corresponding source buffer (Body). The 'filetype'
+of Tree buffers is set to "voomtree".
 
-A Tree buffer is displayed in a separate window which is configured to behave
-as the tree pane of a two-pane outliner. Every line in a Tree buffer is
-associated with a node of the corresponding Body.
+A Tree buffer is displayed in a separate window. It is configured to behave as
+the tree pane of a two-pane outliner. Every line in a Tree buffer is associated
+with a node of the corresponding Body.
 
-A "node" is a Body buffer range that begins with headline (line with start
-fold marker with level number) and ends before the next headline. The last
-node ends with the last buffer line. The region from start of buffer to the
-first headline (or end of buffer) is treated as a special node number 1 which
-can have zero lines.
-
-For best results, Body 'foldmethod' should be "marker" (|fold-marker|). If
-this is the case, Body nodes are also folds. But this is not required: Body
-buffer can use any folding method and its folds have no effect on outline
-construction and outline operations.
+Each "node" is a range of Body buffer lines beginning with headline and ending
+before the next headline (or end-of-buffer). The first Tree line (outline
+title) is treated as a special node number 1: it is associated with the region
+from start of Body buffer to its first headline (or end-of-file); it has zero
+lines if the first Body line is a headline.
 
 When a headline is selected in a Tree window (<Return>, <Up>, <Down>, <Left>,
 <Right>), the corresponding node is displayed in Body window. Nodes can be
@@ -726,11 +761,6 @@ modified since the last update (when Body's |b:changedtick-variable| is
 different). This update is the bottleneck that limits the size of outlines
 that can be edited comfortably.
 
-A TREE BUFFER IS NOT MODIFIABLE AND SHOULD NEVER BE EDITED DIRECTLY. It has
-many buffer-local mappings for navigating the outline and for performing
-outline operations. Most of Vim standard Normal and Visual text change
-commands are either disabled or remapped.
-
 A Body buffer is not configured in any substantial way by the command :Voom.
 It has only two VOoM-specific mappings: <Return> and <Tab> in Normal mode
 (local to buffer). These mappings select node under the cursor and cycle
@@ -738,9 +768,6 @@ between Body and Tree windows. These two mappings can be changed by the user,
 see |voom_shuttle_keys|. The user is responsible for setting all other Body
 settings to his liking: folding, indenting, syntax highlighting and so on
 (these are usually determined by Body 'filetype').
-
-NOTE: When using a markup mode, |voom_markup_modes|, the Body buffer is scanned
-for headline markers specified by the markup mode file.
 
 ==============================================================================
 About Fold Markers   [[[3~
@@ -750,7 +777,7 @@ of start fold markers with level numbers. When Body has 'foldmethod' set to
 "marker", lines in Tree buffer also represent Body folds.
 
 The start fold marker string is obtained from window-local option 'foldmarker'
-when outline is created with the command :Voom. For example, after >
+when outline is created by the command :Voom. For example, after >
     :set fmr=<<<,>>>
     :Voom
 the outline will be created from lines with <<<1, <<<2, <<<3, etc.
@@ -759,7 +786,7 @@ the outline will be created from lines with <<<1, <<<2, <<<3, etc.
 make sure to recreate the outline: delete Tree buffer and execute the command
 :Voom again.
 
-VOoM scans only for _start_ fold markers with level numbers. End fold markers
+VOoM scans only for **start** fold markers with level numbers. End fold markers
 with levels and fold markers without levels are ignored. This assumes that the
 user follows certain rules of using fold markers. These rules make a lot of
 sense and are similar to recommendations given in Vim help, see |fold-marker|.
@@ -802,10 +829,10 @@ node properties:
     'x'     - Node is marked. This is like a checked checkbox. If the node is
               marked, 'x' is displayed in the second column of Tree buffer.
     'o'     - Node is opened (expanded). The corresponding Tree buffer fold
-              will be opened when outline is created with the command :Voom.
+              will be opened when outline is created by the command :Voom.
               Obviously, this applies only to nodes with children.
     '='     - Startup node. This node will be selected when outline is created
-              with the command :Voom.
+              by the command :Voom.
 
 Various VOoM mappings and commands read and write these special marks.
 
@@ -884,12 +911,13 @@ or may not be selected.
 A node is selected by pressing <Return> (Tree or Body, Normal mode), or by
 selecting new node in Tree window with arrow keys or mouse left button click.
 
-It is possible to automatically select a node on startup. A startup node has
-character '=' in Body headline after the level number and after optional 'x'
-and 'o' marks. Tree mapping  <LocalLeader>=  inserts '=' in current node's
-Body headline and removes '=' marks from all other headlines. Next time, when
-outline is created by the command :Voom, the node with '=' will be
-automatically selected. (Does not apply when using markup mode.)
+It is possible to automatically select a node on startup. (This feature is not
+available when using a markup mode.) A startup node has character '=' in Body
+headline after the level number and after optional 'x' and 'o' marks
+(|voom_special_marks|). Tree mapping  <LocalLeader>= inserts '=' in current
+node's Body headline and removes '=' marks from all other headlines. Next time,
+when outline is created by the command :Voom, the node with '=' will be
+automatically selected.
 
 Related Tree mappings, Normal mode:
 =           Put cursor on currently selected node.
@@ -1038,6 +1066,9 @@ zc, zo, zM, zR, zv, etc.
             Note: zf, zF, zd, zD, zE are disabled in Trees.
 
 =           Put cursor on currently selected node.
+
+
+            Special Node Marks, |voom_special_marks|:
 
 +           Put cursor on startup node (node marked with '=' in Body
             headline), if any. Warn if there are several such nodes.
@@ -1207,8 +1238,8 @@ Often, it's easier to just edit Body buffer to insert a numbered fold marker.
 I wrote a simple plugin that helps with that:
     http://www.vim.org/scripts/script.php?script_id=2891
 
-NOTE: When a markup mode is used, new headline will be in different form.
-|voom_markup_modes|
+NOTE: When a markup mode is used, the format of new headline is determined by
+the markup mode, see |voom_markup_modes|. Text is always "NewHeadline".
 
 ==============================================================================
 Move/Copy/Cut/Paste Nodes   [[[3~
@@ -1249,6 +1280,8 @@ it must have start fold marker with level number unless a markup mode is used.
 ==============================================================================
 Mark/Unmark Nodes   [[[3~
 
+NOTE: Not available when a markup mode is used, |voom_markup_modes|.
+
 Marking node is like checking a checkbox. A node is marked/unmarked by
 adding/removing 'x' in Body headline after the start fold marker level number
 (|voom_special_marks|). The 'x' is also displayed in the Tree.
@@ -1269,28 +1302,31 @@ Related Tree mappings, Normal mode:
 x                   Go to next marked node.
 X                   Go to previous marked node.
 
-NOTE: Not available when a markup mode is used, |voom_markup_modes|.
-
 ==============================================================================
 Mark Node As Startup Node   [[[3~
 
-<LocalLeader>=      Mark current node as startup node. Normal mode.
+NOTE: Not available when a markup mode is used, |voom_markup_modes|.
 
-This command inserts '=' character in Body headline after the start fold
-marker level number and after optional 'x' and 'o' marks
-(|voom_special_marks|). The '=' mark is removed from all other Body headlines.
-This mark affects only Voom startup: last node marked with '=' is selected
+<LocalLeader>=      Mark current node as startup node. Normal mode only.
+
+This command inserts character '=' in Body headline after the start fold marker
+level number and after optional 'x' and 'o' marks (|voom_special_marks|). The
+'=' mark is removed from all other Body headlines.  If current line is the
+first Tree line (outline title), '=' are removed from all Body headlines.
+
+The '=' mark affects only Voom startup: last node marked with '=' is selected
 when outline is created for the first time by the command :Voom.
 
 Related Tree mappings, Normal mode:
 +                   Put cursor on the startup node, if any. Warn if there are
                     several such nodes. Mnemonic: + is Shift-=
 
-NOTE: Not available when a markup mode is used, |voom_markup_modes|.
-
 ==============================================================================
 Save/Restore Tree Folding   [[[3~
                                                  *voom_tree_folding*
+
+NOTE: Not available when a markup mode is used, |voom_markup_modes|.
+
 Opened/closed folds in a Tree buffer are equivalent to expanded/contracted
 nodes. VOoM allows to save and restore Tree buffer folding. To do this, it
 relies on special marks in Body headlines: character 'o' immediately after the
@@ -1339,8 +1375,6 @@ There as also the following Tree buffer mappings, Normal mode:
 
 Mnemonics for mappings:  Foldins Save/Restore, Folding All Save/Restore.
 
-NOTE: Not available when a markup mode is used, |voom_markup_modes|.
-
 ==============================================================================
 Sort Outline   [[[3~
                                                  *voom_sort*
@@ -1351,15 +1385,25 @@ same level and the same parent. This command must be executed in Tree buffer.
 :VoomSort           Sort siblings of the current node (node under the cursor).
                     Headlines are sorted by byte value, in ascending order.
 
+:[range]VoomSort    Sort siblings in the range. Start and end range lines must
+                    be different. See |[range]|.
+                    Note that if the range is actually one line, all siblings
+                    of the node at that line are sorted. E.g.,
+                        :57,57VoomSort
+                        :57VoomSort
+                    sorts siblings of node at Tree line 57.
+
 :VoomSort [options]
+:[range]VoomSort [options]
                     Sort according to options. Options are any combination of
                     the following words, separated by whitespace:
                              deep, i, u, r, flip, shuffle.
     OPTIONS:
 
-    deep            Deep (recursive) sort. Sort siblings of the current node
-                    and siblings of all descendants. When cursor is on the 1st
-                    or 2nd Tree line, entire outline is sorted.
+    deep            Deep (recursive) sort. Sort top level siblings and siblings
+                    of their descendants. When the cursor is on the 2nd Tree
+                    line (first headline) and no range is given, entire outline
+                    is sorted.
 
     i               Ignore-case. Case-insensitive sort. Without the "u" option
                     this should affect only A-Za-z letters. To handle other
@@ -1376,19 +1420,28 @@ same level and the same parent. This command must be executed in Tree buffer.
     shuffle         Shuffle nodes randomly.
 
 
-Example: perform deep sort, ignore-case, unicode-aware >
+Example 1, perform deep sort, ignore-case, Unicode-aware: >
     :VoomSort deep i u
+
+Example 2, sort siblings in Visual selection: >
+    :'<,'>VoomSort
+NOTE: make sure at least 2 lines are selected. Otherwise, the range contains
+only one line, which means all siblings of the selected line will be sorted.
+
 
 Sorting and reverse-sorting do not change relative order of nodes with equal
 headlines.
 
 Options "r", "flip", "shuffle" cannot be combined.
 
+
 It is easy to create custom commands that perform sorting with a particular set
 of options. For example, if you often do case-insensitive, non-recursive sort
 you can add the following line to vimrc: >
-    com! VoomSortI call Voom_OopSort('i u')
+    com! VoomSortI call Voom_OopSort(line('.'), line('.'), 'i u')
 The command :VoomSortI will be identical to ":VoomSort i u".
+It does not except a range. To make it work with a range: >
+    com! -range VoomSortI call Voom_OopSort(<line1>, <line2>, 'i u')
 
 ==============================================================================
 MARKUP MODES   [[[2~
@@ -1400,13 +1453,14 @@ necessary to specify the markup mode. For example, command >
 will try to create outline using MySuperDuperWiki markup mode.
 
 A markup mode is defined in Python module named "voom_mode_{MarkupName}.py".
-It can be located anywhere in Python search path. (Is this security risk?)
-The above command will try to import module "voom_mode_MySuperDuperWiki.py",
-which should modify the core code when handling this particular outline to
-accommodate idiosyncrasies of MySuperDuperWiki markup language.
+It can be located anywhere in Python search path. The above command will try
+to import module "voom_mode_MySuperDuperWiki.py", which should modify the core
+code when handling this particular outline to accommodate idiosyncrasies of
+MySuperDuperWiki markup language.
 
 A fully functional markup mode will support all major VOoM commands and outline
-operations. Not supported are operations that rely on special node marks:
+operations. Not supported are operations that rely on special node marks,
+|voom_special_marks|:
     - mark/unmark nodes
     - startup node
     - save/restore Tree folding.
@@ -1414,8 +1468,9 @@ operations. Not supported are operations that rely on special node marks:
 You can create your own command identical to the above command >
     :com! Voow call Voom_Init("MySuperDuperWiki")
 
-To customize or creating new markup mode: modify one of the existing
-voom_mode_{MarkupName}.py files, save it as voom_mode_{YourName}.py .
+To customize or create new markup mode: modify one of the existing
+voom_mode_{MarkupName}.py files, save it as voom_mode_{YourName}.py anywhere in
+Python search path.
 
 The following sections describe available markup modes. These modes are fully
 functional unless stated otherwise. Command line completion is available when
@@ -1425,7 +1480,7 @@ typing these modes: type ":Voom " and hit <Tab> or <C-d>.
 wiki   [[[3~
                                                  *voom_mode_wiki*
 :Voom wiki
-MODULE: .../plugin/voom/voom_mode_wiki.py
+MODULE: ../plugin/voom/voom_mode_wiki.py
 MediaWiki headline markup. This is the most common Wiki format. Should be
 suitable for Wikipedia, vim.wikia.com, etc. >
 
@@ -1452,11 +1507,11 @@ KNOWN PROBLEMS
 1) Headlines are not ignored inside <pre>, <nowiki> and other special blocks.
 
 2) Only trailing HTML comment tags are stripped.
-This valid headline is not recognized: >
+The following valid headline is not recognized: >
     <!-- comment -->=== missed me ===
 
-This is ok, but comment is displayed in Tree buffer: >
-    == headline level 2 <!-- comment --> ==
+A comment inside headline is ok, but it will be displayed in Tree buffer: >
+    == <!-- comment --> headline level 2 ==
 
 
 REFERENCES
@@ -1471,7 +1526,7 @@ http://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style#Section_headings
 vimwiki   [[[3~
                                                  *voom_mode_vimwiki*
 :Voom vimwiki
-MODULE: .../plugin/voom/voom_mode_vimwiki.py
+MODULE: ../plugin/voom/voom_mode_vimwiki.py
 Headline markup used by vimwiki plugin:
     http://www.vim.org/scripts/script.php?script_id=2226
 
@@ -1489,7 +1544,7 @@ Like wiki mode except that:
 viki   [[[3~
                                                  *voom_mode_viki*
 :Voom viki
-MODULE: .../plugin/voom/voom_mode_viki.py
+MODULE: ../plugin/voom/voom_mode_viki.py
 Headline markup used by Vim Viki/Deplate plugin:
     http://www.vim.org/scripts/script.php?script_id=861
     http://deplate.sourceforge.net/Markup.html#hd0010004
@@ -1504,13 +1559,13 @@ Also used in Emacs Org-mode:
     **** headline level 4
 
 First * must be at start of line.
-There must be a space after last * .
+There must be a whitespace after last * .
 
 ==============================================================================
 rest   [[[3~
                                                  *voom_mode_rest*
 :Voom rest
-MODULE: .../plugin/voom/voom_mode_rest.py
+MODULE: ../plugin/voom/voom_mode_rest.py
 Mode for outlining reStructuredText (reST) section titles.
     http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html#sections
     http://docutils.sourceforge.net/docs/user/rst/quickstart.html#sections
@@ -1519,16 +1574,16 @@ Mode for outlining reStructuredText (reST) section titles.
 For examples of reST files click "Show Source" or similar link on above pages.
 Vim has reST syntax highlighting, do :set ft=rst to enable.
 
-To customize the order in which adornment styles are used: modify module level
-constant AD_STYLES near the top of module. It's a string containing preferred
-adornment styles in order of preference.
+To customize the order in which adornment styles are used: modify constant
+AD_STYLES near the top of module. It's a string containing preferred adornment
+styles in order of preference.
 
 KNOWN PROBLEMS
 --------------
 
 1) Sort can make headlines disappear if some sections are not terminated with
 blank line (including last section, that is end of file). The command :VoomSort
-will detect that _after_ sort is finished and display an error message.
+will detect that **after** sort is finished and display an error message.
 Example, sorting nodes C and B kills node C because it is moved down after B. >
 
     =========
@@ -1537,11 +1592,11 @@ Example, sorting nodes C and B kills node C because it is moved down after B. >
 
     C level 2
     ---------
-    some text in node B
+    some text in node C
 
     B level 2
     ---------
-    some text in node C
+    some text in node B
     =========
     E level 1
     =========
@@ -1551,9 +1606,12 @@ insert blank line before headline if needed to prevent headline loss. E.g., it
 is safe to move node C down.
 
 
-2) Outline operations can generate errors and even mess up outline if there are
-inconsistent levels -- next node level incremented by >1.
-Example, errors when moving node D up: >
+2) Outline verification can fail after an outline operation if there are
+inconsistent levels, that is when node's level is incremented by >1. VOoM will
+complain about different Tree lines, different levels, and force outline
+update.
+
+Example 1. Errors when moving node D up. >
 
     A level 1
     ===========
@@ -1570,11 +1628,116 @@ Example, errors when moving node D up: >
     E level 3
     """""""""""
 
+Example 2. Errors when moving node C left. This is because node E is also moved
+left, even though it is in a different branch. >
+
+    A level 1
+    =========
+
+    B level 2
+    ---------
+
+    C level 3
+    +++++++++
+
+    D level 1
+    =========
+
+    E level 4
+    *********
+
+==============================================================================
+markdown   [[[3~
+                                                 *voom_mode_markdown*
+:Voom markdown
+MODULE: ../plugin/voom/voom_mode_markdown.py
+Mode for outlining Markdown headers.
+    http://daringfireball.net/projects/markdown/
+    http://daringfireball.net/projects/markdown/syntax#header
+    http://daringfireball.net/projects/markdown/dingus  --online demo
+    http://babelmark.bobtfish.net/ --derivatives
+    http://fletcherpenney.net/multimarkdown/ --MultiMarkdown
+
+There are two types of header styles. Both can be used in the same outline.
+
+Underline-style, levels 1 and 2 only: >
+    header level 1
+    ==============
+
+    header level 2
+    --------------
+
+Hashes-style: >
+    # header level 1
+    ## header level 2
+    ### header level 3 ###
+
+A blank line before or after a headline is optional.
+One = or - in column 1 is sufficient for underline-style.
+Spaces after opening #'s and before closing #'s are optional.
+Closing #'s are optional. Their number is not important.
+
+Differences from the actual Markdown parser (according to online demo):
+
+    - Hashes-style overrides underline-style. In Markdown, underline overrides
+      hashes: >
+        #### this is headline level 4, not level 2
+        ------------------------------------------
+<
+    - Line consisting only of hashes is interpreted as a blank headline.
+      For example, line "###" is blank headline at level 3. In contrast,
+      Markdown interprets it as header "#" at level 2, that is <h2>#</h2>.
+
+
+HOW OUTLINE OPERATIONS CHOOSE HEADLINE FORMAT
+---------------------------------------------
+
+When an outline operation changes headline level, it has to choose between
+several possible headline formats:
+    - When changing to level 1 or 2, choose underline-style or hashes-style.
+    - When using hashes-style, choose to add not to add closing hashes.
+
+Outline operations try to keep the format of headlines consistent throughout
+the current outline. The above ambiguities are resolved as follows:
+
+    A) If possible, preserve the current style of headline and closing hashes.
+        Demoting headline
+                         Headline
+                         ========
+        changes it to
+                         Headline
+                         --------
+        Demoting "# Headline" changes it to "## Headline".
+        Demoting "#Headline#" changes it to "##Headline##". And so on.
+
+    B) When a choice must be made between underline-style and hashes-style
+    (changing level from >2 to 1 or 2): the style of the first headline with
+    level 1 or 2 is used. The default (in case there are no headlines with
+    level 1 or 2) is to use underline-style.
+
+    C) When a choice must be made to add or not to add closing hashes (changing
+    from underline-style to hashes-style): the first headline which is in
+    hashes-style is checked. If it ends with "#", then closing hashes are
+    added. The default (in case there are no headlines in hashes-style) is to
+    add closing hashes.
+
+    The headline format is always chosen as in B) and C) above when:
+        - Inserting new headline.
+        - Pasting nodes (because we may paste from another outline with a
+          different style).
+
+
+OTHER NOTES
+------------
+If a headline is not preceded by a blank line, outline operations may add one.
+
+An underline-style headline should not contain leading or trailing #'s.
+
 ==============================================================================
 html   [[[3~
                                                  *voom_mode_html*
 :Voom html
-MODULE: .../plugin/voom/voom_mode_html.py
+MODULE: ../plugin/voom/voom_mode_html.py
 HTML heading tags. Single line only. >
 
     <h1>headline level 1</h1>
@@ -1594,83 +1757,10 @@ WARNING: When outlining real web page, moving nodes around will very likely
 screw up html.
 
 ==============================================================================
-python   [[[3~
-                                                 *voom_mode_python*
-:Voom python
-MODULE: .../plugin/voom/voom_mode_python.py
-Mode for outlining Python code. Kind of like a class browser.
-
-Headlines are
-
-    1) Lines that start with:
-        class
-        def
-        @
-        '### '    (special comment headline)
-        '#---'    (special comment headline)
-
-    2) First non-blank line after the end of any 'class' or 'def' block.
-       Note: Such headlines can be killed or created by an outline operation.
-
-Note that comment lines are not ignored. Their indent is significant and can
-influence the level of next headlines.
-
-Headline level is determined by indent relative to previous (smaller) indents.
-One tab equals one space (not eight). If indent is inconsistent, the headline
-is marked with '!!!' to indicate possible indent error.
-
-The mode uses tokenize.py to identify lines that should be ignored (multi-line
-strings and expressions), as well as lines with 'class' and 'def'.
-
-Outline update is slow with large files (>2000 lines, e.g, Tkinter.py).
-
-Note that tokenize.py also checks for inconsistent indenting and can raise
-exceptions in which case outline updated will not be completed.
-
-
-OUTLINE OPERATIONS
-------------------
-This mode have several intrinsic problems with outline operations. Do not
-disable post-operation outline verification (g:voom_verify_oop).
-
-Outline operations assume that the Body buffer has tab-related options set for
-work with the Python code being outlined as follows:
-    1. If 'et' is off, indenting is done with Tabs, one Tab for each level.
-    2. If 'et' is on, indenting is done with Spaces. The number of spaces is
-       set to the value of 'ts'.
-The above settings must match indentation style used by the Python code being
-outlined. If they don't, an outline operation will create wrong indents
-whenever a level must be changed. Outline verification after outline operation
-will detect that, display error messages, and force outline update.
-
-
-Outline operations can cause some headlines disappear and appear. This is not a
-bug but a confusing behavior. In the following code there are four headlines: >
-    def func1():    # headline
-        pass
-    a = 1           # headline (can disappear)
-    def func2():    # headline
-        pass
-    b = 1           # headline (can disappear)
-After "func2" is moved Up, line "b = 1" ceases to be a headline.  Outline
-verification will detect that and complain about wrong Tree size. To protect
-such fragile headline you can insert special comment headline: >
-    def func1():    # headline
-        pass
-    a = 1           # headline (can disappear)
-    def func2():    # headline
-        pass
-    ### b=1         # headline, persistent
-    b = 1
-
-Weirdly indented comment lines also can cause various confusing problems during
-outline operations.
-
-==============================================================================
 thevimoutliner   [[[3~
                                                  *voom_mode_thevimoutliner*
 :Voom thevimoutliner
-MODULE: .../plugin/voom/voom_mode_thevimoutliner.py
+MODULE: ../plugin/voom/voom_mode_thevimoutliner.py
 The Vim Outliner (TVO) format:
     http://www.vim.org/scripts/script.php?script_id=517
 
@@ -1710,13 +1800,97 @@ To >
 vimoutliner   [[[3~
                                                  *voom_mode_vimoutliner*
 :Voom vimoutliner
-MODULE: .../plugin/voom/voom_mode_vimoutliner.py
+MODULE: ../plugin/voom/voom_mode_vimoutliner.py
 VimOutliner format:
     http://www.vimoutliner.org/ 
 
 Headlines are lines with >=0 Tabs followed by any character except:
     : ; | > <
 Otherwise this mode is identical to the "thevimoutliner" mode.
+
+==============================================================================
+python   [[[3~
+                                                 *voom_mode_python*
+:Voom python
+MODULE: ../plugin/voom/voom_mode_python.py
+Mode for outlining Python code. Like a class browser except that regions
+between class and def blocks are also nodes.
+
+Headlines are
+
+    1) Lines that start with:
+        class
+        def
+        @
+        '### '    (special comment headline)
+        '#---'    (special comment headline)
+
+    2) First non-blank line after the end of any 'class' or 'def' block.
+       Note: Such headlines can be killed or created by an outline operation.
+
+Note that comment lines are not ignored. Their indent is significant and can
+influence the level of next headlines.
+
+Headline level is determined by indent relative to previous (smaller) indents.
+One tab equals one space (not eight). If indent is inconsistent, the headline
+is marked with '!!!' to indicate possible indent error.
+
+The mode uses tokenize.py to identify lines that should be ignored (multi-line
+strings and expressions), as well as lines with 'class' and 'def'.
+
+Outline update is slow with large files (>2000 lines, e.g, Tkinter.py).
+
+Note that tokenize.py also checks for inconsistent indenting and can raise
+exceptions in which case outline update will not be completed.
+
+
+OUTLINE OPERATIONS
+------------------
+This mode have several intrinsic problems with outline operations. Do not
+disable post-operation outline verification (g:voom_verify_oop).
+
+Outline operations assume that the Body buffer has tab-related options set for
+work with the Python code being outlined as follows:
+    1. If 'et' is off, indenting is done with Tabs, one Tab for each level.
+    2. If 'et' is on, indenting is done with Spaces. The number of spaces is
+       set to the value of 'ts'.
+The above settings must match indentation style used by the Python code being
+outlined. If they don't, an outline operation will create wrong indents
+whenever a level must be changed. Outline verification after outline operation
+will detect that, display error messages, and force outline update.
+
+
+Outline operations can cause some headlines to disappear. (It's not clear to me
+if they can appear.) This happens because regions between "class" and "def"
+blocks are also nodes. This is not a bug but a confusing behavior. In the
+following code there are four headlines: >
+    def func1():    # headline
+        pass
+    a = 1           # headline (can disappear)
+    def func2():    # headline
+        pass
+    b = 1           # headline (can disappear)
+After "func2" is moved Up, line "b = 1" ceases to be a headline.  Outline
+verification will detect that and complain about wrong Tree size. To protect
+such fragile headline you can insert special comment headline: >
+    def func1():    # headline
+        pass
+    a = 1           # headline (can disappear)
+    def func2():    # headline
+        pass
+    ### b=1         # headline (persistent)
+    b = 1
+
+Weirdly indented comment lines also can cause various confusing problems during
+outline operations.
+
+In summary:
+    - Errors "wrong Tree size" after outline operations are expected and can be
+      ignored. Such errors occur when nodes are moved and blocks of code
+      between class and def are merged.
+    - Errors "wrong levels", "wrong bnodes" indicate serious problems and must
+      not be ignored. Undo the operation after such an error. Make sure buffer
+      indent settings are set correctly to handle Python code.
 
 ==============================================================================
 Known Issues   [[[2~
@@ -1777,24 +1951,29 @@ The following happens when the command :Voomexec is executed:
 ---------------------------------
     a) If current buffer is a Tree buffer, the script text is set to that of
        the current node (including headline) and all descendant nodes. The
-       actual folding in the corresponding Body buffer does not matter and
-       fold markers without levels are ignored.
+       folding of the corresponding Body buffer does not matter.
 
     b) If current buffer is not a Tree buffer, the script text is set to that
-       of the current fold, including all subfolds. This obviously makes sense
-       only if 'foldmethod' is "marker". If 'foldmethod' is not "marker", the
-       command aborts and the script is not executed.
+       of the current fold, including all subfolds. This is most useful when
+       'foldmethod' is "marker". If 'foldmethod' is not "marker", the command
+       aborts and the script is not executed.
 
 3) The script is executed according to its type.
 -----------------------------------------------
     a) A "vim" script is executed by copying text into a register and
-       executing that register inside try/catch/endtry block.
+       executing that register inside try/catch/endtry block. If an error
+       occurs, v:exception is echoed. (v:throwpoint is useless.)
 
-    b) A "python" script is executed by first writing text to file
-       "voom/_voomScript_.py" in the "voom.vim" directory.
+    b) A "python" script is executed by first writing script text to file
+       "voom/_voomScript_.py" in the directory of "voom.vim".
        The file is then executed using execfile() inside try/except block.
        See http://docs.python.org/library/functions.html#execfile .
+
+       If __PyLog__ is enabled and an error occurs, Python traceback and Vim
+       v:exception are printed to __PyLog__.
+
        The following Python names are pre-defined: vim, voom.
+
        The first line of "_voomScript.py_" specifies encoding as per
        http://www.python.org/dev/peps/pep-0263/ . Encoding is obtained from
        Body's 'fenc' or, if it's empty, from 'enc'.
@@ -1873,25 +2052,25 @@ error occurs in the Python code.
 __PyLog__ BUFFER (:Voomlog)   [[[1~
                                                  *voom_Voomlog*
 :Voomlog        This command creates scratch buffer __PyLog__ and redirects
-                Python stdout and stderr to that buffer.
+                Python's stdout and stderr to that buffer.
 
 Subsequent Python print statements and error messages are appended to the
 __PyLog__ buffer instead of being printed on Vim command line.
 
-PyLog windows in all tabpages are scrolled automatically when something is
-printed to the PyLog buffer. If a tabpage has several PyLog windows, only the
-first one is scrolled. If the current tabpage has no PyLog windows, the
-Voomlog command can be used to create one.
+Windows with the __PyLog__ buffer are scrolled automatically in all tabpages
+when something is printed to the PyLog buffer. If a tabpage has several PyLog
+windows, only the first one is scrolled. If the current tabpage has no PyLog
+windows, the command :Voomlog will create one.
 
 To restore original stdout and stderr (that is Vim command line): unload,
 delete, or wipeout the __PyLog__ buffer (:bun, :bd, :bw).
 
-NOTE: the __PyLog__ buffer is configured to be wiped out when unloaded or
+NOTE: __PyLog__ buffer is configured to be wiped out when unloaded or
 deleted. 'bufhidden' is set to "wipe".
 
 The filetype of the PyLog buffer is set to "voomlog". Some syntax highlighting
-is added automatically to highlight Python error messages and common VOoM
-messages.
+is added automatically to highlight Python tracebacks, Vim error, and common
+VOoM messages.
 
 When Python attempts to print a unicode string, e.g. >
     :py print u'ascii test'
@@ -1913,13 +2092,23 @@ time.sleep(5)
 print datetime.datetime.now()
 ### ]]]
 
-2) Visiting other tabpages is very slow on Linux in GUI Vim (GTK). It's better
-to have PyLog only in the current tabpage.
 
-3) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
+2) Printing many lines one by one can take a long time. Instead of doing >
+    :py for i in range(1000): print i
+It is much faster to do >
+    :py print '\n'.join([str(i) for i in range(1000)])
+(It's also easier to undo.)
+
+
+3) Visiting other tabpages during automatic scrolling is slow on Linux in GUI
+Vim (GTK). It's better to have PyLog window only in the current tabpage.
+
+
+4) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
 The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
 
-4) In versions before 1.7 there was problem with the output of help(), which
+
+5) In versions before 1.7 there was problem with the output of help(), which
 apparently uses Lib/pydoc.py, which does something strange to output trailing
 \n. Steps to reproduce:
     1. Open new instance of Vim.
@@ -1942,7 +2131,7 @@ default features without modifying the core files.
 
 
 LOADING ADD-ONS
-
+---------------
 Some Vim script add-ons can be sourced at any time, which means they can be
 placed in $HOME/.vim/plugin/ like any other plugin.
 
@@ -1973,20 +2162,31 @@ The voom.py module should be accessed from within voom_addons.py as follows: >
 
 
 WRITING ADD-ONS
-
+---------------
 There is no special API. The following applies:
+
     - Python-side functions and data are available as attributes of module
       "voom.py". Python-side outline data for each Body are attributes of an
       instance of class VoomOutline (VO). These class instances are stored in
       dictionary voom.VOOMS, keys are Body buffer numbers: VO=voom.VOOMS[body].
+
     - All Vim functions in "voom.vim" are global and start with "Voom_".
+
     - Vim-side data are script-local. Two functions in "voom.vim" allow
-      external scripts to read "voom.vim" script-local data: Voom_GetBufInfo()
-      and Voom_GetData(). Sample add-on "voom_info.vim" shows how to use them.
+      external scripts to read "voom.vim" script-local outline data:
+          Voom_GetBufInfo()
+          Voom_GetData()
+      Sample add-on "voom_info.vim" shows how to use them.
+
+      Function Voom_GetVar(var) allows external scripts to read any "voom.vim"
+      script-local variable if it exists. Example (these vars always exist) >
+          :echo Voom_GetVar('s:voom_logbnr')
+          :echo Voom_GetVar('s:voom_trees')
+          :echo Voom_GetVar('s:voom_bodies')
 
 
 USING ADD-ONS TO ADD NEW FUNCTIONALITY
-
+--------------------------------------
 Add-ons can create global commands, menus and mappings. There is no easy way to
 create Tree-local mappings or commands. It might be possible to use the fact
 that Tree buffer filetype is set to "voomtree" and write a ftplugin.
@@ -1998,13 +2198,19 @@ how to do this.
 
 
 USING ADD-ONS TO CUSTOMIZE VOoM
-
+-------------------------------
 Add-ons can overwrite and modify core code functions and some data. Add-on
 "custom_headlines.vim" is an example of this approach. It shows how to
 customize construction of Tree headline text for individual filetypes.
 
 Such add-ons must be loaded after "voom.vim" has been sourced completely, that
 is via option g:voom_user_command as explained above.
+
+
+MARKUP MODES
+------------
+Markup modes are special kinds of add-ons. They change how outline is
+constructed and how outline operations are performed. See |voom_markup_modes|.
 
 ==============================================================================
 Implementation notes   [[[1~
@@ -2289,10 +2495,52 @@ see v3.0 notes.
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.0, 2010-xx-xx   [[[3o~
+v4.0, 2011-??-??   [[[3o~
 
+v4.0b3, 2011-01-04   [[[4x~
+
+New markup mode: markdown.
+
+Fixed severe bug in reST mode. Paste and level-changing outline operations were
+affected. One manifestation: when pasting into an empty outline all headlines
+become level 1.
+
+The command :VoomSort now accepts a line range in front of it. If a range is
+not a single line, siblings in the range are sorted.
+
+Changed how some outline operations handle the first Tree line (outline title):
+    - VoomSort now aborts if the first Tree line is selected. This is to be
+      consistent with other outline operations (Cut, Copy, Move) which also
+      require a valid range.
+    - Print error message when an operation is aborted because the first Tree
+      line is selected (Cut, Copy, Move, Sort).
+    - Mark Node as Startup is allowed: remove "=" marks from all headlines.
+
+Mode viki: allow any whitespace after last leading *, not just space.
+
+Outline operation Copy: do not display error message complaining about Body
+buffer being nomodifiable or readonly.
+
+Code refactoring
+----------------
+
+s:voom_logbnr now always exists. It is 0 if there is no Log buffer.
+
+New helper function Voom_GetVar(var) -- allows external scripts to read any
+"voom.vim" script-local variable such as s:voom_logbnr.
+
+:Voomexec -- improved printing of errors. When PyLog is not enabled,
+Python traceback is echoed as Vim error message. See
+    ../plugin/voom/voom.py#id_20101214100357
+
+Assign VO.marker and VO.marker_re to MARKER and MARKER_RE instead of 0 when
+foldmarker is default.  MARKER_RE object is reused, so this is still efficient.
+This eliminated the need for silly code
+    marker = VO.marker or MARKER
+    marker_re = VO.marker_re or MARKER_RE
+    
 ------------------------------------------------------------------------------
-v4.0b2, 2010-10-24   [[[4xo~
+v4.0b2, 2010-10-24   [[[4~
 
 New markup modes: rest (reStructuredText), python, thevimoutliner, vimoutliner.
 

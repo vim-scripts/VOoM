@@ -1,5 +1,6 @@
- wiki markup mode test file (MediaWiki)
- converted from test_outline.txt
+  :Voom wiki
+  This is VOoM markup mode test file. Converted from **test_outline.txt**.
+  NOTE: MediaWiki format, with fold markers
 
 findme findme2
 

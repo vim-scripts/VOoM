@@ -1,8 +1,9 @@
 # voom_mode_viki.py
-# VOoM (Vim Outliner of Markers): two-pane outliner and related utilities
+# Last Modified: 2010-12-09
+# VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
-# Author:  Vlad Irnov (vlad DOT irnov AT gmail DOT com)
+# Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
 #          to the extent permitted by applicable law. You can redistribute it
 #          and/or modify it under the terms of the Do What The Fuck You Want To
@@ -11,7 +12,8 @@
 
 """
 VOoM markup mode for headline markup used by Vim Viki/Deplate plugin, Emacs
-Org-mode. See |voom_mode_viki|.
+Org-mode.
+See |voom_mode_viki|,  ../../doc/voom.txt#*voom_mode_viki*
 
 * headline level 1
 some text
@@ -22,16 +24,16 @@ more text
 etc.
 
 First * must be at start of line.
-There must be a space after last * .
+There must be a whitespace after last * .
 """
 
 import re
-headline_match = re.compile(r'^(\*+) ').match
+headline_match = re.compile(r'^(\*+)\s').match
 
 
 def hook_makeOutline(VO, blines):
-    """Return (tlines, bnodes, levels) for list of Body lines.
-    blines can also be Vim buffer object.
+    """Return (tlines, bnodes, levels) for Body lines blines.
+    blines is either Vim buffer object (Body) or list of buffer lines.
     """
     Z = len(blines)
     tlines, bnodes, levels = [], [], []

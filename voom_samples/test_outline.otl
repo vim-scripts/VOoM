@@ -1,6 +1,5 @@
- thevimoutliner mode test file
- converted from test_outline.txt
-
+|  :Voom thevimoutliner
+|  This is VOoM markup mode test file. Converted from **test_outline.txt**.
 
 | findme findme2
 
@@ -116,9 +115,9 @@ tests
 
 		*/---not comment--- /*
 
-		<!-- Comment
+		\<!-- Comment
 
-		html head <!
+		html head \<!
 
 	Voomgrep tests
 	| :Voomg Spam and ham not bacon

@@ -4,24 +4,26 @@ VOoM (Vim Outliner of Markers) is a plugin for Vim that emulates a two-pane text
 
 Screenshots and an animation: http://vim-voom.webs.com/
 
-VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. See :help fold-marker. Markers are specified by option 'foldmarker'. (End fold markers with levels, }}}3, }}}2, etc. are not supported.)
+VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. (See :help fold-marker. Markers are specified by option 'foldmarker'. End fold markers with levels, }}}3, }}}2, etc. are not supported.)
 
 Current VOoM version can also work with several other markup formats that have headlines and support an outline structure. (Headlines are also called headings, headers, section headers, titles.) The following markup modes are available:
-        wiki  MediaWiki, headlines are surrounded by '='
-        vimwiki  vimwiki plugin (script_id=2226)
-        viki  Viki/Deplate plugin (script_id=861), Emacs Org-mode
-        rest  reStructuredText section titles
-        html  HTML heading tags, single line only
-        thevimoutliner  The Vim Outliner plugin (script_id=517)
-        vimoutliner  VimOutliner plugin
-        python  Python code class browser
+        wiki  -- MediaWiki, headlines are surrounded by '='
+        vimwiki  -- vimwiki plugin (script_id=2226)
+        viki  -- Viki/Deplate plugin (script_id=861), Emacs Org-mode
+        rest  -- reStructuredText section titles
+        markdown  -- Markdown, both header styles
+        html  -- HTML heading tags, single line only
+        thevimoutliner  -- The Vim Outliner plugin (script_id=517)
+        vimoutliner  -- VimOutliner plugin
+        python  -- Python code class browser
 
-MAIN FEATURES:
+FEATURES:
         - Works with Vim buffers, not with files on disk as ctags-based tools.
         - Automatic outline update on entering the Tree buffer.
-        - Not a 'filetype' plugin. Has (almost) no side effects on the buffer being outlined.
+        - Not a 'filetype' plugin. Not tied to a particular outline format. Has (almost) no side effects on the buffer being outlined.
         - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
         - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.
+        - Command to search nodes, boolean AND/NOT search.
 
 
 =========================================
@@ -30,10 +32,10 @@ MAIN FEATURES:
 There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
 
 :Voom
-        Create outline of the current buffer. Outline is constructed from lines with start fold markers with level numbers, which become headlines. Outline is displayed in a special buffer in separate window which emulates the tree pane of a two-pane outliner. Such buffers are referred to as Tree buffers. The current buffer becomes a Body buffer.
+        Create outline of the current buffer. Outline is constructed from lines with start fold markers with level numbers (specified by option &foldmarker). Outline is displayed in a special buffer in separate window which emulates the tree pane of a two-pane outliner. Such buffers are referred to as Tree buffers. The current buffer becomes a Body buffer.
 
 :Voom {MarkupMode}
-        Create outline for headline markup other than start fold markers with levels. See above for available markup modes.
+        Create outline from headlines in format defined by markup mode. See above for available modes.
 
 :Voomhelp
         Open help file voom.txt as outline in a new tabpage.
@@ -42,9 +44,9 @@ There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
         Execute text in the current node or fold as Vim script or Python script. This is useful for testing code snippets and for organizing scripts by segregating them into nodes or folds. This command can be used independently of the outlining functionality provided by the command :Voom.
 
 :Voomlog
-        Create scratch buffer __PyLog__ and redirect Python stdout and stderr to that buffer. This is useful when developing Python scripts and when scripting Vim with Python. This feature is completely independent from the rest of the plugin.
+        Create scratch buffer __PyLog__ and redirect Python's stdout and stderr to it. This is useful when developing Python scripts and when scripting Vim with Python. This feature is completely independent from the rest of the plugin.
 
-NOTE: commands Voomexec and Voomlog attempt to emulate similar features of Leo outlining editor.
+NOTE: commands Voomexec and Voomlog attempt to emulate similar features of Leo outlining editor. A Python file with code snippets organized via fold markers, plus the command :Voomexec, plus the PyLog buffer is an alternative to Python's interactive interpreter.
 
 
 =========================================
@@ -84,6 +86,7 @@ Edit a headline (line with a numbered fold marker) in voom.vim and go back into 
 <C-Up>, <C-Down> move node or a range of sibling nodes Up/Down.
 <C-Left>, <C-Right> move nodes Left/Right (promote/demote).
 (If the above CTRL mappings are not recognized by your Vim, you can also move nodes Up/Down/Left/Right with <LocalLeader>u/d/l/r .)
+
 
 Execute the command :Voomhelp to see all commands and mappings.
 
