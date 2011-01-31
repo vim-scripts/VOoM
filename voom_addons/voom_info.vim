@@ -2,6 +2,12 @@
 " It creates global command :VoomInfo which prints various outline information
 " about the current buffer if it's a VOoM buffer (Tree or Body)
 
+" This file can be sourced at any time like a regular Vim script. E.g., it can
+" be dropped in folder ~/.vim/plugin/ . Of course, VOoM has to be installed for
+" the command :VoomInfo to work.
+" This works because the name of command function starts with 'Voom_'
+
+
 com! VoomInfo call Voom_Info()
 
 func! Voom_Info()
@@ -21,7 +27,9 @@ func! Voom_Info()
     " Get Python-side data. This creates local vars.
     py voom_Info()
 
-    " print information
+    echo 'VOoM version:' Voom_GetVar('s:voom_did_quickload')
+    echo '__PyLog__ buffer number:' Voom_GetVar('s:voom_logbnr')
+    " print outline information
     echo 'VOoM outline for:' getbufline(tree,1)[0][1:]
     echo 'Current buffer is:' bufType
     echo 'Body buffer number:' body
@@ -50,7 +58,7 @@ def voom_Info():
     if snLn>1:
         selectedHeadline = treeline[treeline.find('|')+1:]
     else:
-        selectedHeadline = "top-of-file"
+        selectedHeadline = "top-of-buffer"
     vim.command("let [l:selectedNode,l:selectedHeadline]=[%s,'%s']" %(snLn, selectedHeadline.replace("'","''")))
     vim.command("let l:selectedNodeLevel=%s" %levels[snLn-1])
 EOF

@@ -1,5 +1,5 @@
 # voom_mode_markdown.py
-# Last Modified: 2011-01-03
+# Last Modified: 2011-01-08
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -63,7 +63,7 @@ def hook_makeOutline(VO, blines):
     # 0 or 1 -- True, use closing hashes (default); 2 -- False, do not use closing hashes
     useCloseHash = 0
 
-    gotHead = None
+    gotHead = False
     for i in xrange(Z):
         L2 = L1
         L1 = blines[i].rstrip()
@@ -87,7 +87,7 @@ def hook_makeOutline(VO, blines):
             continue
 
         if gotHead:
-            gotHead = None
+            gotHead = False
             if not useHash:
                 if lev < 3:
                     if L1.startswith('#'):

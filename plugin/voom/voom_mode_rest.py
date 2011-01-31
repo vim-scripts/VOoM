@@ -1,5 +1,5 @@
 # voom_mode_rest.py
-# Last Modified: 2011-01-01
+# Last Modified: 2011-01-08
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -76,7 +76,7 @@ def hook_makeOutline(VO, blines):
     # x y z
     L1, L2, L3 = '','',''
 
-    gotHead = None
+    gotHead = False
     for i in xrange(Z):
         L2, L3 = L1, L2
         L1 = blines[i].rstrip()
@@ -105,7 +105,7 @@ def hook_makeOutline(VO, blines):
             if not ad in ads_levels:
                 ads_levels[ad] = len(ads_levels)+1
             lev = ads_levels[ad]
-            gotHead = None
+            gotHead = False
             L1, L2, L3 = '','',''
 
             tline = '  %s|%s' %('. '*(lev-1), head)

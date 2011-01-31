@@ -16,10 +16,11 @@ Current VOoM version can also work with several other markup formats that have h
         thevimoutliner  -- The Vim Outliner plugin (script_id=517)
         vimoutliner  -- VimOutliner plugin
         python  -- Python code class browser
+        **Please email me if you would like support for your favorite lightweight markup language.**
 
 FEATURES:
         - Works with Vim buffers, not with files on disk as ctags-based tools.
-        - Automatic outline update on entering the Tree buffer.
+        - Automagic outline update on entering the Tree buffer.
         - Not a 'filetype' plugin. Not tied to a particular outline format. Has (almost) no side effects on the buffer being outlined.
         - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
         - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.

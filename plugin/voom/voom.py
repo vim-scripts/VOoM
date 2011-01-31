@@ -1,8 +1,8 @@
 # voom.py
-# Last Modified: 2011-01-02
+# Last Modified: 2011-01-28
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
-# Version: 4.0b3
+# Version: 4.0b4
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -78,7 +78,7 @@ def voom_Init(body): #{{{2
             VO.mmode = mode
             VO.bname += ', %s' %qargs
             mode_path = os.path.abspath(mode.__file__)
-            vim.command("call Voom_WarningMsg('VOoM: using mode ''%s'' [%s]')" %(qargs.replace("'","''"), mode_path.replace("'","''")))
+            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), mode_path.replace("'","''")))
         except ImportError:
             vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %module.replace("'","''"))
             return
@@ -116,7 +116,8 @@ def voom_TreeCreate(): #{{{2
 
     if VO.mmode:
         computeSnLn(body, blnr)
-        #vim.command('setl fdl=2')
+        # reST, wiki files often have most headlines at level >1
+        vim.command('setl fdl=2')
         return
 
     bnodes = VO.bnodes
@@ -358,7 +359,7 @@ def nodeUNL(VO, lnum): #{{{2
     """
     Tree = VO.Tree
     levels = VO.levels
-    if lnum==1: return ['top-of-file']
+    if lnum==1: return ['top-of-buffer']
     parents = nodeAncestors(VO,lnum)
     parents.append(lnum)
     heads = [Tree[ln-1].split('|',1)[1] for ln in parents]
@@ -392,9 +393,9 @@ def nodeSiblings(VO, lnum): #{{{2
 
 
 def rangeSiblings(VO, lnum1, lnum2): #{{{2
-    """Return lnums of siblings for nodes Tree range lnum1,lnum2.
+    """Return lnums of siblings for nodes in Tree range lnum1,lnum2.
     These are nodes with the same parent and level as lnum1 node.
-    First node (line 1) is never included, that is minimum lnum in results is 2.
+    First node (first Tree line) is never included, that is minimum lnum in results is 2.
     Return None if range is ivalid.
     """
     if lnum1==1: lnum1 = 2
@@ -455,7 +456,7 @@ def getSiblingsGroups(VO, siblings): #{{{2
 
 def voom_TreeSelect(): #{{{2
     # Get first and last lnums of Body node for Tree line lnum.
-    lnum = int(vim.eval('a:lnum'))
+    lnum = int(vim.eval('l:lnum'))
     body = int(vim.eval('l:body'))
     VO = VOOMS[body]
     VO.snLn = lnum
@@ -512,15 +513,11 @@ def voom_EchoUNL(): #{{{2
     UNL = ' -> '.join(heads)
     vim.command("let @n='%s'" %UNL.replace("'", "''"))
     for h in heads[:-1]:
-        h = h.replace("'", "''")
-        vim.command("echohl ModeMsg")
-        vim.command("echon '%s'" %h)
-        vim.command("echohl Title")
+        vim.command("echon '%s'" %(h.replace("'", "''")))
+        vim.command("echohl TabLineFill")
         vim.command("echon ' -> '")
-    h = heads[-1].replace("'", "''")
-    vim.command("echohl ModeMsg")
-    vim.command("echon '%s'" %h)
-    vim.command("echohl None")
+        vim.command("echohl None")
+    vim.command("echon '%s'" %(heads[-1].replace("'", "''")))
 
 
 def voom_Grep(): #{{{2
@@ -1427,6 +1424,8 @@ def voom_OopMarkStartup(): # {{{2
 #   ln, ln1, ln2  --Tree line number
 #
 # NOTE: Cursor position and window view are not restored here.
+# See also:
+#   ../../doc/voom.txt#id_20110120011733
 
 
 def voom_OopFolding(action): #{{{3
@@ -1489,13 +1488,15 @@ def foldingGet(ln1, ln2): #{{{3
 
 def foldingCreate(ln1, ln2, cFolds): #{{{3
     """Create folds in range ln1-ln2 from a list of closed folds in that range.
-    The list must be reverse sorted.
+    The list must be reverse sorted. Must not contain nodes without children.
     Executed in Tree buffer.
     """
     #cFolds.sort()
     #cFolds.reverse()
-    #vim.command('keepj normal! zR')
-    vim.command('%s,%sfoldopen!' %(ln1,ln2))
+    #vim.command('%s,%sfoldopen!' %(ln1,ln2))
+    # see  ../../doc/voom.txt#id_20110120011733
+    vim.command(r'try | %s,%sfoldopen! | catch /^Vim\%%((\a\+)\)\=:E490/ | endtry'
+            %(ln1,ln2))
     for ln in cFolds:
         vim.command('keepj normal! %sGzc' %ln)
 
@@ -1504,7 +1505,8 @@ def foldingFlip(VO, ln1, ln2, folds): #{{{3
     """Convert list of opened/closed folds in range ln1-ln2 into list of
     closed/opened folds.
     """
-    # This also eliminates lnums of nodes without children.
+    # Important: this also eliminates lnums of nodes without children,
+    # so we don't get Vim E490 (no fold found) error on :foldclose.
     folds = {}.fromkeys(folds)
     folds_flipped = []
     for ln in xrange(ln1,ln2+1):
@@ -1781,7 +1783,7 @@ def voom_GetBodyLines1(): #{{{2
 
     buftype = vim.eval('l:buftype')
     body = int(vim.eval('l:body'))
-    lnum = int(vim.eval('l:lnum'))
+    lnum = int(vim.eval('line(".")'))
     VO = VOOMS[body]
     if buftype=='body':
         lnum = bisect.bisect_right(VO.bnodes, lnum)

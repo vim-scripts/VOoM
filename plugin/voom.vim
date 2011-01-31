@@ -1,8 +1,8 @@
 " voom.vim
-" Last Modified: 2011-01-02
+" Last Modified: 2011-01-28
 " VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 " plugin for Python-enabled Vim version 7.x
-" Version: 4.0b3
+" Version: 4.0b4
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -36,7 +36,7 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voom_did_quickload')
-    let s:voom_did_quickload = 'v4.0b3'
+    let s:voom_did_quickload = 'v4.0b4'
     com! -complete=custom,Voom_Complete -nargs=? Voom call Voom_Init(<q-args>)
     com! Voomhelp call Voom_Help()
     com! Voomlog  call Voom_LogInit()
@@ -222,40 +222,47 @@ endfunc
 
 func! Voom_Help() "{{{2
 " Open voom.txt as outline in a new tabpage.
-    let bnr = bufnr('')
-    " already in voom.txt
-    if fnamemodify(bufname(bnr), ":t")==#'voom.txt'
-        if !has_key(s:voom_bodies, bnr)
-            setl fdm=marker fmr=[[[,]]]
-        endif
-        if &ft!=#'help'
-            set ft=help
-        endif
-        call Voom_Init('')
-        return
-    " in Tree for voom.txt
-    elseif has_key(s:voom_trees, bnr) && fnamemodify(bufname(s:voom_trees[bnr]), ":t")==#'voom.txt'
+    let help_path = fnamemodify(s:script_dir.'/../doc/voom.txt', ":p")
+    if !filereadable(help_path)
+        echoerr "VOoM: can't read help file:" help_path
         return
     endif
 
-    """"" if voom.vim is in /a/b, voom.txt is expected in /a/doc
-    let voom_help = fnamemodify(s:script_dir, ":h") . '/doc/voom.txt'
-    if !filereadable(voom_help)
-        echoerr "VOoM: can't read help file:" voom_help
-        return
+    """ voom.txt exists and is shown in some window in some tab -- go there
+    let help_bufnr =  bufnr(help_path)
+    if help_bufnr > 0
+        let alltabs = range(tabpagenr(),tabpagenr('$')) + range(1,tabpagenr()-1)
+        for tnr in alltabs
+            for bnr in tabpagebuflist(tnr)
+                if bnr == help_bufnr
+                    exe 'tabnext '.tnr
+                    exe bufwinnr(bnr).'wincmd w'
+                    " make sure critical settings are correct
+                    if &ft!=#'help'
+                        set ft=help
+                    endif
+                    if &fmr!=#'[[[,]]]' || &fdm!=#'marker'
+                        setl fmr=[[[,]]] fdm=marker
+                    endif
+                    " make sure outline is present
+                    call Voom_Init('')
+                    return
+                endif
+            endfor
+        endfor
     endif
 
-    """"" try help command
-    let voom_help_installed = 1
+    """ try help command
+    let help_installed = 1
     let tnr_ = tabpagenr()
     try
         silent tab help voom.txt
     catch /^Vim\%((\a\+)\)\=:E149/ " no help for voom.txt
-        let voom_help_installed = 0
+        let help_installed = 0
     catch /^Vim\%((\a\+)\)\=:E429/ " help file not found--removed after installing
-        let voom_help_installed = 0
+        let help_installed = 0
     endtry
-    if voom_help_installed==1
+    if help_installed==1
         if fnamemodify(bufname(""), ":t")!=#'voom.txt'
             echoerr "VOoM: internal error"
             return
@@ -269,8 +276,8 @@ func! Voom_Help() "{{{2
         exe 'tabnext '.tnr_
     endif
 
-    """"" open voom.txt as regular file
-    exe 'tabnew '.voom_help
+    """ open voom.txt as regular file
+    exe 'tabnew '.help_path
     if fnamemodify(bufname(""), ":t")!=#'voom.txt'
         echoerr "VOoM: internal error"
         return
@@ -703,6 +710,7 @@ func! Voom_TreeCreate(body) "{{{2
 
     call Voom_TreeConfig(a:body)
 
+    let l:blnShow = -1
     """ Create outline and draw Tree lines.
     let lz_ = &lz | set lz
     setl ma
@@ -715,7 +723,7 @@ func! Voom_TreeCreate(body) "{{{2
         python voom.voom_TreeCreate()
         let snLn = s:voom_bodies[a:body].snLn
         " Initial draw puts = on first line.
-        if snLn!=1
+        if snLn > 1
             keepj call setline(snLn, '='.getline(snLn)[1:])
             keepj call setline(1, ' '.getline(1)[1:])
         endif
@@ -726,25 +734,24 @@ func! Voom_TreeCreate(body) "{{{2
         let &lz=lz_
     endtry
 
-    if s:voom_bodies[a:body].mmode
-        setl fdl=2
-        return
+    """ Position cursor on snLn line. ../doc/voom.txt#id_20110125210844
+    keepj normal! gg
+    if snLn > 1
+        exe "normal! ".snLn."G0f|m'"
+        call Voom_TreeZV()
+        if line('w0')!=1 && line('w$')!=line('$')
+            normal! zz
+        endif
     endif
 
-    """ Show startup node.
-    exe 'normal! gg' . snLn . 'G'
-    call Voom_TreeZV()
-    call Voom_TreePlaceCursor()
-    if line('w0')!=1 && line('w$')!=line('$')
-        normal! zz
-    endif
-    " blnShow is created by voom_TreeCreate() when there is Body headline marked with =
-    if exists('l:blnShow')
+    "--- the end if markup mode ---
+    " blnShow is set by voom_TreeCreate() when there is Body headline marked with =
+    if l:blnShow > 0
         " go to Body
         let wnr_ = winnr()
         if Voom_ToBody(a:body) < 0 | return | endif
         " show fold at l:blnShow
-        exe 'normal! '.l:blnShow.'G'
+        exe 'keepj normal! '.l:blnShow.'G'
         if &fdm==#'marker'
             normal! zMzvzt
         else
@@ -790,7 +797,7 @@ endfunc
 
 
 func! Voom_TreeConfigWin() "{{{2
-" Set Tree window-local options.
+" Tree window-local options.
     setl foldenable
     setl foldtext=getline(v:foldstart).'\ \ \ /'.(v:foldend-v:foldstart)
     setl foldmethod=expr
@@ -804,7 +811,7 @@ endfunc
 
 
 func! Voom_TreeBufEnter() "{{{2
-" Tree's BufEnter au.
+" Tree BufEnter au.
 " Update outline if Body was changed since last update. Redraw Tree if needed.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
@@ -837,13 +844,13 @@ func! Voom_TreeBufEnter() "{{{2
     " When nodes are deleted by editing Body, snLn can get > last Tree lnum,
     " voom.updateTree() will change snLn to last line lnum
     if snLn_ != s:voom_bodies[body].snLn
-        normal! Gzv
+        keepj normal! Gzv
     endif
 endfunc
 
 
 func! Voom_TreeBufUnload() "{{{2
-" Tree's BufUnload au. Wipe out Tree and cleanup.
+" Tree BufUnload au. Wipe out Tree and cleanup.
     let tree = expand("<abuf>")
     if !exists("s:voom_trees") || !has_key(s:voom_trees, tree)
         echoerr "VOoM: internal error"
@@ -868,7 +875,7 @@ endfunc
 
 
 func! Voom_TreeSyntax(body) "{{{2
-" Default Tree buffer syntax highlighting.
+" Tree buffer default syntax highlighting.
     " first line
     syn match Title /\%1l.*/
 
@@ -894,199 +901,258 @@ func! Voom_TreeSyntax(body) "{{{2
 endfunc
 
 
-func! Voom_TreeMap() "{{{2
-" Mappings and commands local to a Tree buffer.
+func! Voom_TreeMap() "{{{2=
+" Tree buffer local mappings and commands.
     let cpo_ = &cpo | set cpo&vim
-    " Use noremap to disable keys.
-    " Use nnoremap and vnoremap to map keys to Voom functions, don't use noremap.
-    " Disable common text change commands. {{{
-    noremap <buffer><silent> i <Nop>
-    noremap <buffer><silent> I <Nop>
-    noremap <buffer><silent> a <Nop>
-    noremap <buffer><silent> A <Nop>
-    noremap <buffer><silent> o <Nop>
-    noremap <buffer><silent> O <Nop>
-    noremap <buffer><silent> s <Nop>
-    noremap <buffer><silent> S <Nop>
-    noremap <buffer><silent> r <Nop>
-    noremap <buffer><silent> R <Nop>
-    noremap <buffer><silent> x <Nop>
-    noremap <buffer><silent> X <Nop>
-    noremap <buffer><silent> d <Nop>
-    noremap <buffer><silent> D <Nop>
-    noremap <buffer><silent> J <Nop>
-    noremap <buffer><silent> c <Nop>
-    noremap <buffer><silent> p <Nop>
-    noremap <buffer><silent> P <Nop>
-    noremap <buffer><silent> . <Nop>
-    " }}}
 
-    " Disable undo (also case conversion). {{{
-    noremap <buffer><silent> u <Nop>
-    noremap <buffer><silent> U <Nop>
-    " this is Move Right in Leo
-    noremap <buffer><silent> <C-r> <Nop>
-    " }}}
+    """ disable keys that change text {{{
+" disable common text change commands
+noremap <buffer><silent> i <Nop>
+noremap <buffer><silent> I <Nop>
+noremap <buffer><silent> a <Nop>
+noremap <buffer><silent> A <Nop>
+noremap <buffer><silent> o <Nop>
+noremap <buffer><silent> O <Nop>
+noremap <buffer><silent> s <Nop>
+noremap <buffer><silent> S <Nop>
+noremap <buffer><silent> r <Nop>
+noremap <buffer><silent> R <Nop>
+noremap <buffer><silent> x <Nop>
+noremap <buffer><silent> X <Nop>
+noremap <buffer><silent> d <Esc>
+noremap <buffer><silent> D <Nop>
+noremap <buffer><silent> J <Nop>
+noremap <buffer><silent> c <Nop>
+noremap <buffer><silent> C <Nop>
+noremap <buffer><silent> p <Esc>
+noremap <buffer><silent> P <Nop>
+noremap <buffer><silent> . <Nop>
+noremap <buffer><silent> = <Nop>
+noremap <buffer><silent> <Ins> <Nop>
+noremap <buffer><silent> <Del> <Nop>
+noremap <buffer><silent> <C-x> <Esc>
+noremap <buffer><silent> < <Esc>
+noremap <buffer><silent> > <Esc>
 
-    " Disable creation/deletion of folds. {{{
-    noremap <buffer><silent> zf <Nop>
-    noremap <buffer><silent> zF <Nop>
-    noremap <buffer><silent> zd <Nop>
-    noremap <buffer><silent> zD <Nop>
-    noremap <buffer><silent> zE <Nop>
-    " }}}
+" disable undo (also case conversion)
+noremap <buffer><silent> u <Nop>
+noremap <buffer><silent> U <Nop>
+noremap <buffer><silent> <C-r> <Nop>
 
-    " Edit headline. {{{
-    nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit()<CR>
-    nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit()<CR>
-    nnoremap <buffer><silent> a :<C-u>call Voom_OopEdit()<CR>
-    nnoremap <buffer><silent> A :<C-u>call Voom_OopEdit()<CR>
-    " }}}
+" disable creation/deletion of folds
+noremap <buffer><silent> zf <Nop>
+noremap <buffer><silent> zF <Nop>
+noremap <buffer><silent> zd <Nop>
+noremap <buffer><silent> zD <Nop>
+noremap <buffer><silent> zE <Nop>
+    """ }}}
 
-    " Node selection and navigation. {{{
+    """ edit headline {{{
+nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit()<CR>
+nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit()<CR>
+nnoremap <buffer><silent> a :<C-u>call Voom_OopEdit()<CR>
+nnoremap <buffer><silent> A :<C-u>call Voom_OopEdit()<CR>
+    """ }}}
 
-    exe "nnoremap <buffer><silent> ".g:voom_return_key.     " :<C-u>call Voom_TreeSelect(line('.'), '')<CR>"
-    exe "vnoremap <buffer><silent> ".g:voom_return_key." <Esc>:<C-u>call Voom_TreeSelect(line('.'), '')<CR>"
-    "exe "vnoremap <buffer><silent> ".g:voom_return_key." <Nop>"
-    exe "nnoremap <buffer><silent> ".g:voom_tab_key.        " :<C-u>call Voom_ToTreeOrBodyWin()<CR>"
-    exe "vnoremap <buffer><silent> ".g:voom_tab_key.   " <Esc>:<C-u>call Voom_ToTreeOrBodyWin()<CR>"
-    "exe "vnoremap <buffer><silent> ".g:voom_tab_key.   " <Nop>"
+    """ node navigation and selection {{{
+"--- the following select node -----------
+exe "nnoremap <buffer><silent> ".g:voom_return_key." :<C-u>call Voom_TreeSelect(0)<CR>"
+exe "vnoremap <buffer><silent> ".g:voom_return_key." <Esc>:<C-u>call Voom_TreeSelect(0)<CR>"
+"exe "vnoremap <buffer><silent> ".g:voom_return_key." <Nop>"
+exe "nnoremap <buffer><silent> ".g:voom_tab_key." :<C-u>call Voom_ToTreeOrBodyWin()<CR>"
+exe "vnoremap <buffer><silent> ".g:voom_tab_key." <Esc>:<C-u>call Voom_ToTreeOrBodyWin()<CR>"
+"exe "vnoremap <buffer><silent> ".g:voom_tab_key." <Nop>"
 
-    " Put cursor on currently selected node.
-    nnoremap <buffer><silent> = :<C-u>call Voom_TreeToSelected()<CR>
-    " Put cursor on node marked with '=', if any.
-    nnoremap <buffer><silent> + :<C-u>call Voom_TreeToStartupNode()<CR>
+" MOUSE: Left mouse release. Triggered when resizing window with the mouse.
+nnoremap <buffer><silent> <LeftRelease> <LeftRelease>:<C-u>call Voom_TreeMouseClick()<CR>
+inoremap <buffer><silent> <LeftRelease> <LeftRelease><Esc>
+" disable Left mouse double click to avoid entering Visual mode
+nnoremap <buffer><silent> <2-LeftMouse> <Nop>
 
-    " Do not map <LeftMouse>. Not triggered on first click in the buffer.
-    " Triggered on first click in another buffer. Vim doesn't know what buffer
-    " it is until after the click.
-    " Left mouse release. Also triggered when resizing window with the mouse.
-    nnoremap <buffer><silent> <LeftRelease> <LeftRelease>:<C-u>call Voom_TreeMouseClick()<CR>
-    inoremap <buffer><silent> <LeftRelease> <LeftRelease><Esc>
-    " Disable Left mouse double click to avoid entering Visual mode.
-    nnoremap <buffer><silent> <2-LeftMouse> <Nop>
+nnoremap <buffer><silent> <Down> <Down>:<C-u>call Voom_TreeSelect(1)<CR>
+nnoremap <buffer><silent>   <Up>   <Up>:<C-u>call Voom_TreeSelect(1)<CR>
 
-    nnoremap <buffer><silent> <Space> :<C-u>call Voom_TreeToggleFold()<CR>
-    "vnoremap <buffer><silent> <Space> :<C-u>call Voom_TreeToggleFold()<CR>
+nnoremap <buffer><silent> <Left>  :<C-u>call Voom_TreeLeft()<CR>
+nnoremap <buffer><silent> <Right> :<C-u>call Voom_TreeRight()<CR>
 
-    nnoremap <buffer><silent> <Down> <Down>:<C-u>call Voom_TreeSelect(line('.'), 'tree')<CR>
-    nnoremap <buffer><silent>   <Up>   <Up>:<C-u>call Voom_TreeSelect(line('.'), 'tree')<CR>
+nnoremap <buffer><silent> x :<C-u>call Voom_TreeToMark(0)<CR>
+nnoremap <buffer><silent> X :<C-u>call Voom_TreeToMark(1)<CR>
 
-    nnoremap <buffer><silent> <Left>  :<C-u>call Voom_TreeLeft()<CR>
-    nnoremap <buffer><silent> <Right> :<C-u>call Voom_TreeRight()<CR>
+"--- the following don't select node -----------
 
-    nnoremap <buffer><silent> x :<C-u>call Voom_TreeNextMark(0)<CR>
-    nnoremap <buffer><silent> X :<C-u>call Voom_TreeNextMark(1)<CR>
-    " }}}
+nnoremap <buffer><silent> <Space> :<C-u>call Voom_TreeToggleFold()<CR>
+"vnoremap <buffer><silent> <Space> :<C-u>call Voom_TreeToggleFold()<CR>
 
-    " Outline operations. {{{
-    " Can't use Ctrl as in Leo: <C-i> is Tab; <C-u>, <C-d> are page up/down.
+" put cursor on the selected node
+nnoremap <buffer><silent> = :<C-u>call Voom_TreeToSelected()<CR>
+" put cursor on the node marked with '=', if any
+nnoremap <buffer><silent> + :<C-u>call Voom_TreeToStartupNode()<CR>
 
-    " insert new node
-    nnoremap <buffer><silent> <LocalLeader>i  :<C-u>call Voom_OopInsert('')<CR>
-    nnoremap <buffer><silent> <LocalLeader>I  :<C-u>call Voom_OopInsert('as_child')<CR>
+" go up to the parent node
+nnoremap <buffer><silent> P :<C-u>call Voom_Tree_Pco('P','n')<CR>
+" go up to the parent node and contract it
+nnoremap <buffer><silent> c :<C-u>call Voom_Tree_Pco('c','n')<CR>
+" go down to direct child node
+nnoremap <buffer><silent> o :<C-u>call Voom_Tree_Pco('o','n')<CR>
 
-    " move
-    nnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'n')<CR>
-    nnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'v')<CR>
-    vnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'v')<CR>
+" contract all siblings of current node
+nnoremap <buffer><silent> C :<C-u>call Voom_Tree_CO('zC','n')<CR>
+" contract all nodes in Visual selection
+vnoremap <buffer><silent> C :<C-u>call Voom_Tree_CO('zC','v')<CR>
+" expand all siblings of current node
+nnoremap <buffer><silent> O :<C-u>call Voom_Tree_CO('zO','n')<CR>
+" expand all nodes in Visual selection
+vnoremap <buffer><silent> O :<C-u>call Voom_Tree_CO('zO','v')<CR>
 
-    nnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'n')<CR>
-    nnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'v')<CR>
-    vnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'v')<CR>
+" go up to the previous sibling
+nnoremap <buffer><silent> K :<C-u>call Voom_Tree_KJUD('K','n')<CR>
+vnoremap <buffer><silent> K :<C-u>call Voom_Tree_KJUD('K','v')<CR>
+" go down to the next sibling
+nnoremap <buffer><silent> J :<C-u>call Voom_Tree_KJUD('J','n')<CR>
+vnoremap <buffer><silent> J :<C-u>call Voom_Tree_KJUD('J','v')<CR>
+" go up to the uppermost sibling
+nnoremap <buffer><silent> U :<C-u>call Voom_Tree_KJUD('U','n')<CR>
+vnoremap <buffer><silent> U :<C-u>call Voom_Tree_KJUD('U','v')<CR>
+" go down to the downmost sibling
+nnoremap <buffer><silent> D :<C-u>call Voom_Tree_KJUD('D','n')<CR>
+vnoremap <buffer><silent> D :<C-u>call Voom_Tree_KJUD('D','v')<CR>
+    """ }}}
 
-    nnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'n')<CR>
-    nnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'n')<CR>
-    nnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'v')<CR>
-    vnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'v')<CR>
-    vnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'v')<CR>
+    """ outline operations {{{
+" insert new node
+nnoremap <buffer><silent> <LocalLeader>i  :<C-u>call Voom_OopInsert('')<CR>
+nnoremap <buffer><silent> <LocalLeader>I  :<C-u>call Voom_OopInsert('as_child')<CR>
 
-    nnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'n')<CR>
-    nnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'n')<CR>
-    nnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'v')<CR>
-    vnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'v')<CR>
-    vnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'v')<CR>
+" move
+nnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'n')<CR>
+nnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'v')<CR>
+vnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'v')<CR>
 
-    " cut/copy/paste
-    nnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'n')<CR>
-    vnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'n')<CR>
+nnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'v')<CR>
+vnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'v')<CR>
 
-    nnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'n')<CR>
-    vnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'n')<CR>
+nnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'n')<CR>
+nnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'v')<CR>
+vnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'v')<CR>
+vnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'v')<CR>
 
-    nnoremap <buffer><silent>  pp  :<C-u>call Voom_OopPaste()<CR>
+nnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'n')<CR>
+nnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'n')<CR>
+nnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'v')<CR>
+vnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'v')<CR>
+vnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'v')<CR>
 
-    " mark/unmark
-    nnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'v')<CR>
+" cut/copy/paste
+nnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'n')<CR>
+vnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'v')<CR>
 
-    nnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'n')<CR>
-    vnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'v')<CR>
+nnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'n')<CR>
+vnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'v')<CR>
 
-    " mark node as selected node
-    nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voom_OopMarkStartup()<CR>
-    " }}}
+nnoremap <buffer><silent>  pp  :<C-u>call Voom_OopPaste()<CR>
 
-    " Save/Restore Tree folding. {{{
-    nnoremap <buffer><silent> <LocalLeader>fs  :<C-u>call Voom_OopFolding(line('.'),line('.'), 'save')<CR>
-    nnoremap <buffer><silent> <LocalLeader>fr  :<C-u>call Voom_OopFolding(line('.'),line('.'), 'restore')<CR>
-    nnoremap <buffer><silent> <LocalLeader>fas :<C-u>call Voom_OopFolding(1,line('$'), 'save')<CR>
-    nnoremap <buffer><silent> <LocalLeader>far :<C-u>call Voom_OopFolding(1,line('$'), 'restore')<CR>
-    " }}}
+" mark/unmark
+nnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'v')<CR>
 
-    " Various commands. {{{
-    "nnoremap <buffer><silent> <F1> :<C-u>call Voom_Help()<CR>
-    nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
-    " }}}
+nnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'v')<CR>
+
+" mark node as selected node
+nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voom_OopMarkStartup()<CR>
+    """ }}}
+
+    """ save/Restore Tree folding {{{
+nnoremap <buffer><silent> <LocalLeader>fs  :<C-u>call Voom_OopFolding(line('.'),line('.'), 'save')<CR>
+nnoremap <buffer><silent> <LocalLeader>fr  :<C-u>call Voom_OopFolding(line('.'),line('.'), 'restore')<CR>
+nnoremap <buffer><silent> <LocalLeader>fas :<C-u>call Voom_OopFolding(1,line('$'), 'save')<CR>
+nnoremap <buffer><silent> <LocalLeader>far :<C-u>call Voom_OopFolding(1,line('$'), 'restore')<CR>
+    """ }}}
+
+    """ various commands {{{
+" echo Tree headline
+nnoremap <buffer><silent> s :<C-u>echo getline('.')[(stridx(getline('.'),'<Bar>')+1):]<CR>
+
+" echo UNL
+nnoremap <buffer><silent> S :<C-u>call Voom_EchoUNL()<CR>
+
+"nnoremap <buffer><silent> <F1> :<C-u>call Voom_Help()<CR>
+nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
+    """ }}}
 
     let &cpo = cpo_
+    return
+    " Use noremap to disable keys. This must be done first.
+    " Use nnoremap and vnoremap in VOoM mappings, don't use noremap.
+    " Some keys should be disabled via <Esc> instead of <Nop>:
+    "       ../doc/voom.txt#id_20110121201243
+    "
+    " Do not map <LeftMouse>. Not triggered on first click in the buffer.
+    " Triggered on first click in another buffer. Vim probably doesn't know
+    " what buffer it is until after the click.
+    "
+    " Can't use Ctrl: <C-i> is Tab; <C-u>, <C-d> are page up/down.
+    " Use <LocalLeader> instead of Ctrl.
+    "
+    " Still up for grabs: R <C-x> <C-j> <C-k> <C-p> <C-n>
 endfunc
 
 
 "---Outline Navigation---{{{2
-" To select node from Tree, call Voom_TreeSelect().
-" Must return after calling Voom_TreeSelect() in case Body checks fail.
+" To select node from Tree, call Voom_TreeSelect().  ALWAYS return immediately
+" after calling Voom_TreeSelect() in case Body checks fail.
+"
+" To position cursor on | in Tree (not needed if Voom_TreeSelect() is called):
+"   call cursor(0,stridx(getline('.'),'|')+1)
+"       or
+"   normal! 0f|
 
-func! Voom_TreeSelect(lnum, focus) "{{{3
-" Select node corresponding to Tree line lnum.
+" Notes: ../doc/voom.txt#id_20110116213809
+
+
+func! Voom_TreeSelect(stayInTree) "{{{3
+" Select node corresponding to current Tree line.
 " Show correspoding node in Body.
-" Leave cursor in Body if cursor is already in selected node and focus!='tree'.
+" Leave cursor in Body if cursor is already in selected node and !stayInTree.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
+    let lnum = line('.')
     if Voom_BufLoaded(body) < 0 | return | endif
 
     let snLn = s:voom_bodies[body].snLn
 
     let lz_ = &lz | set lz
     call Voom_TreeZV()
-    call Voom_TreePlaceCursor()
+    call cursor(0,stridx(getline('.'),'|')+1)
 
     " compute l:nodeStart and l:nodeEnd Body lnums
     " set VO.snLn before going to Body in case outline update is forced
     python voom.voom_TreeSelect()
 
-    """" Mark new line with =. Remove old = mark.
-    if a:lnum!=snLn
+    """ Mark new line with =. Remove old = mark.
+    if lnum!=snLn
         setl ma | let ul_ = &ul | setl ul=-1
-        keepj call setline(a:lnum, '='.getline(a:lnum)[1:])
+        keepj call setline(lnum, '='.getline(lnum)[1:])
         keepj call setline(snLn, ' '.getline(snLn)[1:])
         setl noma | let &ul = ul_
-        let s:voom_bodies[body].snLn = a:lnum
+        let s:voom_bodies[body].snLn = lnum
     endif
 
-    """" Go to Body, show current node, and either come back or stay in Body.
+    """ Go to Body, show current node, and either come back or stay in Body.
     if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
     if Voom_BodyCheckTicks(body) < 0 | let &lz=lz_ | return | endif
 
     " Show Body node corresponding to current line in Tree.
     let bodyLnr = line('.')
-    let new_node_selected = (bodyLnr < l:nodeStart) || (bodyLnr > l:nodeEnd)
-    if new_node_selected
-        exe 'normal! '.nodeStart.'G'
+    let gotNewNode = (bodyLnr < l:nodeStart) || (bodyLnr > l:nodeEnd)
+    if gotNewNode
+        exe 'keepj normal! '.nodeStart.'G'
         " zt is affected by 'scrolloff'.
         if &fdm ==# 'marker'
             normal! zMzvzt
@@ -1095,9 +1161,9 @@ func! Voom_TreeSelect(lnum, focus) "{{{3
         endif
     endif
 
-    """" Go back to Tree after showing a different node in Body.
-    """" Otherwise, that is if Body's node was same as Tree's, stay in Body.
-    if (new_node_selected==1 || a:focus=='tree') && a:focus!='body'
+    """ Go back to Tree after showing new node in Body.
+    """ Stay in Body if Body's node is already the selected node.
+    if gotNewNode || a:stayInTree
         let wnr_ = winnr('#')
         if winbufnr(wnr_)==tree
             exe wnr_.'wincmd w'
@@ -1110,25 +1176,20 @@ func! Voom_TreeSelect(lnum, focus) "{{{3
 endfunc
 
 
-func! Voom_TreePlaceCursor() "{{{3
-" Place cursor before the headline.
-    let col = stridx(getline('.'),'|') + 1
-    if col==0
-        let col = 1
-    endif
-    call cursor('.', col)
-endfunc
-
-
 func! Voom_TreeZV() "{{{3
-" Make current line visible.
-" Like zv, but when current line starts a fold, do not automatically open that fold.
+" Make current line visible. Return -1 if it was hidden. Like zv, but when
+" current line starts a fold, do not open that fold.
     let lnum = line('.')
     let fc = foldclosed(lnum)
-    while fc < lnum && fc > 0
+    if fc < lnum && fc > 0
         normal! zo
         let fc = foldclosed(lnum)
-    endwhile
+        while fc < lnum && fc > 0
+            normal! zo
+            let fc = foldclosed(lnum)
+        endwhile
+        return -1
+    endif
 endfunc
 
 
@@ -1139,39 +1200,11 @@ func! Voom_TreeToLine(lnum) "{{{3
     else
         let offscreen = 1
     endif
-    exe 'normal! ' . a:lnum . 'G'
+    exe 'keepj normal! '.a:lnum.'G'
     call Voom_TreeZV()
-    call Voom_TreePlaceCursor()
+    call cursor(0,stridx(getline('.'),'|')+1)
     if offscreen==1
         normal! zz
-    endif
-endfunc
-
-
-func! Voom_TreeToSelected() "{{{3
-" Put cursor on selected node, that is on SnLn line.
-    let lnum = s:voom_bodies[s:voom_trees[bufnr('')]].snLn
-    call Voom_TreeToLine(lnum)
-endfunc
-
-
-func! Voom_TreeToStartupNode() "{{{3
-" Put cursor on startup node, if any: node marked with '=' in Body headline.
-" Warn if there are several such nodes.
-    let body = s:voom_trees[bufnr('')]
-    if s:voom_bodies[body].mmode
-        call Voom_ErrorMsg('VOoM: startup nodes are not available in this markup mode')
-        return
-    endif
-    " this creates l:lnums
-    python voom.voom_TreeToStartupNode()
-    if len(l:lnums)==0
-        call Voom_WarningMsg("VOoM: no nodes marked with '='")
-        return
-    endif
-    call Voom_TreeToLine(l:lnums[-1])
-    if len(l:lnums)>1
-        call Voom_WarningMsg("VOoM: multiple nodes marked with '=': ".join(l:lnums, ', '))
     endif
 endfunc
 
@@ -1202,87 +1235,252 @@ func! Voom_TreeMouseClick() "{{{3
     if virtcol('.')+1 >= virtcol('$') || col('.')-1 < stridx(getline('.'),'|')
         call Voom_TreeToggleFold()
     endif
-    call Voom_TreeSelect(line('.'), 'tree')
+    call Voom_TreeSelect(1)
 endfunc
 
 
 func! Voom_TreeLeft() "{{{3
-" Move to parent after first contracting node.
-    let lnum = line('.')
-
-    " line is hidden in a closed fold: make it visible
-    let fc = foldclosed(lnum)
-    if fc < lnum && fc > 0
-        while fc < lnum && fc > 0
-            normal! zo
-            let fc = foldclosed(lnum)
-        endwhile
-        normal! zz
-        call cursor('.', stridx(getline('.'),'|') + 1)
-        call Voom_TreeSelect(line('.'), 'tree')
+" Go to parent node, but first contract current node if it's expanded.
+    if Voom_TreeZV() < 0
+        call Voom_TreeSelect(1)
         return
     endif
+    let lnum = line('.')
+    if lnum==1 | return | endif
 
     let ind = stridx(getline(lnum),'|')
-    if ind < 0 | return | endif
-    let indn = stridx(getline(lnum+1),'|')
-
-    " line is in an opened fold and next line has bigger indent: close fold
-    if fc < 0 && (ind < indn)
+    " next line has bigger indent and line is an opened fold -- close fold
+    if stridx(getline(lnum+1),'|') > ind && foldclosed(lnum) < 0
         normal! zc
-        call Voom_TreeSelect(line('.'), 'tree')
-        return
+    " top level -- do not go anywhere
+    elseif ind < 3
+    " go to parent
+    else
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'bWe')
     endif
-
-    " root node: do not move
-    if ind==2
-        call cursor('.', stridx(getline('.'),'|') + 1)
-        call Voom_TreeSelect(line('.'), 'tree')
-        return
-    endif
-
-    " move to parent
-    let indp = ind
-    while indp>=ind
-        normal! k
-        let indp = stridx(getline('.'),'|')
-    endwhile
-    "normal! zz
-    call cursor('.', stridx(getline('.'),'|') + 1)
-    call Voom_TreeSelect(line('.'), 'tree')
+    call Voom_TreeSelect(1)
 endfunc
 
 
 func! Voom_TreeRight() "{{{3
-" Move to first child.
-    let lnum = line('.')
-    " line is hidden in a closed fold: make it visible
-    let fc = foldclosed(lnum)
-    if fc < lnum && fc > 0
-        while fc < lnum && fc > 0
-            normal! zo
-            let fc = foldclosed(lnum)
-        endwhile
-        normal! zz
-        call cursor('.', stridx(getline('.'),'|') + 1)
-        call Voom_TreeSelect(line('.'), 'tree')
+" Go to first child of current node.
+    if Voom_TreeZV() < 0
+        call Voom_TreeSelect(1)
         return
     endif
+    let lnum = line('.')
+    if lnum==1 | return | endif
 
-    " line is in a closed fold
-    if fc==lnum
+    " line is first line of a closed fold
+    if foldclosed(lnum)==lnum
         normal! zoj
-        call cursor('.', stridx(getline('.'),'|') + 1)
     " line is not in a closed fold and next line has bigger indent
     elseif stridx(getline(lnum),'|') < stridx(getline(lnum+1),'|')
         normal! j
-        call cursor('.', stridx(getline('.'),'|') + 1)
     endif
-    call Voom_TreeSelect(line('.'), 'tree')
+    call Voom_TreeSelect(1)
 endfunc
 
 
-func! Voom_TreeNextMark(back) "{{{3
+func! Voom_Tree_KJUD(action, mode) "{{{3
+" Move cursor to a sibling node as specified by action: U D K J.
+    if Voom_TreeZV() < 0
+        call cursor(0,stridx(getline('.'),'|')+1)
+        return
+    endif
+    let lnum = line('.')
+    if lnum==1 | return | endif
+
+    if a:mode==#'v'
+        let [ln1,ln2] = [line("'<"), line("'>")]
+    else
+        let [ln1,ln2] = [lnum, lnum]
+    endif
+
+    " make sure we are on the first line of visual selection
+    " node level is indent of first |
+    exe 'keepj normal! '.ln1.'G0f|'
+    let ind = virtcol('.')-1
+
+    " go to the uppermost sibling: up to parent, down to sibling
+    if a:action==#'U'
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'bWe')
+        if line('.') < lnum
+            call search('\m^[^|]\{'.(ind).'}|', 'We')
+        else
+            keepj normal! gg
+            call search('\m^[^|]\{'.(ind).'}|', 'We')
+        endif
+
+    " go to the downmost sibling: down to next elder, up to sibling
+    elseif a:action==#'D'
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'We')
+        if line('.') > lnum
+            call search('\m^[^|]\{'.(ind).'}|', 'bWe')
+        else
+            keepj normal! G0f|
+            call search('\m^[^|]\{'.(ind).'}|', 'bcWe')
+        endif
+
+    " go up to the previous sibling, stopline is parent
+    elseif a:action==#'K'
+        let stopline = search('\m^[^|]\{0,'.(ind-2).'}|', 'bWn')
+        for i in range(v:count1)
+            call search('\m^[^|]\{'.(ind).'}|', 'bWe', stopline)
+        endfor
+
+    " go down to the next sibling, stopline is next elder node
+    elseif a:action==#'J'
+        " must first move to the last sibling in Visual selection
+        let sibln = lnum
+        while sibln > 0
+            let sibln = search('\m^[^|]\{'.(ind).'}|', 'We', ln2)
+        endwhile
+        let stopline = search('\m^[^|]\{0,'.(ind-2).'}|', 'Wn')
+        for i in range(v:count1)
+            call search('\m^[^|]\{'.(ind).'}|', 'We', stopline)
+        endfor
+
+    endif
+
+    " restore and extend Visual selection
+    if a:mode==#'v'
+        let lnum = line(".")
+        if a:action==#'U' || a:action==#'K'
+            exe 'keepj normal! '.ln2.'GV'.lnum.'G0f|'
+        elseif a:action==#'D' || a:action==#'J'
+            exe 'keepj normal! '.ln1.'GV'.lnum.'G0f|'
+        endif
+    endif
+endfunc
+
+
+func! Voom_Tree_Pco(action, mode) "{{{3
+" action: P c o
+    if Voom_TreeZV() < 0
+        call cursor(0,stridx(getline('.'),'|')+1)
+        return
+    endif
+    let lnum = line('.')
+    if lnum==1 | return | endif
+
+    """ action 'P' or 'c': go up to parent, contract if 'c'
+    if a:action==#'c' || a:action==#'P'
+        keepj normal! 0f|
+        let ind = virtcol('.')-1
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'bWe')
+        if a:action==#'c' && line('.') < lnum
+            normal! zc
+        endif
+        return
+    " action 'o': go to first child node, same as Voom_TreeRight()
+    elseif a:action==#'o'
+        " line is first line of a closed fold
+        if foldclosed(lnum)==lnum
+            normal! zoj0f|
+            let fc = foldclosed(lnum)
+            if fc < lnum && fc > 0
+                normal! zo
+            endif
+        " line is not in a closed fold and next line has bigger indent
+        elseif stridx(getline(lnum),'|') < stridx(getline(lnum+1),'|')
+            normal! j0f|
+            let fc = foldclosed(lnum)
+            if fc < lnum && fc > 0
+                normal! zo
+            endif
+        endif
+    endif
+endfunc
+
+
+
+func! Voom_Tree_CO(action, mode) "{{{3
+" action: zC zO
+    if Voom_TreeZV() < 0
+        call cursor(0,stridx(getline('.'),'|')+1)
+        return
+    endif
+    let lnum = line('.')
+    if lnum==1 | return | endif
+
+    """ do 'zC' or 'zO' for all siblings of current node
+    if a:mode==#'n'
+        keepj normal! 0f|
+        let ind = virtcol('.')-1
+
+        let winsave_dict = winsaveview()
+
+        " go the uppermost sibling: up to parent, down to sibling
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'bWe')
+        if line('.') < lnum
+            let lnUp = search('\m^[^|]\{'.(ind).'}|', 'We')
+        else
+            keepj normal! gg
+            let lnUp = search('\m^[^|]\{'.(ind).'}|', 'We')
+        endif
+        exe 'keepj normal! '.lnum.'G0f|'
+
+        " go to the last subnode of the downmost sibling: down to elder node, up
+        call search('\m^[^|]\{0,'.(ind-2).'}|', 'We')
+        if line('.') > lnum
+            exe 'keepj normal! '.(line('.')-1).'G0f|'
+        else
+            keepj normal! G0f|
+        endif
+
+        try
+            "exe 'keepj normal! V'.lnUp.'GzC'
+            exe 'keepj normal! V'.lnUp.'G'.a:action
+        catch /^Vim\%((\a\+)\)\=:E490/
+        endtry
+
+        call winrestview(winsave_dict)
+        exe 'keepj normal! '.lnum.'G0f|'
+
+    """ do 'zC' or 'zO' for all nodes in Visual selection
+    elseif a:mode==#'v'
+        try
+            "normal! gvzC
+            exe 'normal! gv'.a:action
+        catch /^Vim\%((\a\+)\)\=:E490/
+        endtry
+    endif
+
+    call Voom_TreeZV()
+endfunc
+
+
+
+func! Voom_TreeToSelected() "{{{3
+" Put cursor on selected node, that is on SnLn line.
+    let lnum = s:voom_bodies[s:voom_trees[bufnr('')]].snLn
+    call Voom_TreeToLine(lnum)
+endfunc
+
+
+func! Voom_TreeToStartupNode() "{{{3
+" Put cursor on startup node, if any: node marked with '=' in Body headline.
+" Warn if there are several such nodes.
+    let body = s:voom_trees[bufnr('')]
+    if s:voom_bodies[body].mmode
+        call Voom_ErrorMsg('VOoM: startup nodes are not available in this markup mode')
+        return
+    endif
+    " this creates l:lnums
+    python voom.voom_TreeToStartupNode()
+    if len(l:lnums)==0
+        call Voom_WarningMsg("VOoM: no nodes marked with '='")
+        return
+    endif
+    call Voom_TreeToLine(l:lnums[-1])
+    if len(l:lnums)>1
+        call Voom_WarningMsg("VOoM: multiple nodes marked with '=': ".join(l:lnums, ', '))
+    endif
+endfunc
+
+
+func! Voom_TreeToMark(back) "{{{3
 " Go to next or previous marked node.
     if a:back==1
         normal! 0
@@ -1294,9 +1492,7 @@ func! Voom_TreeNextMark(back) "{{{3
     if found==0
         call Voom_WarningMsg("VOoM: there are no marked nodes")
     else
-        call Voom_TreeZV()
-        call cursor('.', stridx(getline('.'),'|') + 1)
-        call Voom_TreeSelect(line('.'), 'tree')
+        call Voom_TreeSelect(1)
     endif
 endfunc
 
@@ -1318,14 +1514,14 @@ func! Voom_OopEdit() "{{{3
     if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
     if Voom_BodyCheckTicks(body) < 0 | let &lz=lz_ | return | endif
 
-    exe 'normal! ' . l:bLnr.'G0'
+    exe 'keepj normal! '.l:bLnr.'G0'
     normal! zv
     " put cursor on the first word char before the foldmarker
     let foldmarker = split(&foldmarker, ',')[0]
     let markerIdx = match(getline('.'), '\V\C'.foldmarker)
     let wordCharIdx = match(getline('.'), '\<')
     if wordCharIdx < markerIdx
-        call cursor(line('.'), wordCharIdx+1)
+        call cursor(0, wordCharIdx+1)
     endif
     let &lz=lz_
 endfunc
@@ -1358,13 +1554,13 @@ func! Voom_OopInsert(as_child) "{{{3
     setl noma
 
     let snLn = s:voom_bodies[body].snLn
-    exe "normal! ".snLn."G"
-    call Voom_TreePlaceCursor()
+    exe "keepj normal! ".snLn."G"
+    call cursor(0,stridx(getline('.'),'|')+1)
     call Voom_TreeZV()
 
     if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
-    exe "normal! ".bLnum."G"
-    call cursor(line('.'), l:column)
+    exe "keepj normal! ".bLnum."G"
+    call cursor(0, l:column)
     normal! zvzz
     let &lz=lz_
 endfunc
@@ -1502,8 +1698,8 @@ func! Voom_OopMarkStartup() "{{{3
 endfunc
 
 
-func! Voom_Oop(op, mode) "{{{3=
-" Outline operations that can be perfomed on current node or on nodes in visual
+func! Voom_Oop(op, mode) "{{{3
+" Outline operations that can be perfomed on current node or on nodes in Visual
 " selection. All apply to branches, not to single nodes.
 
     " Checks and init vars. {{{
@@ -1546,7 +1742,7 @@ func! Voom_Oop(op, mode) "{{{3=
         if ln1<3 | let &lz=lz_ | return | endif
         if a:mode=='v'
             " must be on first line of selection
-            exe "normal! ".ln1."G"
+            exe "keepj normal! ".ln1."G"
         endif
         " ln before which to insert, also, new snLn
         normal! k
@@ -1572,7 +1768,7 @@ func! Voom_Oop(op, mode) "{{{3=
     elseif a:op=='down' " {{{
         if ln2==line('$') | let &lz=lz_ | return | endif
         " must be on the last node of current tree or last tree in selection
-        exe "normal! ".ln2."G"
+        exe "keepj normal! ".ln2."G"
         " line after which to insert
         normal! j
         let lnDn1 = line('.') " should be ln2+1
@@ -1648,7 +1844,7 @@ func! Voom_Oop(op, mode) "{{{3=
     elseif a:op=='cut' " {{{
         if a:mode=='v'
             " must be on first line of selection
-            exe "normal! ".ln1."G"
+            exe "keepj normal! ".ln1."G"
         endif
         " new snLn
         normal! k
@@ -1662,7 +1858,7 @@ func! Voom_Oop(op, mode) "{{{3=
         call setbufvar(tree, '&ma', 0)
 
         let s:voom_bodies[body].snLn = lnUp1
-        call Voom_TreePlaceCursor()
+        call cursor(0,stridx(getline('.'),'|')+1)
         " }}}
     endif
 
@@ -1725,7 +1921,8 @@ func! Voom_OopFolding(ln1, ln2, action) "{{{3
 endfunc
 
 func! Voom_OopSort(ln1,ln2,qargs) "{{{3
-" Sort siblings of the currrent node according to options in qargs.
+" Sort siblings in Tree range ln1:ln2 according to options qargs.
+" Sort siblings of the current node if range is one line (ln1==ln2).
 " If one of the options is 'deep' -- also sort siblings in all subnodes.
 " Options are dealt with in the Python code.
 
@@ -1798,7 +1995,7 @@ func! Voom_OopFromBody(body, tree, blnShow, setTick) "{{{3
 
     if a:blnShow > 0
         " show fold at blnShow
-        exe 'normal! '.a:blnShow.'G'
+        exe 'keepj normal! '.a:blnShow.'G'
         if &fdm==#'marker'
             normal! zMzvzt
         else
@@ -1833,9 +2030,9 @@ func! Voom_OopShowTree(ln1, ln2, mode) " {{{3
 " (select range, zC, show first line).
 
     " zv ensures ln1 node is expanded before next GV
-    exe 'normal! '.a:ln1.'Gzv'
+    exe 'keepj normal! '.a:ln1.'Gzv'
     " select range and close all folds in range
-    exe 'normal! '.a:ln2.'GV'.a:ln1.'G'
+    exe 'keepj normal! '.a:ln2.'GV'.a:ln1.'G'
     try
         normal! zC
     " E490: No fold found
@@ -1844,7 +2041,7 @@ func! Voom_OopShowTree(ln1, ln2, mode) " {{{3
 
     " show first node
     call Voom_TreeZV()
-    call Voom_TreePlaceCursor()
+    call cursor(0,stridx(getline('.'),'|')+1)
 
     " restore visual mode selection
     if a:mode=='v'
@@ -1907,7 +2104,7 @@ endfunc
 
 
 func! Voom_BodyMap() "{{{2
-" Create Body mappiings.
+" Body buffer local mappings.
     let cpo_ = &cpo | set cpo&vim
     exe "nnoremap <buffer><silent> ".g:voom_return_key." :<C-u>call Voom_BodySelect()<CR>"
     exe "nnoremap <buffer><silent> ".g:voom_tab_key.   " :<C-u>call Voom_ToTreeOrBodyWin()<CR>"
@@ -2041,7 +2238,7 @@ endfunc
 func! Voom_EchoUNL() "{{{2
 " Display UNL (Uniformed Node Locator) of current node.
 " Copy UNL to register 'n'.
-" This can be called from any buffer.
+" Can be called from any buffer.
     let bnr = bufnr('')
     let lnum = line('.')
 
@@ -2207,6 +2404,10 @@ endfunc
 
 
 "---LOG BUFFER (Voomlog)----------------------{{{1
+"
+" Use "normal! G" to position cursor and scroll Log window.
+" "call cursor('$',1)" does not scroll Log window.
+
 
 func! Voom_LogInit() "{{{2
 " Redirect Python stdout and stderr to Log buffer.
@@ -2228,7 +2429,7 @@ func! Voom_LogInit() "{{{2
         if bufwinnr(s:voom_logbnr) < 0
             call Voom_ToLogWin()
             silent exe 'b '.s:voom_logbnr
-            normal! G
+            keepj normal! G
             exe bufwinnr(bnr_).'wincmd w'
         endif
         return
@@ -2328,7 +2529,7 @@ func! Voom_LogScroll() "{{{2
                 let wnr__p = winnr('#')
                 " move to window with buffer bnr
                 exe 'noautocmd '. bufwinnr(bnr).'wincmd w'
-                normal! G
+                keepj normal! G
                 " restore tab's current and previous window numbers
                 exe 'noautocmd '.wnr__p.'wincmd w'
                 exe 'noautocmd '.wnr__.'wincmd w'
@@ -2346,7 +2547,7 @@ func! Voom_LogScroll() "{{{2
         "wincmd t | 10wincmd l | vsplit | wincmd l
         call Voom_ToLogWin()
         exe 'b '.s:voom_logbnr
-        normal! G
+        keepj normal! G
         " Return to original tab and buffer.
         exe 'tabn '.tnr_
         exe bufwinnr(bnr_).'wincmd w'
@@ -2364,7 +2565,7 @@ func! Voom_GetBodyLines(lnum) "{{{2
 " Any other buffer: lines from fold at line lnum, including subfolds.
 " Return [] if checks fail.
 
-    """"" Tree buffer: get lines from corresponding node.
+    """ Tree buffer: get lines from corresponding node.
     if has_key(s:voom_trees, bufnr(''))
         let body = s:voom_trees[bufnr('')]
         if Voom_BufLoaded(body) < 0 | return [] | endif
@@ -2380,7 +2581,7 @@ func! Voom_GetBodyLines(lnum) "{{{2
         return getbufline(body, nodeStart, nodeEnd)
     endif
 
-    """"" Regular buffer: get lines from current fold.
+    """ Regular buffer: get lines from current fold.
     if &fdm !=# 'marker'
         call Voom_ErrorMsg('VOoM: ''foldmethod'' must be "marker"')
         return []
@@ -2412,7 +2613,6 @@ func! Voom_GetBodyLines1() "{{{2
 " Return list of Body lines of node under the cursor.
 " This is for use by external scripts. Can be called from any buffer.
 " Return [-1] if lines cannot be obtained.
-    let lnum = line('.')
     let bnr = bufnr('')
     if has_key(s:voom_trees, bnr)
         let buftype = 'tree'
