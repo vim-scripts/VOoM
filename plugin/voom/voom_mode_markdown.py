@@ -1,5 +1,5 @@
 # voom_mode_markdown.py
-# Last Modified: 2011-01-08
+# Last Modified: 2011-02-10
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -117,27 +117,25 @@ def hook_makeOutline(VO, blines):
 
 
 def hook_newHeadline(VO, level, blnum, tlnum):
-    """Return (tree_head, bodyLines, column).
+    """Return (tree_head, bodyLines).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
-    column is cursor position in new headline in Body buffer.
     """
     tree_head = 'NewHeadline'
     if level < 3 and not VO.useHash:
-        column = 1
-        bodyLines = ['NewHeadline', levels_ads[level]*11, '']
+        bodyLines = [tree_head, levels_ads[level]*11, '']
     else:
-        column = level + 2
+        lev = '#'*level
         if VO.useCloseHash:
-            bodyLines = ['%s NewHeadline %s' %('#'*level,'#'*level), '']
+            bodyLines = ['%s %s %s' %(lev, tree_head, lev), '']
         else:
-            bodyLines = ['%s NewHeadline' %('#'*level), '']
+            bodyLines = ['%s %s' %(lev, tree_head), '']
 
     # Add blank line when inserting after non-blank Body line.
     if VO.Body[blnum-1].strip():
         bodyLines[0:0] = ['']
 
-    return (tree_head, bodyLines, column)
+    return (tree_head, bodyLines)
 
 
 #def hook_changeLevBodyHead(VO, h, levDelta):

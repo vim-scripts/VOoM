@@ -6,6 +6,9 @@ findme findme2
 h1
 ==
    1 body
+NEXT LINE IS FOR TEST SUITE -- DO NOT MOVE OR EDIT
+VO.levels=[1, 1, 2, 2, 1, 1, 2, 2, 3, 4, 3, 4, 5, 5, 2, 1, 2, 1, 2, 2, 3, 3, 4, 5, 5, 3, 2, 3, 2, 3, 2, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 3, 4, 4, 4, 4, 5, 5, 4, 4, 5, 5, 3, 3, 3, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 3, 2, 3, 3]
+
 
 h1.1
 ----
@@ -118,6 +121,8 @@ htests
 hsyntax tests
 -------------
 Since v2.1 comment chars before foldmarker are stripped according to filetype.
+Some Body filetypes have their own Tree syntax hi.
+
 
 ### h//---TODO comment--- // ###
 
@@ -131,11 +136,14 @@ print 'py ok'
 
 ### h/*---comment--- /* ###
 
-### h*/---not comment--- /* ###
-
 ### h&lt;!-- Comment ###
+ft=html,xml
 
 ### hhtml head &lt;! ###
+
+### h/organizer node/ ###
+
+### h!warning mark ###
 
 hVoomgrep tests
 ---------------
@@ -144,22 +152,22 @@ hVoomgrep tests
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
-### hn42 breakfast ###
+### hn44 breakfast ###
 eggs
 bacon
 
-### hn43 lunch ###
+### hn45 lunch ###
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
-### hn44 dinner ###
+### hn46 dinner ###
 eggs
 Spam
 ham
 
-### hn45 snack ###
+### hn47 snack ###
 bacon
 spam
 HAM

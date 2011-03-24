@@ -1,5 +1,5 @@
 # voom_mode_python.py
-# Last Modified: 2010-12-09
+# Last Modified: 2011-02-20
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -16,8 +16,9 @@ See |voom_mode_python|,  ../../doc/voom.txt#*voom_mode_python*
 """
 
 import token, tokenize
-#import traceback
+import traceback
 import vim
+
 
 def hook_makeOutline(VO, blines):
     """Return (tlines, bnodes, levels) for Body lines blines.
@@ -27,14 +28,18 @@ def hook_makeOutline(VO, blines):
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
 
-#    try:
-#        ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
-#    except (IndentationError, tokenize.TokenError):
-#        # ??? printing traceback causes vim.error ???
-#        #traceback.print_exc()
-#        print traceback.format_exc()
-#        return (tlines, bnodes, levels)
-    ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
+    #ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
+    try:
+        ignore_lnums, func_lnums = get_lnums_from_tokenize(blines)
+    except (IndentationError, tokenize.TokenError):
+        vim.command("call Voom_ErrorMsg('VOoM: EXCEPTION WHILE PARSING PYTHON OUTLINE')")
+        # DO NOT print to sys.stderr -- triggers Vim error when default stderr (no PyLog)
+        #traceback.print_exc()  --this goes to sys.stderr
+        #print traceback.format_exc() --ok but no highlighting
+        lines = traceback.format_exc().replace("'","''").split('\n')
+        for l in lines:
+            vim.command("call Voom_ErrorMsg('%s')" %l)
+        return (['= |!!!ERROR: OUTLINE IS INVALID'], [1], [1])
 
     gotHead = False # True if current line is a headline
     indents = [0,] # indents of previous levels
@@ -150,18 +155,14 @@ def get_body_indent(body):
 
 
 def hook_newHeadline(VO, level, blnum, tlnum):
-    """Return (tree_head, bodyLines, column).
+    """Return (tree_head, bodyLines).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
-    column is cursor position in new headline in Body buffer.
     """
     tree_head = '### NewHeadline'
     indent = get_body_indent(VO.body)
-    body_head = '%s### NewHeadline' %(indent*(level-1))
-    column = len(indent)*(level-1) + 1
-    #bodyLines = [body_head, '']
-    bodyLines = [body_head]
-    return (tree_head, bodyLines, column)
+    body_head = '%s%s' %(indent*(level-1), tree_head)
+    return (tree_head, [body_head])
 
 
 #def hook_changeLevBodyHead(VO, h, levDelta):

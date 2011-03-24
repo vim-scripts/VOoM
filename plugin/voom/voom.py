@@ -1,8 +1,8 @@
 # voom.py
-# Last Modified: 2011-01-28
+# Last Modified: 2011-03-15
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
-# Version: 4.0b4
+# Version: 4.0b5
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -68,17 +68,16 @@ def voom_Init(body): #{{{2
     # Body &filetype
     VO.filetype = vim.eval('&filetype')
 
-    VO.mmode = None
-    # check if user requested markup mode
-    qargs = vim.eval('a:qargs').strip()
+    # markup mode, l:qargs is mode's name
+    VO.mmode = 0
+    qargs = vim.eval('l:qargs').strip()
     if qargs:
         module = 'voom_mode_%s' %qargs
         try:
-            mode = __import__(module)
-            VO.mmode = mode
+            mmode = __import__(module)
+            VO.mmode = mmode
             VO.bname += ', %s' %qargs
-            mode_path = os.path.abspath(mode.__file__)
-            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), mode_path.replace("'","''")))
+            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), os.path.abspath(mmode.__file__).replace("'","''")))
         except ImportError:
             vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %module.replace("'","''"))
             return
@@ -170,8 +169,6 @@ def makeOutline(VO, blines): #{{{2
     # Python list. But overall time to do outline update is the same and memory
     # usage is less because we don't create new list (see v3.0 notes)
 
-    # Optimized for buffers in which most lines don't have fold markers.
-
     if VO.mmode:
         f = getattr(VO.mmode, 'hook_makeOutline', 0)
         if f: return f(VO,blines)
@@ -183,6 +180,7 @@ def makeOutline(VO, blines): #{{{2
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
     h = MAKE_HEAD.get(VO.filetype, 0)
     # NOTE: duplicate code, only head construction is different
+    # Optimized for buffers in which most lines don't have fold markers.
     if not h:
         c = VO.rstrip_chars
         for i in xrange(Z):
@@ -265,6 +263,7 @@ def updateTree(body,tree): #{{{2
     #tlines_ = Tree[:]
     if not len(Tree)==len(tlines):
         Tree[:] = tlines
+        vim.command('let l:ok=1')
         return
 
     # If only one line is modified, draw that line only. This ensures that
@@ -279,9 +278,13 @@ def updateTree(body,tree): #{{{2
                 diff = i
             else:
                 Tree[diff:] = tlines[diff:]
+                vim.command('let l:ok=1')
                 return
     if draw_one:
         Tree[diff] = tlines[diff]
+
+    vim.command('let l:ok=1')
+    # why l:ok is needed:  ../../doc/voom.txt#id_20110213212708
 
 
 def computeSnLn(body, blnr): #{{{2
@@ -461,18 +464,15 @@ def voom_TreeSelect(): #{{{2
     VO = VOOMS[body]
     VO.snLn = lnum
 
-    nodeStart =  VO.bnodes[lnum-1]
-    vim.command('let l:nodeStart=%s' %nodeStart)
+    vim.command('let l:blnum1=%s' %(VO.bnodes[lnum-1]))
 
-    if lnum==len(VO.bnodes): # last node
-        vim.command("let l:nodeEnd=%s" %(len(VO.Body)+1))
+    if lnum < len(VO.bnodes):
+        vim.command('let l:blnum2=%s' %(VO.bnodes[lnum]-1 or 1))
     else:
-        # "or 1" takes care of situation when:
-        # lnum is 1 (path info line);
-        # first Body line is a headline.
-        # In that case VO.bnodes is [1, 1, ...]
-        nodeEnd =  VO.bnodes[lnum]-1 or 1
-        vim.command('let l:nodeEnd=%s' %nodeEnd)
+        vim.command("let l:blnum2=%s" %(len(VO.Body)+1))
+    # "or 1" takes care of situation when:
+    # lnum is 1 (first Tree line) and first Body line is a headline.
+    # In that case VO.bnodes is [1, 1, ...] and (l:blnum1,l:blnum2) is (1,0)
 
 
 def voom_TreeToStartupNode(): #{{{2
@@ -647,15 +647,14 @@ def changeLevBodyHead(VO, h, levDelta): #{{{2
 
 
 def newHeadline(VO, level): #{{{2
-    """Return (tree_head, bodyLines, column).
+    """Return (tree_head, bodyLines).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
-    column is cursor position in new headline in Body buffer.
     """
     marker = VO.marker
     tree_head = 'NewHeadline'
-    bodyLines = ['---NewHeadline--- %s%s' %(marker,level), '']
-    return (tree_head, bodyLines, 4)
+    bodyLines = ['---%s--- %s%s' %(tree_head, marker, level), '']
+    return (tree_head, bodyLines)
 
 
 def setClipboard(s): #{{{2
@@ -750,20 +749,19 @@ def voom_OopInsert(as_child=False): #{{{2
         bLnum = len(Body)
 
     if not VO.mmode:
-        tree_head, bodyLines, column = newHeadline(VO,lev)
+        tree_head, bodyLines = newHeadline(VO,lev)
     else:
         f = getattr(VO.mmode, 'hook_newHeadline', 0)
         if f:
-            tree_head, bodyLines, column = f(VO,lev,bLnum,ln)
+            tree_head, bodyLines = f(VO,lev,bLnum,ln)
         else:
-            tree_head, bodyLines, column = newHeadline(VO,lev)
+            tree_head, bodyLines = newHeadline(VO,lev)
 
     treeLine = '= %s|%s' %('. '*(lev-1), tree_head)
-    vim.command('let l:column=%s' %column)
     Tree[ln:ln] = [treeLine]
     Body[bLnum:bLnum] = bodyLines
 
-    vim.command('let bLnum=%s' %(bLnum+1))
+    vim.command('let l:bLnum=%s' %(bLnum+1))
 
     # write = mark and set snLn to new headline
     Tree[ln] = '=' + Tree[ln][1:]
@@ -1265,8 +1263,8 @@ def voom_OopLeft(): #{{{2
     if levels[ln1-1]==1:
         vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
         return
-    # can't move left if the range is not at the end of tree
-    elif ln2!=len(levels) and levels[ln2]==levels[ln1-1]:
+    # don't move left if the range is not at the end of subtree
+    if ln2 < len(levels) and levels[ln2]==levels[ln1-1]:
         vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
         return
 
@@ -1767,36 +1765,34 @@ def voom_GetBodyLines(): #{{{2
     VO = VOOMS[body]
     ln1 = int(vim.eval('a:lnum'))
 
-    vim.command('let nodeStart=%s' %(VO.bnodes[ln1-1]) )
+    vim.command('let l:bln1=%s' %(VO.bnodes[ln1-1]) )
 
     ln2 = ln1 + nodeSubnodes(VO, ln1)
-    if ln2==len(VO.bnodes): # last line
-        vim.command('let nodeEnd="$"')
+    if ln2 < len(VO.bnodes):
+        vim.command('let l:bln2=%s' %(VO.bnodes[ln2]-1))
     else:
-        nodeEnd = VO.bnodes[ln2]-1
-        vim.command('let nodeEnd=%s' %nodeEnd )
-    # (nodeStart,nodeEnd) can be (1,0), see voom_TreeSelect()
-    # it doesn't matter here
+        vim.command('let l:bln2="$"')
+    # (l:bln1,l:bln2) can be (1,0), see voom_TreeSelect()
+    # this is what we want here
 
 
 def voom_GetBodyLines1(): #{{{2
-
-    buftype = vim.eval('l:buftype')
     body = int(vim.eval('l:body'))
-    lnum = int(vim.eval('line(".")'))
     VO = VOOMS[body]
+    lnum = int(vim.eval('a:lnum'))
+    buftype = vim.eval('l:buftype')
     if buftype=='body':
         lnum = bisect.bisect_right(VO.bnodes, lnum)
 
     bln1 =  VO.bnodes[lnum-1]
     vim.command("let l:bln1=%s" %bln1)
 
-    if lnum==len(VO.bnodes):
-        # last node
-        vim.command("let l:bln2='$'")
+    if lnum < len(VO.bnodes):
+        vim.command("let l:bln2=%s" %(VO.bnodes[lnum]-1))
     else:
-        bln2 =  VO.bnodes[lnum]-1 or 1
-        vim.command("let l:bln2=%s" %bln2)
+        vim.command("let l:bln2='$'")
+    # (l:bln1,l:bln2) can be (1,0), see voom_TreeSelect()
+    # this is what we want here
 
 
 def execScript(): #{{{2
@@ -1824,6 +1820,7 @@ def execScript(): #{{{2
         # We want Python traceback echoed as error message when printing on Vim
         # command line (no PyLog).  Writing to sys.stderr accomplishes that.
         #   :py sys.stderr.write('oopsy-doopsy')
+        # Note: writing to default sys.stderr (no PyLog) triggers Vim error.
         #
         # Vim code:
         #
@@ -1840,6 +1837,7 @@ def execScript(): #{{{2
         # extra lines on top with Vim error.
         #   Error detected while processing function Voom_Exec:
         #   line 63:
+        # This because printing to Vim default sys.stderr triggers Vim error.
         #
 
 

@@ -1,8 +1,8 @@
 *voom.txt*      Two-pane outliner and related utilities
-Last Modified: 2011-01-30
+Last Modified: 2011-03-24
 VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 plugin for Python-enabled Vim version 7.x
-Version: 4.0b4
+Version: 4.0b5
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: This documentation is released under the Do What The Fuck You Want To
@@ -27,7 +27,7 @@ Overview   [[[1~
 VOoM (Vim Outliner of Markers) is a plugin for Vim that emulates a two-pane
 text outliner.
 
-Screenshots and an animation: http://vim-voom.webs.com/
+Screenshots and an animation: http://vim-voom.github.com/
 
 VOoM was originally written to work with start fold markers with level numbers,
 such as in this help file. This is the most versatile outline markup -- it is
@@ -36,14 +36,15 @@ allows features not possible with other markups (|fold-marker|).
 Markers are specified by option 'foldmarker'. End fold markers with levels are
 not supported.
 
-Current VOoM version can handle several other markup formats that have
-headlines and support an outline structure. (Headlines are also called
-headings, headers, section headers, titles.) Available markup modes:
+VOoM currently can handle several other markup formats that have headlines and
+support an outline structure. (Headlines are also called headings, headers,
+section headers, titles.) Available markup modes:
     wiki           |voom_mode_wiki|
     vimwiki        |voom_mode_vimwiki|
     viki           |voom_mode_viki|
     rest           |voom_mode_rest|
     markdown       |voom_mode_markdown|
+    txt2tags       |voom_mode_txt2tags|
     html           |voom_mode_html|
     thevimoutliner |voom_mode_thevimoutliner|
     vimoutliner    |voom_mode_vimoutliner|
@@ -59,7 +60,7 @@ FEATURES:
       (Some modes can be slower.)
     - Outline structure manipulation: move nodes Up/Down, Promote/Demote,
       Copy/Cut/Paste, Insert New Headline, Sort in various ways.
-    - Command to search nodes, boolean AND/NOT search.
+    - Command to search nodes. Boolean AND/NOT search (in addition to |/bar|).
 
 
 There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
@@ -245,17 +246,22 @@ Leo outlining editor:
 
 The "Tag List" Vim plugin:
     http://vim.sourceforge.net/scripts/script.php?script_id=273
-    - Conceptually, VOoM is similar to the Tag List plugin and other source
-      code browsers. Tag List uses the "ctags" program to scan file for tags.
-      VOoM uses Python script to scan buffer for start fold markers with
-      levels or some other headline markers.
+    - Conceptually, VOoM is similar to the "Tag List" plugin and other source
+      code browsers. "Tag List" uses the "ctags" program to scan files for
+      tags. VOoM uses Python script to scan Vim buffer for start fold markers
+      with levels or some other headline markers.
+
+Tagbar : Display tags of the current file ordered by scope 
+    http://www.vim.org/scripts/script.php?script_id=3465
 
 VO, VimOutliner:
-    http://www.vimoutliner.org/
+    http://www.vim.org/scripts/script.php?script_id=3515
 TVO, The Vim Outliner:
     http://vim.sourceforge.net/scripts/script.php?script_id=517
-VimOrganizer:
+VimOrganizer (Org-mode for Vim):
     http://www.vim.org/scripts/script.php?script_id=3342
+vim-orgmode (Org-mode for Vim): 
+    https://github.com/jceb/vim-orgmode
 
 Various Vim scripts with outlining functionality
 (there are probably many other):
@@ -283,12 +289,14 @@ Code Browser:
 
 Emacs oultining modes, OrgMode seems to be popular:
     http://www.emacswiki.org/emacs/CategoryOutline
+    http://orgmode.org/
 
 Listings of outliner programs:
-    http://psychinnovations.com/psych/node/37
+    http://en.wikipedia.org/wiki/Outliner
+    http://www.psychinnovations.com/directory/outliners-mind-maps
+    http://texteditors.org/cgi-bin/wiki.pl?OutlinerFamily
     http://www.marktaw.com/reviews/Outliners.html
     http://www.outlinersoftware.com/topics/viewt/807/0/list-of-outliners
-    http://en.wikipedia.org/wiki/Category:Outliners
 
 ==============================================================================
 Requirements   [[[1~
@@ -1128,8 +1136,8 @@ Examples:
 ------------------------------------------------------------------------------
 There are about 19 other mappings for easy Tree navigation, see |voom_map|.
 Many of them use keys that otherwise would have been wasted because they change
-text and thus have to be disabled in Tree buffers. For example, "c" and "P" go
-to the parent of the current node.
+text and thus have to be disabled in Tree buffers. For example, "c" and "P"
+move cursor to the parent of the current node.
 
 Most Tree mappings are defined only for the Normal mode and do not accept a
 count. The exceptions are:
@@ -1244,7 +1252,7 @@ TIPS:
 
     - The readability of UNLs in the quickfix window is much better when
       the -> separators are highlighted, see screenshot at
-      http://vim-voom.webs.com/ . I have the following two lines in
+      http://vim-voom.github.com/ . I have the following two lines in
       $HOME/vimfiles/after/syntax/qf.vim: >
           syn match Title / -> /
           syn match LineNr /| n\d\+:\d\+\s*|/
@@ -1324,6 +1332,7 @@ Move/Copy/Cut/Paste Nodes   [[[3~
 <C-Left>
 <<
 <LocalLeader>l      Move node(s) left (promote). (N,V)
+                    Note: node(s) must be at at the end of their subtree.
 
 <C-Right>
 >>
@@ -1637,6 +1646,7 @@ rest   [[[3~
 :Voom rest
 MODULE: ../plugin/voom/voom_mode_rest.py
 Mode for outlining reStructuredText (reST) section titles.
+    http://docutils.sourceforge.net/rst.html
     http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html#sections
     http://docutils.sourceforge.net/docs/user/rst/quickstart.html#sections
     http://docs.python.org/documenting/rest.html#sections
@@ -1804,6 +1814,31 @@ If a headline is not preceded by a blank line, outline operations may add one.
 An underline-style headline should not contain leading or trailing #'s.
 
 ==============================================================================
+txt2tags   [[[3~
+                                                 *voom_mode_txt2tags*
+:Voom txt2tags
+MODULE: ../plugin/voom/voom_mode_txt2tags.py
+Mode for outlining txt2tags titles.
+    http://txt2tags.org/
+    http://txt2tags.org/userguide/TitleNumberedTitle.html#6_2
+
+Both Titles and Numbered Titles are recognized. Anchors are ok. >
+    = title level 1 =
+    == title level 2 ==[anchor-A]
+    +++ numbered title level 3 +++
+    +++ numbered title level 3 +++[anchor-B]
+
+There can be leading spaces, but not tabs.
+The number of = or + chars must be the same on both sides.
+
+Titles are ignored inside Verbatim, Raw, and Tagged Areas, that is between
+pairs of lines with ```, """, '''. These areas cannot be nested
+
+In the Tree, the text of Numbered Titles is prepended with "+ " to help
+distinguish them from regular titles. The type of the title is preserved during
+outline operations.
+
+==============================================================================
 html   [[[3~
                                                  *voom_mode_html*
 :Voom html
@@ -1965,28 +2000,40 @@ In summary:
 ==============================================================================
 Known Issues   [[[2~
 
-There are some pitfalls to be aware of when editing large outlines:
+1) Memory used by Vim can increase significantly when outline operations Move
+Up/Down are applied repetitively to a large node or a block of nodes (>1MB).
+These commands delete and then insert lines in Body buffer. If the range being
+moved is large, this can cause dramatic increase in memory used by the undo
+history. Thus, to move a large node over a long distance it's better to use
+Cut/Paste rather than keep pressing Ctrl-Up/Down.
 
-1) Memory used by Vim can increase significantly when outline operations
-   Move Up/Down are applied repetitively to a large node or a block of nodes
-   (>1MB). These commands delete and then insert lines in Body buffer. If the
-   range being moved is large, this can cause dramatic increase in memory used
-   by the undo history. Thus, to move a large node over a long distance it's
-   better to use Cut/Paste rather than keep pressing Ctrl-Up/Down.
-
-   This problem doesn't exist if 'undolevels' is set to -1, 0, 1.
-   A handy way to clear undo history: set 'undoreload' to 0, reload the file
-   with :e or :e! .
+This problem doesn't exist if 'undolevels' is set to -1, 0, 1.
+A handy way to clear undo history: set 'undoreload' to 0, reload the file with
+:e or :e! .
 
 2) Undoing some outline operations can take a longer than usual time if a large
-   number of Body folds (>1000) is affected. The workaround is to temporarily
-   set Body 'foldmethod' to manual (:set fdm=manual).
+number of Body folds (>1000) is affected. The workaround is to temporarily set
+Body 'foldmethod' to manual (:set fdm=manual).
 
-Outline navigation and outline operations can be sluggish if there are
+3) Outline navigation and outline operations can be sluggish if there are
 time-consuming BufEnter, BufLeave, WinEnter, WinLeave autocommands associated
 with the Body buffer. This is because most VOoM commands involve entering and
 leaving Body buffer window, often temporarily. This is a problem with .otl
 files of The Vim Outliner plugin (|voom_mode_thevimoutliner|).
+
+4) Support for Vim Sessions (|:mksession|) is far from perfect. If 'ssop'
+contains "blank", the command :mksession will save info about Tree buffers,
+that is no-file buffers named {Body_name}_VOOM{Body_bufnr}. When the session is
+restored, VOoM tries to recreate the outline for such buffers.
+    - Markup modes are not supported. Outline is always created with the
+      command :Voom.
+    - The Tree and corresponding Body buffer must be in the same tab page.
+    - If 'ssop' contains "options", the command :mksession saves all Tree
+      buffer-local mapping (because all voom.vim functions are global).
+      This is redundant and increases the size of the Session file for no good
+      reason -- about 120 mappings for each Tree buffer.
+    - If 'ssop' contains "folds", :mksession doesn't really save Tree folding,
+      only some folding options which will be restored anyway.
 
 ==============================================================================
 EXECUTING NODES (:Voomexec)   [[[1~
@@ -2030,9 +2077,9 @@ The following happens when the command :Voomexec is executed:
 
 3) The script is executed according to its type.
 -----------------------------------------------
-    a) A "vim" script is executed by copying text into a register and
-       executing that register inside try/catch/endtry block. If an error
-       occurs, v:exception is echoed. (v:throwpoint is useless.)
+    a) A "vim" script is executed by copying text into a register and executing
+       that register inside try/catch/finally/endtry block. If an error occurs,
+       v:exception is echoed. (v:throwpoint is useless.)
 
     b) A "python" script is executed by first writing script text to file
        "voom/_voomScript_.py" in the directory of "voom.vim".
@@ -2045,8 +2092,8 @@ The following happens when the command :Voomexec is executed:
        The following Python names are pre-defined: vim, voom.
 
        The first line of "_voomScript.py_" specifies encoding as per
-       http://www.python.org/dev/peps/pep-0263/ . Encoding is obtained from
-       Body's 'fenc' or, if it's empty, from 'enc'.
+       http://www.python.org/dev/peps/pep-0263/ .
+       Encoding is Vim's enternal encoding ('utf-8' for all Unicode &enc).
 
 ==============================================================================
 sample Vim scripts   [[[2~
@@ -2177,8 +2224,21 @@ Vim (GTK). It's better to have PyLog window only in the current tabpage.
 4) __PyLog__ is not usable when in the Ex mode, that is after 'Q' or 'gQ'.
 The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
 
+    id_20110213225841
+5) When __PyLog__ is enabled, a Python error in a Vim script does not result in
+Vim error. This is probably because Python's sys.stderr is redirected. This
+changes Vim error handling when a Python code is executed by Vim inside
+try/endtry. Example Vim script, try it with PyLog on: >
+    try
+        python assert 1==2
+        echo 'AFTER PYTHON ERROR -- should not be here'
+    finally
+        echo 'AFTER FINALLY'
+    endtry
+    echo 'AFTER TRY -- should not be here'
 
-5) In versions before 1.7 there was problem with the output of help(), which
+
+6) In versions before 1.7 there was problem with the output of help(), which
 apparently uses Lib/pydoc.py, which does something strange to output trailing
 \n. Steps to reproduce:
     1. Open new instance of Vim.
@@ -2443,10 +2503,11 @@ The function that does this check is Voom_BodyCheckTicks().
 These checks can be tested by modifying Body and then moving to Tree with
 ":noau wincmd w" or after ":set ei=BufLeave", etc.
 
-Another precaution is that outline update (voom.updateTree()) is always done
-inside try/finally/endtry. This ensures that "tick_" will not be set to "tick"
-when an error occurs during update. Example: python mode, tockenize.py raises
-exception because of missing closing ' or ".
+Another precaution is that "tick_" is not set to "tick" when an unexpected
+error occurs during update.  voom.updateTree()) is always called from Vim code
+inside try/finally/endtry. It also sets Vim var l:ok to indicate success, see
+#id_20110213212708 .
+
 
     [1] 2011-01-21 Fixed by Patch 7.3.105 !!!
 
@@ -2577,7 +2638,47 @@ v4.0   [[[3o~
 v4.0, 2011-??-??   [[[4~
 
 
-v4.0b4, 2011-01-30   [[[4x~
+v4.0b5, 2011-03-24   [[[4x~
+
+New markup mode: txt2tags.
+
+Added support for Vim Sessions (:mksession) via BufFilePost autocmd for VOOM
+Tree buffers and __PyLog__ buffers.
+
+Fixed bug in :Voomexec -- Python script file encoding was set incorrectly.
+Source code encoding of the temp script file should be Vim internal encoding,
+not &fenc or &enc.
+
+Fixed command Edit Headline (iIaA): cursor was not positioned on the first word
+char in Body headline when there are was no foldmarker (markup modes).
+
+Dealing with Python errors during outline update.
+-------------------------------------------------
+Working in the python mode revealed a flaw in safeguards against Python errors
+during outline update. Such errors are expected while in python mode --
+tokenize.py raises exception when indentation is wrong or a quote is missing.
+
+    id_20110213212708 , also see #id_20110213225841
+Calling voom.updateTree() via try/python.../finally/endtry in the Vim code
+(|try-finally|) does not guard against Python errors when PyLog is on. It looks
+like Vim error is not triggered when Python's sys.stderr is redirected. The
+result is that changedtick (tick_) is updated despite a failed update.
+SOLUTION: always set Vim var l:ok in voom.updateTree() before returning to
+indicate a successful update.
+
+Python mode: catch exceptions raised by tokenize.py, echo the error, set Tree
+lines to make it clear that update has failed and outline is invalid.
+
+Refactoring
+-----------
+Insert New Headline -- don't need Body column, just search for "NewHeadline".
+voom.newHeadline(), hook_newHeadline() no longer return column.
+
+Voom_LogScroll() -- several optimizations. PyLog is usually only in the current
+tabpage. Thus, check tabpagenr() before tabnext--faster than redundant tabnext.
+
+
+v4.0b4, 2011-01-30   [[[4~
 New Tree mappings for navigating outline:
     P (go to parent node),
     c (go to parent and contract it),

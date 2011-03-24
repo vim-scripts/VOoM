@@ -8,6 +8,9 @@ findme findme2
 1    
 =
    1 body
+NEXT LINE IS FOR TEST SUITE -- DO NOT MOVE OR EDIT
+VO.levels=[1, 1, 2, 2, 1, 1, 2, 2, 3, 4, 3, 4, 5, 5, 2, 1, 2, 1, 2, 2, 3, 3, 4, 5, 5, 3, 2, 3, 2, 3, 2, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 3, 4, 4, 4, 4, 5, 5, 4, 4, 5, 5, 3, 3, 3, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 3, 2, 3, 3]
+
 
 ---
 1.1    
@@ -165,6 +168,8 @@ tests
 syntax tests    
 ------------
 Since v2.1 comment chars before foldmarker are stripped according to filetype.
+Some Body filetypes have their own Tree syntax hi.
+
 
 
 //---TODO comment--- //  
@@ -189,16 +194,21 @@ print 'py ok'
 ==================
 
 
-*/---not comment--- /*  
-======================
-
-
 <!-- Comment  
 ============
+ft=html,xml
 
 
 html head <!  
 ============
+
+
+/organizer node/  
+================
+
+
+!warning mark  
+=============
 
 --------------
 Voomgrep tests    
@@ -209,13 +219,13 @@ Voomgrep tests
 \Spam// ' "
 
 
-n42 breakfast  
+n44 breakfast  
 =============
 eggs
 bacon
 
 
-n43 lunch  
+n45 lunch  
 =========
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
@@ -223,14 +233,14 @@ Spam Spam Spam Spam Spam Spam Spam Spam Spam
 ham
 
 
-n44 dinner  
+n46 dinner  
 ==========
 eggs
 Spam
 ham
 
 
-n45 snack  
+n47 snack  
 =========
 bacon
 spam

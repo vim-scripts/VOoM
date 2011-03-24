@@ -1,5 +1,5 @@
 # voom_mode_html.py
-# Last Modified: 2010-12-09
+# Last Modified: 2011-02-10
 # VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
 # plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -55,15 +55,13 @@ def hook_makeOutline(VO, blines):
 
 
 def hook_newHeadline(VO, level, blnum, tlnum):
-    """Return (tree_head, bodyLines, column).
+    """Return (tree_head, bodyLines).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
-    column is cursor position in new headline in Body buffer.
     """
     tree_head = 'NewHeadline'
-    bodyLines = ['<h%s>NewHeadline</h%s>' %(level,level), '']
-    column = 5
-    return (tree_head, bodyLines, column)
+    bodyLines = ['<h%s>%s</h%s>' %(level, tree_head, level), '']
+    return (tree_head, bodyLines)
 
 
 def hook_changeLevBodyHead(VO, h, levDelta):

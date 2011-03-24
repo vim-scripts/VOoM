@@ -5,6 +5,9 @@ findme findme2
 
 <h1>1</h1> <!--{{{1-->
    1 body
+NEXT LINE IS FOR TEST SUITE -- DO NOT MOVE OR EDIT
+VO.levels=[1, 1, 2, 2, 1, 1, 2, 2, 3, 4, 3, 4, 5, 5, 2, 1, 2, 1, 2, 2, 3, 3, 4, 5, 5, 3, 2, 3, 2, 3, 2, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 2, 3, 4, 4, 4, 4, 5, 5, 4, 4, 5, 5, 3, 3, 3, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 3, 2, 3, 3]
+
 
 <h2>1.1</h2> <!--{{{2-->
    1.1 body
@@ -100,6 +103,8 @@ findme
 
 <h2>syntax tests</h2> <!--{{{2-->
 Since v2.1 comment chars before foldmarker are stripped according to filetype.
+Some Body filetypes have their own Tree syntax hi.
+
 
 <h3>//---TODO comment--- //</h3> <!--{{{3-->
 
@@ -113,11 +118,14 @@ print 'py ok'
 
 <h3>/*---comment--- /*</h3> <!--{{{3*/-->
 
-<h3>*/---not comment--- /*</h3> <!--{{{3*/-->
-
 <h3>&lt;!-- Comment</h3> <!--{{{3 --&gt;-->
+ft=html,xml
 
 <h3>html head &lt;!</h3> <!--{{{3--&gt;-->
+
+<h3>/organizer node/</h3> <!--{{{3-->
+
+<h3>!warning mark</h3> <!--{{{3-->
 
 <h2>Voomgrep tests</h2> <!--{{{2-->
 :Voomg Spam and ham not bacon
@@ -125,22 +133,22 @@ print 'py ok'
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
-<h3>n42 breakfast</h3> <!--{{{3-->
+<h3>n44 breakfast</h3> <!--{{{3-->
 eggs
 bacon
 
-<h3>n43 lunch</h3> <!--{{{3-->
+<h3>n45 lunch</h3> <!--{{{3-->
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
-<h3>n44 dinner</h3> <!--{{{3-->
+<h3>n46 dinner</h3> <!--{{{3-->
 eggs
 Spam
 ham
 
-<h3>n45 snack</h3> <!--{{{3-->
+<h3>n47 snack</h3> <!--{{{3-->
 bacon
 spam
 HAM
