@@ -1,4 +1,4 @@
-# voom_mode_viki.py
+# voom_mode_org.py
 # Last Modified: 2011-10-28
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -10,29 +10,12 @@
 #          See http://sam.zoy.org/wtfpl/COPYING for more details.
 
 """
-VOoM markup mode for headline markup used by Vim Viki/Deplate plugin.
-See |voom_mode_viki|,  ../../doc/voom.txt#*voom_mode_viki*
+VOoM markup mode for Emacs Org-mode headline format.
+See |voom_mode_org|,  ../../doc/voom.txt#*voom_mode_org*
 """
 
 import re
 headline_match = re.compile(r'^(\*+)\s').match
-
-# Ignore Regions other than #Region
-#
-#    #Type [OPTIONS] <<EndOfRegion
-#    .......
-#    EndOfRegion
-#
-# syntax/viki.vim:
-#   syn region vikiRegion matchgroup=vikiMacroDelim
-#               \ start=/^[[:blank:]]*#\([A-Z]\([a-z][A-Za-z]*\)\?\>\|!!!\)\(\\\n\|.\)\{-}<<\z(.*\)$/
-#               \ end=/^[[:blank:]]*\z1[[:blank:]]*$/
-#               \ contains=@vikiText,vikiRegionNames
-#
-# EndOfRegion can be empty string, leading/trailing white space matters
-# Don't know what !!! is for.
-#
-region_match = re.compile(r'^\s*#([A-Z]([a-z][A-Za-z]*)?)\b.*?<<(.*)').match
 
 
 def hook_makeOutline(VO, blines):
@@ -42,23 +25,10 @@ def hook_makeOutline(VO, blines):
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
-    inRegion = False #  EndOfRegion match object when inside a region
     for i in xrange(Z):
+        if not blines[i].startswith('*'):
+            continue
         bline = blines[i]
-
-        if inRegion:
-            if re.match(inRegion, bline):
-                inRegion = False
-            continue
-
-        if bline.lstrip().startswith('#') and '<<' in bline:
-            r_m = region_match(bline)
-            if r_m and r_m.group(1) != 'Region':
-                inRegion = '^\s*%s\s*$' %re.escape(r_m.group(3) or '')
-                continue
-        elif not bline.startswith('*'):
-            continue
-
         m = headline_match(bline)
         if not m:
             continue

@@ -1,8 +1,7 @@
 # voom.py
-# Last Modified: 2011-03-15
-# VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
-# plugin for Python-enabled Vim version 7.x
-# Version: 4.0b5
+# Last Modified: 2011-11-03
+# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
+# Version: 4.0
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -617,7 +616,7 @@ def intersectDicts(dictsAND, dictsNOT): #{{{2
 #---Outline Operations------------------------{{{1
 # voom_Oop... functions are called from Voom_Oop... Vim functions.
 # They use local Vim vars set by the caller and can create and change Vim vars.
-# They set lines in Tree and Body via vim.buffer objects.
+# Most of them set lines in Tree and Body via vim.buffer objects.
 # Default l:blnShow is -1.
 # Returning before setting l:blnShow means no changes were made.
 
@@ -663,6 +662,10 @@ def setClipboard(s): #{{{2
     # use '%s' for Vim string: all we need to do is double ' quotes
     s = s.replace("'", "''")
     vim.command("let @+='%s'" %s)
+
+    # TODO: failed once, empty clipboard after copy/delete >5MB outline, could
+    # not reproduce, probably stale system, perhaps a check for clipboard size
+    # is needed
 
 
 def voom_OopVerify(): #{{{2
@@ -711,6 +714,22 @@ def voom_OopSelEnd(): #{{{2
         # node after the last sibling node's branch
         elif i+1 > ln2 and lev <= lev0: return i
     return z
+
+
+def voom_OopSelectBodyRegion(): # {{{2
+    body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
+    ln1, ln2 = int(vim.eval('l:ln1')), int(vim.eval('l:ln2'))
+    VO = VOOMS[body]
+    assert VO.tree == tree
+    bnodes = VO.bnodes
+
+    vim.command("let l:bln1=%s" %(bnodes[ln1-1]))
+    if ln2==1 and len(bnodes)>1 and bnodes[1]==1:
+        pass
+    if ln2 < len(bnodes):
+        vim.command("let l:bln2=%s" %(bnodes[ln2]-1))
+    else:
+        vim.command("let l:bln2=line('$')")
 
 
 def voom_OopInsert(as_child=False): #{{{2

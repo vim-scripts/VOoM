@@ -1,7 +1,6 @@
 # voom_mode_markdown.py
-# Last Modified: 2011-02-10
-# VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
-# plugin for Python-enabled Vim version 7.x
+# Last Modified: 2011-10-24
+# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -88,18 +87,16 @@ def hook_makeOutline(VO, blines):
 
         if gotHead:
             gotHead = False
-            if not useHash:
-                if lev < 3:
-                    if L1.startswith('#'):
-                        useHash = 2
-                    else:
-                        useHash = 1
-            if not useCloseHash:
+            if not useHash and lev < 3:
                 if L1.startswith('#'):
-                    if L1.endswith('#'):
-                        useCloseHash = 1
-                    else:
-                        useCloseHash = 2
+                    useHash = 2
+                else:
+                    useHash = 1
+            if not useCloseHash and L1.startswith('#'):
+                if L1.endswith('#'):
+                    useCloseHash = 1
+                else:
+                    useCloseHash = 2
             L1, L2 = '',''
 
             tline = '  %s|%s' %('. '*(lev-1), head)
@@ -260,24 +257,26 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
 
             # change headline level and/or format
 
-            # no format change, only adjust level of underline
+            # underline-style unchanged, only adjust level of underline
             if not useHash and not hasHash:
                 if not levDelta: continue
                 Body[bln] = levels_ads[lev]*len(L2)
-            # no format change, only adjust level of hashes; there are closing hashes
-            elif useHash and hasHash and useCloseHash and hasCloseHash:
-                if not levDelta: continue
-                Body[bln-1] = '%s%s%s' %('#'*lev, L1.strip('#'), '#'*lev)
-            # no format change, only adjust level of hashes; there are no closing hashes
-            elif useHash and hasHash and not useCloseHash and not hasCloseHash:
-                if not levDelta: continue
-                Body[bln-1] = '%s%s' %('#'*lev, L1.lstrip('#'))
-            # add closing hashes
-            elif useHash and hasHash and useCloseHash and not hasCloseHash:
-                Body[bln-1] = '%s%s %s' %('#'*lev, L1.strip('#').rstrip(), '#'*lev)
-            # remove closing hashes
-            elif useHash and hasHash and not useCloseHash and hasCloseHash:
-                Body[bln-1] = '%s%s' %('#'*lev, L1.strip('#').rstrip())
+            # hashes-style unchanged, adjust level of hashes and add/remove closing hashes
+            elif useHash and hasHash:
+                # no format change, there are closing hashes
+                if useCloseHash and hasCloseHash:
+                    if not levDelta: continue
+                    Body[bln-1] = '%s%s%s' %('#'*lev, L1.strip('#'), '#'*lev)
+                # no format change, there are no closing hashes
+                elif not useCloseHash and not hasCloseHash:
+                    if not levDelta: continue
+                    Body[bln-1] = '%s%s' %('#'*lev, L1.lstrip('#'))
+                # add closing hashes
+                elif useCloseHash and not hasCloseHash:
+                    Body[bln-1] = '%s%s %s' %('#'*lev, L1.strip('#').rstrip(), '#'*lev)
+                # remove closing hashes
+                elif not useCloseHash and hasCloseHash:
+                    Body[bln-1] = '%s%s' %('#'*lev, L1.strip('#').rstrip())
             # insert underline, remove hashes
             elif not useHash and hasHash:
                 L1 = L1.strip('#').strip()

@@ -1,8 +1,7 @@
 " voom.vim
-" Last Modified: 2011-03-19
-" VOoM (Vim Outliner of Markers) -- two-pane outliner and related utilities
-" plugin for Python-enabled Vim version 7.x
-" Version: 4.0b5
+" Last Modified: 2011-11-03
+" VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
+" Version: 4.0
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -36,7 +35,7 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voom_did_quickload')
-    let s:voom_did_quickload = 'v4.0b5'
+    let s:voom_did_quickload = 'v4.0'
     com! -complete=custom,Voom_Complete -nargs=? Voom call Voom_Init(<q-args>)
     com! Voomhelp call Voom_Help()
     com! Voomlog  call Voom_LogInit()
@@ -215,7 +214,7 @@ endfunc
 
 func! Voom_Complete(A,L,P) "{{{2
 " Argument completion for command :Voom.
-    return "wiki\nvimwiki\nviki\nrest\nmarkdown\ntxt2tags\nhtml\npython\nthevimoutliner\nvimoutliner"
+    return "wiki\nvimwiki\nviki\norg\nrest\nmarkdown\ntxt2tags\nasciidoc\nhtml\npython\nthevimoutliner\nvimoutliner"
 endfunc
 
 
@@ -887,29 +886,33 @@ func! Voom_TreeSyntax(body) "{{{2
     syn match Title /\%1l.*/
 
     let FT = getbufvar(a:body, "&ft")
-    if FT==#'python'
-        syn match Statement /^.\{-}|\zs\%(def\s\|class\s\)/
-        syn match Define /^.\{-}|\zs@/
-        syn match Comment /^.\{-}|\zs#.*/ contains=Todo
+    if FT==#'text'
+        " organizer nodes: /headline/
+        syn match Comment '^[^|]\+|\zs[/#].*' contains=Todo
+        syn keyword Todo TODO XXX FIXME
+    elseif FT==#'python'
+        syn match Statement /^[^|]\+|\zs\%(def\s\|class\s\)/
+        syn match Define /^[^|]\+|\zs@/
+        syn match Comment /^[^|]\+|\zs#.*/ contains=Todo
         syn keyword Todo contained TODO XXX FIXME
     elseif FT==#'vim'
-        syn match Statement /^.\{-}|\zs\%(fu\%[nction]\>\|def\s\|class\s\)/
-        syn match Comment /^.\{-}|\zs\%("\|#\).*/ contains=Todo
+        syn match Statement /^[^|]\+|\zs\%(fu\%[nction]\>\|def\s\|class\s\)/
+        syn match Comment /^[^|]\+|\zs\%("\|#\).*/ contains=Todo
         syn keyword Todo contained TODO XXX FIXME
     elseif FT==#'html' || FT==#'xml'
-        syn match Comment /^.\{-}|\zs<!.*/ contains=Todo
+        syn match Comment /^[^|]\+|\zs<!.*/ contains=Todo
         syn keyword Todo contained TODO XXX FIXME
     else
         """ organizer nodes: /headline/
-        "syn match Directory @^.\{-}|\zs/.*@ contains=Todo
-        """ line comment chars: "  #  //  /*  %  <!--
-        "syn match Comment @^.\{-}|\zs\%("\|#\|//\|/\*\|%\|<!--\).*@ contains=Todo
+        "syn match Directory @^[^|]\+|\zs/.*@ contains=Todo
+        """ line comment chars: "  #  //  /*  %  ;  <!--
+        "syn match Comment @^[^|]\+|\zs\%("\|#\|//\|/\*\|%\|<!--\).*@ contains=Todo
         """ line comment chars with / (organizer nodes) instead of // and /*
-        syn match Comment '^.\{-}|\zs["#/%].*' contains=Todo
+        syn match Comment '^[^|]\+|\zs["#/%;].*' contains=Todo
         syn keyword Todo TODO XXX FIXME
     endif
 
-    syn match WarningMsg /^.\{-}|\zs!\+/
+    syn match WarningMsg /^[^|]\+|\zs!\+/
 
     """ selected node hi, useless with folding
     "syn match Pmenu /^=.\{-}|\zs.*/
@@ -1082,6 +1085,10 @@ vnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'v'
 
 " mark node as selected node
 nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voom_OopMarkStartup()<CR>
+
+" select Body region
+nnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRegion('n')<CR>
+vnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRegion('v')<CR>
     """ }}}
 
     """ save/Restore Tree folding {{{
@@ -1116,7 +1123,7 @@ nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
     " Can't use Ctrl: <C-i> is Tab; <C-u>, <C-d> are page up/down.
     " Use <LocalLeader> instead of Ctrl.
     "
-    " Still up for grabs: R <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { }
+    " Still up for grabs: q <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { }
 endfunc
 
 
@@ -1579,14 +1586,48 @@ endfunc
 
 "---Outline Operations---{{{2
 
+func! Voom_OopSelectBodyRegion(mode) "{{{3
+" Move to Body and select region corresponding to node(s) in the Tree.
+    let tree = bufnr('')
+    let body = s:voom_trees[tree]
+    if Voom_BufLoaded(body) < 0 | return | endif
+    if Voom_BufEditable(body) < 0 | return | endif
+    let ln = line('.')
+    let ln_status = Voom_FoldStatus(ln)
+    " current line must not be hidden in a fold
+    if ln_status=='hidden'
+        call Voom_ErrorMsg("VOoM: current line is hidden in fold")
+        return
+    endif
+    " normal mode: use current line
+    if a:mode=='n'
+        let [ln1, ln2] = [ln, ln]
+    " visual mode: use range
+    elseif a:mode=='v'
+        let [ln1, ln2] = [line("'<"), line("'>")]
+    endif
+
+    if Voom_ToBody(body) < 0 | return | endif
+    if Voom_BodyCheckTicks(body) < 0 | return | endif
+    " compute bln1 and bln2
+    python voom.voom_OopSelectBodyRegion()
+    " this happens when ln2==1 and the first headline is top of buffer
+    if l:bln2==0 | return | endif
+    exe 'normal! '.bln1.'Gzv'.bln2.'GzvV'.bln1.'G'
+    if line('w$') < bln2
+        normal! zt
+    endif
+endfunc
+
+
 func! Voom_OopEdit() "{{{3
 " Edit headline text: move into Body, put cursor on headline.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
+    if Voom_BufEditable(body) < 0 | return | endif
     let lnum = line('.')
     if lnum==1 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
 
     python vim.command("let l:bLnr=%s" %voom.VOOMS[int(vim.eval('l:body'))].bnodes[int(vim.eval('l:lnum'))-1])
 
@@ -1624,9 +1665,17 @@ func! Voom_OopInsert(as_child) "{{{3
     endif
 
     let lz_ = &lz | set lz
-    if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
-    if Voom_BodyCheckTicks(body) < 0 | let &lz=lz_ | return | endif
-    call Voom_OopFromBody(body,tree,-1,1)
+    if v:version > 703 || v:version==703 && has('patch105')
+        if s:voom_bodies[body].tick_ != getbufvar(body,'changedtick')
+            if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
+            if Voom_BodyCheckTicks(body) < 0 | let &lz=lz_ | return | endif
+            call Voom_OopFromBody(body,tree,-1,1)
+        endif
+    else
+        if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
+        if Voom_BodyCheckTicks(body) < 0 | let &lz=lz_ | return | endif
+        call Voom_OopFromBody(body,tree,-1,1)
+    endif
 
     setl ma
     if a:as_child=='as_child'
@@ -1693,7 +1742,7 @@ func! Voom_OopMark(op, mode) "{{{3
     let tree = bufnr('')
     let body = s:voom_trees[tree]
     if s:voom_bodies[body].mmode
-        call Voom_ErrorMsg('VOoM: marked nodes are not available in in this markup mode')
+        call Voom_ErrorMsg('VOoM: marked nodes are not available in this markup mode')
         return
     endif
     if Voom_BufLoaded(body) < 0 | return | endif
@@ -2581,6 +2630,7 @@ func! Voom_LogSyntax() "{{{2
 
     " VOoM messages
     syn match Error /^ERROR: .*/
+    syn match Error /^EXCEPTION: .*/
     syn match PreProc /^---end of Python script---/
     syn match PreProc /^---end of Vim script---/
 
