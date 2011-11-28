@@ -1,7 +1,7 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2011-11-06
+Last Modified: 2011-11-27
 VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.0
+Version: 4.1
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
@@ -68,10 +68,11 @@ There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
 
 :Voom
 :Voom {MarkupMode}
-            Scan the current buffer for headlines and construct an outline from
-            them. By default, headlines are lines with start fold markers with
-            levels. Optional argument {MarkupMode} can specify a different
-            headline format, see above and |voom_markup_modes|.
+            Create outline of the current buffer. By default, outline is
+            constructed from lines with start fold markers with level numbers.
+            To work with headlines in a different format, an argument
+            specifying the desired markup mode must be provided, see above and
+            |voom_markup_modes|.
             Outline is displayed in a special buffer in a separate window which
             emulates the tree pane of a two-pane outliner. Such buffers are
             referred to as Tree buffers. The current buffer becomes a Body
@@ -745,7 +746,7 @@ Create Outline   [[[2o~
             non-modifiable buffer called Tree buffer. The current buffer
             becomes a Body buffer.
 
-:Voom       By default headlines are lines with start fold markers with level
+:Voom       By default, headlines are lines with start fold markers with level
             numbers: {{{3, {{{1, etc. The level of each headline is set to the
             number after the fold marker. Headline text is part of line before
             the fold marker (this can be customized).
@@ -1373,6 +1374,8 @@ To unmark all: ggVG<LocalLeader>M
 Related Tree mappings, Normal mode:
 x                   Go to next marked node and select it.
 X                   Go to previous marked node and select it.
+
+TODO: mark/unmark only visible nodes (not hidden in folds). Could be add-on.
 
 ==============================================================================
 Mark Node As Startup Node   [[[3~
@@ -2998,7 +3001,19 @@ see v3.0 notes.
 CHANGELOG   [[[2o~
 
 
-v4.0, 2011-11-06   [[[3x~
+v4.1, 2011-11-27   [[[3x~
+
+PROBLEM: Tree mappings J/K are supposed to accept a count, but they don't.
+This is with Vim 7.3.145. No problem with Vim 7.2.
+SOLUTION: Save original v:count1 before
+    exe 'normal...
+in Voom_Tree_KJUD().
+
+Better argument completion for the :Voom command. The list of modes is
+constructed from file names voom_mode_{whatever}.py in ../plugin/voom .
+
+
+v4.0, 2011-11-06   [[[3~
 
 New markup modes: asciidoc, org (same as old viki), cwiki.
 Viki mode now ignores special regions.

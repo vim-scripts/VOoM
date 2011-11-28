@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2011-11-03
+" Last Modified: 2011-11-27
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.0
+" Version: 4.1
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -35,7 +35,7 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voom_did_quickload')
-    let s:voom_did_quickload = 'v4.0'
+    let s:voom_did_quickload = 'v4.1'
     com! -complete=custom,Voom_Complete -nargs=? Voom call Voom_Init(<q-args>)
     com! Voomhelp call Voom_Help()
     com! Voomlog  call Voom_LogInit()
@@ -50,9 +50,10 @@ endif
 
 "---Initialize--------------------------------{{{1
 if !exists('s:voom_did_init')
-    let s:script_path = expand("<sfile>:p")
-    let s:script_dir = expand("<sfile>:p:h")
-    let s:voom_script_py = s:script_dir.'/voom/_voomScript_.py'
+    let s:script_path = substitute(expand("<sfile>:p"),'\','/','g')
+    let s:script_dir = substitute(expand("<sfile>:p:h"),'\','/','g')
+    let s:voom_dir = s:script_dir.'/voom'
+    let s:voom_script_py = s:voom_dir.'/_voomScript_.py'
 
     let s:voom_logbnr = 0
 
@@ -68,9 +69,8 @@ if !exists('s:voom_did_init')
 
 python << EOF
 import sys, vim
-voom_dir = vim.eval("s:script_dir.'/voom'")
-if not voom_dir in sys.path:
-    sys.path.append(voom_dir)
+if not vim.eval("s:voom_dir") in sys.path:
+    sys.path.append(vim.eval("s:voom_dir"))
 import voom
 sys.modules['voom'].VOOMS = {}
 EOF
@@ -213,8 +213,15 @@ endfunc
 
 
 func! Voom_Complete(A,L,P) "{{{2
-" Argument completion for command :Voom.
-    return "wiki\nvimwiki\nviki\norg\nrest\nmarkdown\ntxt2tags\nasciidoc\nhtml\npython\nthevimoutliner\nvimoutliner"
+" Argument completion for command :Voom. Return string "wiki\nvimwiki\nviki..."
+" constructed from file names ../plugin/voom/voom_mode_{whatever}.py .
+    let thefiles = split(glob(s:voom_dir.'/voom_mode_?*.py'), "\n")
+    let themodes = []
+    for the in thefiles
+        let themode = substitute(fnamemodify(the,':t'), '\c^voom_mode_\(.*\)\.py$', '\1', '')
+        call add(themodes, themode)
+    endfor
+    return join(themodes, "\n")
 endfunc
 
 
@@ -459,7 +466,7 @@ func! Voom_PrintData() "{{{2
 " Print Vim-side VOoM data.
     redir => voomData
     silent echo repeat('-', 60)
-    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_script_py', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
+    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_dir', 's:voom_script_py', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
         silent echo v '--' {v}
     endfor
     redir END
@@ -1386,6 +1393,7 @@ func! Voom_Tree_KJUD(action, mode) "{{{3
 
     " make sure we are on the first line of visual selection
     " node level is indent of first |
+    let vcount1 = v:count1
     exe 'keepj normal! '.ln1.'G0f|'
     let ind = virtcol('.')-1
 
@@ -1412,7 +1420,7 @@ func! Voom_Tree_KJUD(action, mode) "{{{3
     " go up to the previous sibling, stopline is parent
     elseif a:action==#'K'
         let stopline = search('\m^[^|]\{0,'.(ind-2).'}|', 'bWn')
-        for i in range(v:count1)
+        for i in range(vcount1)
             call search('\m^[^|]\{'.(ind).'}|', 'bWe', stopline)
         endfor
 
@@ -1424,7 +1432,7 @@ func! Voom_Tree_KJUD(action, mode) "{{{3
             let sibln = search('\m^[^|]\{'.(ind).'}|', 'We', ln2)
         endwhile
         let stopline = search('\m^[^|]\{0,'.(ind-2).'}|', 'Wn')
-        for i in range(v:count1)
+        for i in range(vcount1)
             call search('\m^[^|]\{'.(ind).'}|', 'We', stopline)
         endfor
 

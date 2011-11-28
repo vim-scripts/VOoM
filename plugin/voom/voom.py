@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2011-11-03
+# Last Modified: 2011-11-27
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.0
+# Version: 4.1
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,

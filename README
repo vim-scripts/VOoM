@@ -21,6 +21,14 @@ VOoM currently can handle several other markup formats that have headlines and s
         cwiki  -- vimscript #2176
         python  -- Python code browser, blocks between 'class' and 'def' are also nodes
 
+NOTE: The :Voom command without an argument always creates outline from lines with start fold markers with level numbers. To outline another format, an argument specifying the desired markup mode must be provided.
+For a Markdown (MultiMarkdown, Pandoc) file:
+        :Voom markdown
+For an Orgmode file:
+        :Voom org
+And so on. There is argument completion -- type ":Voom " and hit <Tab> or <C-d>.
+
+
 FEATURES:
         - Works with Vim buffers, not with files on disk as ctags-based tools.
         - Automagic outline update on entering the Tree buffer.
