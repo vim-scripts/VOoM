@@ -1,5 +1,5 @@
 # voom_mode_asciidoc.py
-# Last Modified: 2011-11-03
+# Last Modified: 2012-04-02
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
@@ -27,15 +27,11 @@ See |voom_mode_asciidoc|,   ../../doc/voom.txt#*voom_mode_asciidoc*
 
 try:
     import vim
-    ENC = vim.eval('&enc')
-    if ENC in ('utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'):
-        ENC = 'utf-8'
     if vim.eval('exists("g:voom_asciidoc_do_blanks")')=='1' and vim.eval("g:voom_asciidoc_do_blanks")=='0':
         DO_BLANKS = False
     else:
         DO_BLANKS = True
 except ImportError:
-    ENC = 'utf-8'
     DO_BLANKS = True
 
 import re
@@ -62,6 +58,7 @@ def hook_makeOutline(VO, blines):
     """Return (tlines, bnodes, levels) for Body lines blines.
     blines is either Vim buffer object (Body) or list of buffer lines.
     """
+    ENC = VO.enc
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
@@ -135,7 +132,6 @@ def hook_makeOutline(VO, blines):
                   (-3 < z2 - z1 < 3) and z1 > 1 and z2 > 1 and
                   headI != i-1 and
                   not ((L2[0] in CHARS) and L2.lstrip(L2[0])=='') and
-                  not (L2.startswith('[[') and L2.endswith(']]')) and
                   not (L2.startswith('[') and L2.endswith(']')) and
                   not L2.startswith('.') and
                   not L2.startswith('\t') and
@@ -149,32 +145,33 @@ def hook_makeOutline(VO, blines):
                 bnode = i # lnum of previous line (L2)
 
         if gotHead and bnode > 1:
-            # decrement bnode if preceding lines are [[AAA]] and/or [AAA]
-            # line before title line, can be [[AAA]] or [AAA]
+            # decrement bnode if preceding lines are [[AAA]] or [AAA] lines
+            # that is set bnode to the topmost [[AAA]] or [AAA] line number
+            j_ = bnode-2 # idx of line before the title line
             L3 = blines[bnode-2].rstrip()
-            if (L3.startswith('[[') and L3.endswith(']]')):
-                bnode -= 1
-            elif (L3.startswith('[') and L3.endswith(']')):
+            while L3.startswith('[') and L3.endswith(']'):
                 bnode -= 1
                 if bnode > 1:
-                    # line before line before title line, can be [[AAA]]
-                    L4 = blines[bnode-2].rstrip()
-                    if (L4.startswith('[[') and L4.endswith(']]')):
-                        bnode -= 1
+                    L3 = blines[bnode-2].rstrip()
+                else:
+                    break
 
             # headline must be preceded by a blank line unless:
-            #   previous line is a headline
-            #   previous line is the end of a DelimitedBlock
-            #   it's line 1
+            #   it's line 1 (j == -1)
+            #   headline is preceded by [AAA] or [[AAA]] lines (j != j_)
+            #   previous line is a headline (headI_ == j)
+            #   previous line is the end of a DelimitedBlock (blockI == j)
             j = bnode-2
-            if DO_BLANKS and j > 0:
+            if DO_BLANKS and j==j_ and j > -1:
                 L3 = blines[j].rstrip()
                 if L3 and headI_ != j and blockI != j:
                     # skip over any adjacent comment lines
                     while L3.startswith('//') and not L3.startswith('///'):
                         j -= 1
-                        if j >=0: L3 = blines[j].rstrip()
-                        else: L3 = ''
+                        if j > -1:
+                            L3 = blines[j].rstrip()
+                        else:
+                            L3 = ''
                     if L3 and headI_ != j and blockI != j:
                         gotHead = False
                         headI = headI_
@@ -248,6 +245,7 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
     Body = VO.Body
     Z = len(Body)
     bnodes, levels = VO.bnodes, VO.levels
+    ENC = VO.enc
 
     # blnum1 blnum2 is first and last lnums of Body region pasted, inserted
     # during up/down, or promoted/demoted.
@@ -320,11 +318,9 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
             # Body headline (bnode) and the next line
             bln = bnodes[i-1]
             L1 = Body[bln-1].rstrip()
-            # bnode can point to line with [AAA] or [[AAA]]
-            if L1.startswith('[[') and L1.endswith(']]'):
-                bln += 1
-                L1 = Body[bln-1].rstrip()
-            if L1.startswith('[') and L1.endswith(']'):
+            # bnode can point to the tompost [AAA] or [[AAA]] line
+            # increment bln until the actual headline (title line) is found
+            while L1.startswith('[') and L1.endswith(']'):
                 bln += 1
                 L1 = Body[bln-1].rstrip()
             # the underline line

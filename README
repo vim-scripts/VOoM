@@ -20,8 +20,9 @@ VOoM currently can handle several other markup formats that have headlines and s
         vimoutliner  -- VimOutliner plugin (vimscript #3515)
         cwiki  -- vimscript #2176
         python  -- Python code browser, blocks between 'class' and 'def' are also nodes
+        fmr, fmr1, fmr2  -- start fold markers with levels (variations of the default mode) 
 
-NOTE: The :Voom command without an argument always creates outline from lines with start fold markers with level numbers. To outline another format, an argument specifying the desired markup mode must be provided.
+NOTE: By default, the :Voom command without an argument creates outline from lines with start fold markers with level numbers. To outline another format, an argument specifying the desired markup mode must be provided.
 For a Markdown (MultiMarkdown, Pandoc) file:
         :Voom markdown
 For an Orgmode file:
@@ -34,6 +35,7 @@ FEATURES:
         - Automagic outline update on entering the Tree buffer.
         - Not a 'filetype' plugin. Not tied to a particular outline format. Has (almost) no side effects on the buffer being outlined.
         - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
+        - Many single-key mappings for efficient outline navigation, which can be combined into complex commands, e.g.,"UVD" selects all siblings of the current node. Outlines can also be navigated with the mouse.
         - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.
         - Command to search nodes. Boolean AND/NOT search (in addition to Vim's \|).
 
@@ -97,7 +99,7 @@ Edit a headline (line with a numbered fold marker) in voom.vim and go back into 
 
 <C-Up>, <C-Down> move node or a range of sibling nodes Up/Down.
 <C-Left>, <C-Right> move nodes Left/Right (promote/demote).
-(If the above CTRL mappings are not recognized by your Vim, you can also move nodes Up/Down/Left/Right with <LocalLeader>u/d/l/r .)
+(If the above CTRL mappings are not recognized by your Vim, you can also move nodes Up/Down/Left/Right with ^^ __ << >>  or <LocalLeader>u/d/l/r .)
 
 
 Execute the command :Voomhelp to see all commands and mappings.

@@ -1,5 +1,5 @@
 # voom_mode_markdown.py
-# Last Modified: 2011-10-24
+# Last Modified: 2012-04-02
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
@@ -24,13 +24,6 @@ See |voom_mode_markdown|,   ../../doc/voom.txt#*voom_mode_markdown*
 # that is in hook_doBodyAfterOop().
 # Defaults: use underline, use closing hashes.
 
-try:
-    import vim
-    ENC = vim.eval('&enc')
-    if ENC in ('utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'):
-        ENC = 'utf-8'
-except ImportError:
-    ENC = 'utf-8'
 
 levels_ads = {1:'=', 2:'-'}
 
@@ -149,6 +142,7 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
     Body = VO.Body
     Z = len(Body)
     bnodes, levels = VO.bnodes, VO.levels
+    ENC = VO.enc
 
     # blnum1 blnum2 is first and last lnums of Body region pasted, inserted
     # during up/down, or promoted/demoted.

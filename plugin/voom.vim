@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2011-11-27
+" Last Modified: 2012-04-02
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.1
+" Version: 4.2
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -35,15 +35,16 @@
 
 "---Quickload---------------------------------{{{1
 if !exists('s:voom_did_quickload')
-    let s:voom_did_quickload = 'v4.1'
     com! -complete=custom,Voom_Complete -nargs=? Voom call Voom_Init(<q-args>)
+    com! -complete=custom,Voom_Complete -nargs=? VoomToggle call Voom_Init(<q-args>,1)
     com! Voomhelp call Voom_Help()
     com! Voomlog  call Voom_LogInit()
     com! -nargs=? Voomexec call Voom_Exec(<q-args>)
     exe "au FuncUndefined Voom_* source " . expand("<sfile>:p")
     " support for Vim sessions (:mksession)
     au BufFilePost __PyLog__ call Voom_LogSessionLoad()
-    au BufFilePost  *_VOOM\d\+ call Voom_TreeSessionLoad()
+    au BufFilePost *_VOOM\d\+ call Voom_TreeSessionLoad()
+    let s:voom_did_quickload = 'v4.2'
     finish
 endif
 
@@ -53,7 +54,6 @@ if !exists('s:voom_did_init')
     let s:script_path = substitute(expand("<sfile>:p"),'\','/','g')
     let s:script_dir = substitute(expand("<sfile>:p:h"),'\','/','g')
     let s:voom_dir = s:script_dir.'/voom'
-    let s:voom_script_py = s:voom_dir.'/_voomScript_.py'
 
     let s:voom_logbnr = 0
 
@@ -62,7 +62,7 @@ if !exists('s:voom_did_init')
     " {body : {'tree' : associated tree,
     "          'blnr' : Body cursor lnum, set when selecting node from Body,
     "          'snLn' : selected node Tree lnum,
-    "          'mmode' : 0 (no mode) or 1 (markup mode),
+    "          'mmode' : 0 (no mode or fmr mode) 1 (markup mode),
     "          'tick' : b:changedtick of Body on Body BufLeave,
     "          'tick_' : b:changedtick of Body on last Tree update}, {...}, ... }
     let s:voom_bodies = {}
@@ -72,7 +72,7 @@ import sys, vim
 if not vim.eval("s:voom_dir") in sys.path:
     sys.path.append(vim.eval("s:voom_dir"))
 import voom
-sys.modules['voom'].VOOMS = {}
+#sys.modules['voom'].VOOMS = {}
 EOF
     au! FuncUndefined Voom_*
     let s:voom_did_init = 1
@@ -145,69 +145,78 @@ endif
 
 com! Voomunl call Voom_EchoUNL()
 com! -nargs=? Voomgrep call Voom_Grep(<q-args>)
-
 com! -range -nargs=? VoomSort call Voom_OopSort(<line1>,<line2>, <q-args>)
 
 com! -range VoomFoldingSave    call Voom_OopFolding(<line1>,<line2>, 'save')
 com! -range VoomFoldingRestore call Voom_OopFolding(<line1>,<line2>, 'restore')
 com! -range VoomFoldingCleanup call Voom_OopFolding(<line1>,<line2>, 'cleanup')
 
+com! Voomtoggle call Voom_ToggleTreeWindow()
+com! Voomquit call Voom_DeleteOutline()
+com! VoomQuitAll call Voom_DeleteOutlines()
+
 """ development helpers
 if exists('g:voom_create_devel_commands')
     " print Vim-side data
     com! VoomPrintData  call Voom_PrintData()
-    " source voom.vim, reload voom.py
-    com! VoomReload    exe 'so '.s:script_path. ' | python reload(voom)'
-    " source voom.vim
+    " reload voom.vim (outlines are preserved)
     com! VoomReloadVim exe 'so '.s:script_path
-    " reload voom.py
-    com! VoomReloadPy  python reload(voom)
-    " reload all markup modes
-    com! VoomReloadModes call Voom_ReloadMarkupModes()
-    " complete reload: delete Trees and Voom data, source voom.vim, reload voom.py
-    com! VoomReloadAll call Voom_ReloadAllPre() | exe 'so '.s:script_path | call Voom_Init('')
+    " wipe out Trees, PyLog, delete Python modules, reload voom.vim and voom.py
+    " Note: simply reloading Python modules is pointless since v4.2
+    com! VoomReloadAll call Voom_ReloadAllPre() | exe 'so '.s:script_path
 endif
 
 
-"---Voom_Init(), various helpers--------------{{{1
+"---Voom_Init(), various commands, helpers----{{{1
 
-func! Voom_Init(qargs) "{{{2
-" The :Voom command.
+func! Voom_Init(qargs,...) "{{{2
+" Commands :Voom, :VoomToggle.
     let bnr = bufnr('')
-    " This is Tree. Go to Body, loading it if needed.
+    " Current buffer is Tree.
     if has_key(s:voom_trees, bnr)
         let body = s:voom_trees[bnr]
+        if a:0 && a:1
+            call Voom_UnVoom(body, bnr)
+            return
+        endif
         if !hasmapto('Voom_ToTreeOrBodyWin','n')
             echoerr "VOoM: Tree lost mappings. Reconfiguring..."
             call Voom_TreeConfig(body)
         endif
         call Voom_ToBody(body)
         return
-    " This is Body. Go to Tree.
+    " Current buffer is Body.
     elseif has_key(s:voom_bodies, bnr)
         let tree = s:voom_bodies[bnr].tree
+        if a:0 && a:1
+            call Voom_UnVoom(bnr, tree)
+            return
+        endif
         if !hasmapto('Voom_ToTreeOrBodyWin','n')
             echoerr "VOoM: Body lost mappings. Reconfiguring..."
             call Voom_BodyConfig()
         endif
-        if Voom_ToTree(tree) < 0 | return | endif
+        call Voom_ToTree(tree)
         return
-    " This is not a VOoM buffer.
-    " Create Tree for current buffer, which becomes a Body buffer.
-    else
-        let body = bnr
-        let s:voom_bodies[body] = {}
-        let s:voom_bodies[body].blnr = line('.')
-        let [b_name, b_dir] = [expand('%:p:t'), expand('%:p:h')]
-        if b_name=='' | let b_name='No Name' | endif
-        let l:firstLine = ' '.b_name.' ['.b_dir.'], b'.body
-        let [l:mmode, l:qargs] = [-1, a:qargs]
-        python voom.voom_Init(int(vim.eval('l:body')))
-        if l:mmode < 0 | unlet s:voom_bodies[body] | return | endif
-        let s:voom_bodies[body].mmode = l:mmode
-        call Voom_BodyConfig()
-        call Voom_ToTreeWin()
-        call Voom_TreeCreate(body)
+    endif
+    " Current buffer is not a VOoM buffer. Create Tree for it. Current buffer
+    " becomes a Body buffer.
+    let body = bnr
+    let s:voom_bodies[body] = {}
+    let s:voom_bodies[body].blnr = line('.')
+    let [b_name, b_dir] = [expand('%:p:t'), expand('%:p:h')]
+    if b_name=='' | let b_name='No Name' | endif
+    let l:firstLine = ' '.b_name.' ['.b_dir.'], b'.body
+    let [l:mmode, l:qargs] = [-1, a:qargs]
+    python voom.voom_Init(int(vim.eval('l:body')))
+    if l:mmode < 0 | unlet s:voom_bodies[body] | return | endif
+    let s:voom_bodies[body].mmode = l:mmode
+    call Voom_BodyConfig()
+    call Voom_ToTreeWin()
+    call Voom_TreeCreate(body)
+    if a:0 && a:1
+        call Voom_ToBody(body)
+        return
     endif
 endfunc
 
@@ -297,12 +306,59 @@ func! Voom_Help() "{{{2
 endfunc
 
 
+func! Voom_DeleteOutline(...) "{{{2
+" Delete current outline, execute Ex command if in Body or non-VOoM buffer.
+    let bnr = bufnr('')
+    " current buffer is Tree
+    if has_key(s:voom_trees, bnr)
+        call Voom_UnVoom(s:voom_trees[bnr], bnr)
+        return
+    " current buffer is Body
+    elseif has_key(s:voom_bodies, bnr)
+        call Voom_UnVoom(bnr, s:voom_bodies[bnr].tree)
+    endif
+    " current buffer is Body or non-VOoM buffer
+    if a:0
+        execute a:1
+    endif
+endfunc
+
+
+func! Voom_DeleteOutlines() "{{{2
+" Delete all VOoM outlines.
+    for bnr in keys(s:voom_trees)
+        let tree = str2nr(bnr)
+        call Voom_UnVoom(s:voom_trees[tree], tree)
+    endfor
+endfunc
+
+
+func! Voom_UnVoom(body,tree) "{{{2
+" Remove VOoM data for Body body and its Tree tree.
+" Wipeout Tree, delete Body au, etc.
+" Can be called from any buffer.
+" Note: when called from Tree BufUnload au, tree doesn't exist.
+    if has_key(s:voom_bodies, a:body) && has_key(s:voom_trees, a:tree)
+        unlet s:voom_bodies[a:body]
+        unlet s:voom_trees[a:tree]
+    else
+        echoerr 'VOoM: internal error'
+        return
+    endif
+    python voom.voom_UnVoom(int(vim.eval('a:body')))
+    exe 'au! VoomBody * <buffer='.a:body.'>'
+    if bufexists(a:tree)
+        "exe 'noautocmd bwipeout '.a:tree
+        exe 'au! VoomTree * <buffer='.a:tree.'>'
+        exe 'bwipeout '.a:tree
+    endif
+    if bufnr('')==a:body
+        call Voom_BodyUnMap()
+    endif
+endfunc
+
+
 func! Voom_FoldStatus(lnum) "{{{2
-" Helper for dealing with folds. Determine if line lnum is:
-"  not in a fold;
-"  hidden in a closed fold;
-"  not hidden and is a closed fold;
-"  not hidden and is in an open fold.
     " there is no fold
     if foldlevel(a:lnum)==0
         return 'nofold'
@@ -318,6 +374,11 @@ func! Voom_FoldStatus(lnum) "{{{2
     else
         return 'notfolded'
     endif
+" Helper for dealing with folds. Determine if line lnum is:
+"  not in a fold;
+"  hidden in a closed fold;
+"  not hidden and is a closed fold;
+"  not hidden and is in an open fold.
 endfunc
 
 
@@ -363,102 +424,95 @@ func! Voom_BufEditable(body) "{{{2
 endfunc
 
 
-func! Voom_DeleteOutline(ex_command) "{{{2
-" Delete outline if current buffer is Tree or Body.
-" Then execute ex_command if current buffer is not Tree.
+func! Voom_SetSnLn(body, snLn) "{{{2
+" Set snLn. Used by Python code.
+    let s:voom_bodies[a:body].snLn= a:snLn
+endfunc
+
+
+func! Voom_ToggleTreeWindow() "{{{2
+" Mimimize/restore Tree window.
     let bnr = bufnr('')
-    " current buffer is Tree
-    if has_key(s:voom_trees, bnr)
-        let body = s:voom_trees[bnr]
-        call Voom_UnVoom(body,bnr)
-        return
-    " current buffer is Body
-    elseif has_key(s:voom_bodies, bnr)
-        let tree = s:voom_bodies[bnr].tree
-        call Voom_UnVoom(bnr,tree)
-        execute a:ex_command
-        return
-    " not a VOoM buffer
+    if has_key(s:voom_bodies, bnr)
+        let [body, tree, inBody] = [bnr, s:voom_bodies[bnr].tree, 1]
+    elseif has_key(s:voom_trees, bnr)
+        let [body, tree, inBody] = [s:voom_trees[bnr], bnr, 0]
     else
-        execute a:ex_command
+        call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
         return
     endif
+
+    if inBody
+        if Voom_ToTree(tree)!=0 | return | endif
+    endif
+
+    " current window width (w) and height (h)
+    let [winw, winh] = [winwidth(0), winheight(0)]
+    " maximum possible w and h (-2 for statusline and tabline)
+    let [maxw, maxh] = [&columns, &lines-&cmdheight-2]
+    " minimize w, h, or both
+    if winw > 1 && winh > 1
+        let w:voom_winsave = winsaveview()
+        if winw < maxw
+            let w:voom_w = winw
+            vertical resize 1
+        endif
+        if winh < maxh
+            let w:voom_h = winh
+            resize 1
+        endif
+    " restore w, h, or both
+    else
+        if winw <= 1
+            let w = exists('w:voom_w') ? w:voom_w : g:voom_tree_width
+            exe 'vertical resize '.w
+        endif
+        if winh <= 1
+            let h = exists('w:voom_h') ? w:voom_h : g:voom_tree_height
+            exe 'resize '.h
+        endif
+        if exists('w:voom_winsave')
+            call winrestview(w:voom_winsave)
+        endif
+    endif
+
+    if inBody | call Voom_ToBody(body) | endif
 endfunc
 
 
-func! Voom_UnVoom(body,tree) "{{{2
-" Remove VOoM data for Body body and its Tree tree.
-" Wipeout Tree, delete Body au, etc.
-" Can be called from any buffer.
-" Note: when called from Tree BufUnload au, tree doesn't exist.
-    if has_key(s:voom_trees, a:tree)
-        unlet s:voom_trees[a:tree]
-    endif
-    if has_key(s:voom_bodies, a:body)
-        unlet s:voom_bodies[a:body]
-    endif
-    python voom.voom_UnVoom(int(vim.eval('a:body')))
-    exe 'au! VoomBody * <buffer='.a:body.'>'
-    if bufexists(a:tree)
-        "exe 'noautocmd bwipeout '.a:tree
-        exe 'au! VoomTree * <buffer='.a:tree.'>'
-        exe 'bwipeout '.a:tree
-    endif
-    if bufnr('')==a:body
-        call Voom_BodyUnMap()
-    endif
-endfunc
-
+"--- for external scripts --- {{{2
 
 func! Voom_GetVar(var) "{{{2
     return {a:var}
-" Allow external scripts to read script-local variables.
-" Example, move cursor to Log window in current tab
-" :let logwnr = bufwinnr(Voom_GetVar('s:voom_logbnr'))
-" :      if logwnr > 0 | exe logwnr.'wincmd w' | endif
 endfunc
 
 
 func! Voom_GetData() "{{{2
-" Allow external scripts and add-ons to read Vim-side Voom data.
     return [s:voom_bodies, s:voom_trees]
 endfunc
 
 
-func! Voom_GetBufInfo() "{{{2
-" Helper for external scripts and add-ons.
-" Return ['Body' or 'Tree', body, tree] for current buffer.
-" Return [None,0,0] if current buffer is neither Body nor Tree.
-" Update outline if current buffer is Body.
-
-    """ Determine Tree or Body buffer numbers.
+func! Voom_GetBufInfo(...) "{{{2
     let bnr = bufnr('')
-    " current buffer is Tree
     if has_key(s:voom_trees, bnr)
-        let type = 'Tree'
-        let tree = bnr
-        let body = s:voom_trees[bnr]
-        if Voom_BufLoaded(body) < 0 | return ['None',0,0] | endif
-    " current buffer is Body
+        let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
+        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1] | endif
     elseif has_key(s:voom_bodies, bnr)
-        let type = 'Body'
-        let body = bnr
-        let tree = s:voom_bodies[bnr].tree
-        " update outline
-        if Voom_BodyUpdateTree() < 0
-            return ['None',0,0]
-        endif
+        let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
+        if Voom_BodyUpdateTree() < 0 | return ['Body',-1,-1] | endif
     else
-        call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
+        if !(a:0 && a:1)
+            call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
+        endif
         return ['None',0,0]
     endif
-    return [type, body, tree]
-endfunc
-
-
-func! Voom_SetSnLn(body, snLn) "{{{2
-" Set snLn. Used by Python code.
-    let s:voom_bodies[a:body].snLn= a:snLn
+    return [bufType, body, tree]
+" Helper for external scripts and add-ons.
+" Return ['Body'/'Tree', body, tree] for the current buffer.
+" Return ['None',0,0] if current buffer is neither Body nor Tree and print
+"   error message. To supress the error message: Voom_GetBufInfo(1)
+" Return ['Body'/'Tree',-1,-1] if outline is not available.
+" Update outline if current buffer is Body.
 endfunc
 
 
@@ -466,7 +520,7 @@ func! Voom_PrintData() "{{{2
 " Print Vim-side VOoM data.
     redir => voomData
     silent echo repeat('-', 60)
-    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_dir', 's:voom_script_py', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
+    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_dir', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
         silent echo v '--' {v}
     endfor
     redir END
@@ -476,27 +530,21 @@ endfunc
 
 
 func! Voom_ReloadAllPre() "{{{2
-" Helper for reloading entire plugin.
-    update
-    " wipe out all Tree buffers
-    for bnr in keys(s:voom_trees)
-        if bufexists(str2nr(bnr))
-            exe 'bwipeout '.bnr
-        endif
-    endfor
-    python reload(voom)
+" Helper for reloading the entire plugin and all modes.
+" Wipe out all Tree buffers and PyLog buffer. Delete Python voom modules.
+    call Voom_DeleteOutlines()
+    if s:voom_logbnr && bufexists(s:voom_logbnr)
+        exe 'bwipeout '.s:voom_logbnr
+    endif
+python << EOF
+sys.exc_clear()
+del sys.modules['voom']
+for k in sys.modules.keys():
+    if k.startswith('voom_mode_'):
+        del sys.modules[k]
+del k
+EOF
     unlet s:voom_did_init
-endfunc
-
-
-func! Voom_ReloadMarkupModes() "{{{2
-" Reload all markup modes.
-    let bodies = keys(s:voom_bodies)
-    for body in bodies
-        if s:voom_bodies[body].mmode
-            python reload(voom.VOOMS[int(vim.eval('l:body'))].mmode)
-        endif
-    endfor
 endfunc
 
 
@@ -619,6 +667,7 @@ func! Voom_ToTree(tree) abort "{{{2
     call Voom_ToTreeWin()
     silent exe 'b '.a:tree
     " window-local options will be set on BufEnter
+    return 1
 endfunc
 
 
@@ -681,6 +730,7 @@ func! Voom_ToBody(body) abort "{{{2
     " Create new window and load there.
     call Voom_ToBodyWin()
     exe 'b '.a:body
+    return 1
 endfunc
 
 
@@ -945,20 +995,22 @@ noremap <buffer><silent> r <Nop>
 noremap <buffer><silent> R <Nop>
 noremap <buffer><silent> x <Nop>
 noremap <buffer><silent> X <Nop>
-noremap <buffer><silent> d <Esc>
 noremap <buffer><silent> D <Nop>
 noremap <buffer><silent> J <Nop>
 noremap <buffer><silent> c <Nop>
 noremap <buffer><silent> C <Nop>
-noremap <buffer><silent> p <Esc>
 noremap <buffer><silent> P <Nop>
 noremap <buffer><silent> . <Nop>
 noremap <buffer><silent> = <Nop>
 noremap <buffer><silent> <Ins> <Nop>
 noremap <buffer><silent> <Del> <Nop>
 noremap <buffer><silent> <C-x> <Esc>
+noremap <buffer><silent> p <Esc>
+noremap <buffer><silent> d <Esc>
 noremap <buffer><silent> < <Esc>
 noremap <buffer><silent> > <Esc>
+noremap <buffer><silent> ^ <Esc>
+noremap <buffer><silent> _ <Esc>
 
 " disable undo (also case conversion)
 noremap <buffer><silent> u <Nop>
@@ -1052,13 +1104,17 @@ nnoremap <buffer><silent> <LocalLeader>I  :<C-u>call Voom_OopInsert('as_child')<
 " move
 nnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'n')<CR>
 nnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'n')<CR>
+nnoremap <buffer><silent>             ^^  :<C-u>call Voom_Oop('up', 'n')<CR>
 vnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'v')<CR>
 vnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'v')<CR>
+vnoremap <buffer><silent>             ^^  :<C-u>call Voom_Oop('up', 'v')<CR>
 
 nnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'n')<CR>
 nnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'n')<CR>
+nnoremap <buffer><silent>             __  :<C-u>call Voom_Oop('down', 'n')<CR>
 vnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'v')<CR>
 vnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'v')<CR>
+vnoremap <buffer><silent>             __  :<C-u>call Voom_Oop('down', 'v')<CR>
 
 nnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'n')<CR>
 nnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'n')<CR>
@@ -1094,8 +1150,8 @@ vnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'v'
 nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voom_OopMarkStartup()<CR>
 
 " select Body region
-nnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRegion('n')<CR>
-vnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRegion('v')<CR>
+nnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRange('n')<CR>
+vnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRange('v')<CR>
     """ }}}
 
     """ save/Restore Tree folding {{{
@@ -1106,14 +1162,16 @@ nnoremap <buffer><silent> <LocalLeader>far :<C-u>call Voom_OopFolding(1,line('$'
     """ }}}
 
     """ various commands {{{
+
 " echo Tree headline
 nnoremap <buffer><silent> s :<C-u>echo getline('.')[(stridx(getline('.'),'<Bar>')+1):]<CR>
-
 " echo UNL
 nnoremap <buffer><silent> S :<C-u>call Voom_EchoUNL()<CR>
-
 "nnoremap <buffer><silent> <F1> :<C-u>call Voom_Help()<CR>
 nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
+" delete outline
+nnoremap <buffer><silent> q :<C-u>call Voom_DeleteOutline()<CR>
+
     """ }}}
 
     let &cpo = cpo_
@@ -1130,7 +1188,7 @@ nnoremap <buffer><silent> <LocalLeader>e :<C-u>call Voom_Exec('')<CR>
     " Can't use Ctrl: <C-i> is Tab; <C-u>, <C-d> are page up/down.
     " Use <LocalLeader> instead of Ctrl.
     "
-    " Still up for grabs: q <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { }
+    " Still up for grabs: <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { }
 endfunc
 
 
@@ -1594,7 +1652,7 @@ endfunc
 
 "---Outline Operations---{{{2
 
-func! Voom_OopSelectBodyRegion(mode) "{{{3
+func! Voom_OopSelectBodyRange(mode) "{{{3
 " Move to Body and select region corresponding to node(s) in the Tree.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
@@ -1618,7 +1676,7 @@ func! Voom_OopSelectBodyRegion(mode) "{{{3
     if Voom_ToBody(body) < 0 | return | endif
     if Voom_BodyCheckTicks(body) < 0 | return | endif
     " compute bln1 and bln2
-    python voom.voom_OopSelectBodyRegion()
+    python voom.voom_OopSelectBodyRange()
     " this happens when ln2==1 and the first headline is top of buffer
     if l:bln2==0 | return | endif
     exe 'normal! '.bln1.'Gzv'.bln2.'GzvV'.bln1.'G'
@@ -2215,8 +2273,8 @@ func! Voom_BodyConfig() "{{{2
 " Configure current buffer as a Body buffer.
     augroup VoomBody
         au! * <buffer>
-        au BufLeave   <buffer> call Voom_BodyBufLeave()
-        au BufEnter   <buffer> call Voom_BodyBufEnter()
+        au BufLeave <buffer> call Voom_BodyBufLeave()
+        au BufEnter <buffer> call Voom_BodyBufEnter()
     augroup END
 
     " redundant: will be set on BufLeave
@@ -2382,23 +2440,16 @@ func! Voom_EchoUNL() "{{{2
 " Can be called from any buffer.
     let bnr = bufnr('')
     let lnum = line('.')
-
     if has_key(s:voom_trees, bnr)
-        let body = s:voom_trees[bnr]
+        let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
         if Voom_BufLoaded(body) < 0 | return | endif
-        let tree = bnr
-        let buftype = 'tree'
     elseif has_key(s:voom_bodies, bnr)
-        let body = bnr
-        let tree = s:voom_bodies[bnr].tree
-        let buftype = 'body'
-        " update outline
+        let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
         if Voom_BodyUpdateTree() < 0 | return | endif
     else
-        call Voom_ErrorMsg("VOoM (Voomunl): current buffer is not a VOoM buffer")
+        call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
         return
     endif
-
     python voom.voom_EchoUNL()
 endfunc
 
@@ -2435,7 +2486,7 @@ func! Voom_Grep(input) "{{{2
         " update outline
         if Voom_BodyUpdateTree() < 0 | return | endif
     else
-        call Voom_ErrorMsg("VOoM (Voomgrep): current buffer is not a VOoM buffer")
+        call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
         return
     endif
 
@@ -2639,8 +2690,7 @@ func! Voom_LogSyntax() "{{{2
     " VOoM messages
     syn match Error /^ERROR: .*/
     syn match Error /^EXCEPTION: .*/
-    syn match PreProc /^---end of Python script---/
-    syn match PreProc /^---end of Vim script---/
+    syn match PreProc /^---end of \w\+ script.*---$/
 
     " -> UNL separator
     syn match Title / -> /
@@ -2711,41 +2761,81 @@ endfunc
 
 "---EXECUTE SCRIPT (Voomexec)-----------------{{{1
 
-func! Voom_GetBodyLines(lnum) "{{{2
-" Return list of Body lines.
-" Tree buffer: Body lines from branch at Tree line lnum (node lnum and all its
-" subnodes).
-" Any other buffer: lines from fold at line lnum, including subfolds.
-" Return [] if checks fail.
-
+func! Voom_GetVoomRange(lnum, withSubnodes) "{{{2
     let bnr = bufnr('')
-    """ Tree buffer: get Body lines of the corresponding node and subnodes.
     if has_key(s:voom_trees, bnr)
-        let body = s:voom_trees[bnr]
-        if Voom_BufLoaded(body) < 0 | return [] | endif
-        let status = Voom_FoldStatus(a:lnum)
-        if status=='hidden'
-            call Voom_ErrorMsg('VOoM: current line is hidden in fold')
-            return []
-        endif
-        python voom.voom_GetBodyLines()
-        return getbufline(body, l:bln1, l:bln2)
+        let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
+        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1,-1] | endif
+    elseif has_key(s:voom_bodies, bnr)
+        let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
+        if Voom_BodyUpdateTree() < 0 | return ['Body',-1,-1,-1] | endif
+    else
+        return ['None',0,0,0]
     endif
+    if a:withSubnodes
+        python voom.voom_GetVoomRange(withSubnodes=1)
+    else
+        python voom.voom_GetVoomRange()
+    return [bufType, body, l:bln1, l:bln2]
+" Return [bufType, body, bln1, bln2] for node at line lnum of the current
+" VOoM buffer (Tree or Body).
+" bln1, bln2: VOoM node's first and last Body lnums. Current node only if
+" a:withSubnodes==0. Include all subnodes if a:withSubnodes==1.
+" Return [bufType,-1,-1,-1] in case of an error (unloaded Body, etc.)
+" Return ['None',0,0,0] for a non-VOoM buffer.
+" This is for use by external scripts:
+"       let [bufType, body, bln1, bln2] = Voom_GetVoomRange(line('.'),0)
+"       let bodyLines = getbufline(body,bln1,bln2)
+endfunc
 
-    """ Regular buffer: get lines of the current fold.
+
+func! Voom_GetBuffRange(ln1, ln2) "{{{2
+    let bnr = bufnr('')
+    if has_key(s:voom_trees, bnr)
+        let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
+        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1,-1] | endif
+        python voom.voom_GetBuffRange()
+        return [bufType, body, l:bln1, l:bln2]
+    elseif has_key(s:voom_bodies, bnr)
+        return ['Body',bnr,a:ln1,a:ln2]
+    else
+        return ['None',bnr,a:ln1,a:ln2]
+    endif
+" Return [bufType, body, bln1, bln2] for line range lnum1,lnum2.
+" If current buffer is a Tree: bln1, bln2 are start and end lnums of the
+" corresponding Body line range; 'body' is Body's buffer number.
+" Return ['Tree',-1,-1,-1] in case of an error (unloaded Body.)
+" If current buffer is not a Tree: bln1, bln2 are lnum1, lnum2; 'body' is the
+" current buffer number.
+" NOTE: Outline is not updated if the current buffer is Body.
+endfunc
+
+
+func! Voom_GetExecRange(lnum) "{{{2
+" Return line range info for Voomexec: [bufType, bufnr, start lnum, end lnum]
+    let bnr = bufnr('')
+    let status = Voom_FoldStatus(a:lnum)
+    if status=='hidden'
+        call Voom_ErrorMsg('VOoM: line is hidden in fold')
+        return ['',-1,-1,-1] 
+    endif
+    " Tree buffer: get start/end of Body node and subnodes.
+    if has_key(s:voom_trees, bnr)
+        let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
+        if Voom_BufLoaded(body) < 0 | return ['',-1,-1,-1] | endif
+        python voom.voom_GetVoomRange(withSubnodes=1)
+        return [bufType, body, l:bln1, l:bln2]
+    endif
+    " Any other buffer: get start/end of the current fold and subfolds.
     if &fdm !=# 'marker'
         call Voom_ErrorMsg('VOoM: ''foldmethod'' must be "marker"')
-        return []
+        return ['',-1,-1,-1]
     endif
-    let status = Voom_FoldStatus(a:lnum)
     if status=='nofold'
         call Voom_ErrorMsg('VOoM: no fold at cursor')
-        return []
-    elseif status=='hidden'
-        call Voom_ErrorMsg('VOoM: current line is hidden in fold')
-        return []
+        return ['',-1,-1,-1]
     elseif status=='folded'
-        return getline(foldclosed(a:lnum), foldclosedend(a:lnum))
+        return ['', bnr, foldclosed(a:lnum), foldclosedend(a:lnum)]
     elseif status=='notfolded'
         let lz_ = &lz | set lz
         let winsave_dict = winsaveview()
@@ -2755,37 +2845,14 @@ func! Voom_GetBodyLines(lnum) "{{{2
         normal! zo
         call winrestview(winsave_dict)
         let &lz=lz_
-        return getline(foldStart, foldEnd)
+        return ['', bnr, foldStart, foldEnd]
     endif
-endfunc
-
-
-func! Voom_GetBodyLines1(lnum) "{{{2
-" Return list of Body lines of node at line lnum (Tree or Body).
-" This is for use by external scripts. Can be called from any buffer.
-" Return [-1] if lines cannot be obtained.
-    let bnr = bufnr('')
-    if has_key(s:voom_trees, bnr)
-        let buftype = 'tree'
-        let body = s:voom_trees[bnr]
-        if Voom_BufLoaded(body) < 0 | return [-1] | endif
-    elseif has_key(s:voom_bodies, bnr)
-        let buftype = 'body'
-        let body = bnr
-        let tree = s:voom_bodies[body].tree
-        if Voom_BodyUpdateTree() < 0 | return [-1] | endif
-    else
-        "echo "VOoM: current buffer is not a VOoM buffer"
-        return []
-    endif
-    python voom.voom_GetBodyLines1()
-    return getbufline(body, l:bln1, l:bln2)
 endfunc
 
 
 func! Voom_Exec(qargs) "{{{2
-" Execute text from the current fold (non-Tree buffer, include subfolds) or
-" node (Tree buffer, include subnodes) as a script.
+" Execute text from the current node (Tree or Body, include subnodes) or fold
+" (non-VOoM buffer, include subfolds) as a script.
 " If argument is 'vim' or 'py'/'python': execute as Vim or Python script.
 " Otherwise execute according to filetype.
 
@@ -2813,8 +2880,8 @@ func! Voom_Exec(qargs) "{{{2
     endif
 
     " Get script lines.
-    let lines = Voom_GetBodyLines(line('.'))
-    if lines==[] | return | endif
+    let [bufType, body, bln1, bln2] = Voom_GetExecRange(line('.'))
+    if body<1 | return | endif
 
     " Execute Vim script: Copy list of lines to register and execute it.
     " Problem: Python errors do not terminate script and Python tracebacks are
@@ -2822,40 +2889,38 @@ func! Voom_Exec(qargs) "{{{2
     " caused by 'catch', but without it foldtext is temporarily messed up in
     " all windows after any error.
     if scriptType==#'vim'
+        let lines = getbufline(body, bln1, bln2)
+        if lines==[] | return | endif
         let reg_z = getreg('z')
         let reg_z_mode = getregtype('z')
         let script = join(lines, "\n") . "\n"
         call setreg('z', script, "l")
         try
-            @z
-            echo '---end of Vim script---'
+            call s:Voom_ExecVim()
         catch
             call Voom_ErrorMsg(v:exception)
         finally
             call setreg('z', reg_z, reg_z_mode)
+            echo '---end of Vim script ('.bln1.'-'.bln2.')---'
         endtry
-    " Execute Python script: write lines to a .py file and do execfile().
+    " Execute Python script.
     elseif scriptType==#'python'
-        " specifiy script encoding (Vim internal encoding) on its first line
-        let ENC = getbufvar(bnr,'&enc')
-        let p = '^'.ENC.'$'
-        if match(['utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'],p) > -1
-            let ENC = 'utf-8'
-        endif
-        call insert(lines, '# -*- coding: '.ENC.' -*-')
-        if writefile(lines, s:voom_script_py)==0
-            " do not change, see ./voom/voom.py#id_20101214100357
-            if s:voom_logbnr
-                try
-                    python voom.execScript()
-                catch
-                    python print vim.eval('v:exception')
-                endtry
-            else
-                python voom.execScript()
-            endif
+        " do not change, see ./voom/voom.py#id_20101214100357
+        if s:voom_logbnr
+            try
+                python voom.voom_Exec()
+            catch
+                python print vim.eval('v:exception')
+            endtry
+        else
+            python voom.voom_Exec()
         endif
     endif
+endfunc
+
+
+func! s:Voom_ExecVim() "{{{2
+    @z
 endfunc
 
 

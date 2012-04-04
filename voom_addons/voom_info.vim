@@ -12,19 +12,30 @@ com! VoomInfo call Voom_Info()
 
 func! Voom_Info()
     """"""" standard code for every VOoM add-on command
-    " Determine if current buffer is a Tree or Body buffer.
-    " Exit if neither. An info message will be printed by Voom_GetBufInfo.
-    " bufType is also 'None' when Body is not loaded or doesn't exist.
-    " Get Tree and Body buffer numbers.
-    " If current buffer is a Body, outline is updated if needed.
+    " Determine if the current buffer is a VOoM Tree buffer, Body buffer, or neither.
     let [bufType,body,tree] = Voom_GetBufInfo()
-    if bufType=='None' | return | endif
-    " Get Vim-side outline data (local to voom.vim).
+    " Error, outline is not available (Body is unloaded, outline update failed).
+    if body==-1 | return | endif
+    """ Do different things depending on the type of the current buffer.
+    " Current buffer is not a VOoM buffer (neither Tree nor Body).
+    " The error message is printed automatically. It can be suppressed by
+    " providing an optional argument: Voom_GetBufInfo(1)
+    if bufType==#'None'
+        "call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
+        return
+    " Current buffer is a VOoM Body. Outline is updated automatically if needed.
+    elseif bufType==#'Body'
+        call Voom_WarningMsg("in VOoM Body buffer")
+    " Current buffer is a VOoM Tree.
+    elseif bufType==#'Tree'
+        call Voom_WarningMsg("in VOoM Tree buffer")
+    endif
+    " Get Vim-side outline data. NOTE: Do not modify these dictionaries!
     let [voom_bodies, voom_trees] = Voom_GetData()
 
 
     """"""" script-specific code
-    " Get Python-side data. This creates local vars.
+    " Get Python-side data. This creates Vim local variables.
     py voom_Info()
 
     echo 'VOoM version:' Voom_GetVar('s:voom_did_quickload')

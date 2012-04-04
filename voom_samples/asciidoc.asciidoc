@@ -1,6 +1,6 @@
 ﻿// :Voom asciidoc
 // Tests for VOoM asciidoc mode. This file is in utf-8 encoding.
-// vim: ft=asciidoc list
+// vim: ft=asciidoc list fdm=manual
 
 
 
@@ -110,14 +110,27 @@ BLOCKID, ATTRIBUTELIST
 ======================
 
 [[AAA]]
-== headline ==
+== headline 1 ==
 
 [AAA]
-== headline ==
+== headline 2 ==
 
 [[AAA]]
 [AAA]
-== headline ==
+== headline 3 ==
+
+[AAA]
+[[AAA]]
+== headline 4 ==
+
+[AAA]
+[[AAA]]
+[AAA]
+== headline 5 ==
+text
+[AAA]
+== headline 6 ==
+
 
 
 

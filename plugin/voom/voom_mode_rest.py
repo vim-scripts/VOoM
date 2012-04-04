@@ -1,5 +1,5 @@
 # voom_mode_rest.py
-# Last Modified: 2011-05-01
+# Last Modified: 2012-04-02
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
@@ -23,13 +23,6 @@ http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html#sections
 http://docs.python.org/documenting/rest.html#sections
 Python recommended styles:   ##  **  =  -  ^  "
 """
-try:
-    import vim
-    ENC = vim.eval('&enc')
-    if ENC in ('utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'):
-        ENC = 'utf-8'
-except ImportError:
-    ENC = 'utf-8'
 
 # All valid section title adornment characters.
 AD_CHARS = """  ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ ` { | } ~  """
@@ -61,6 +54,7 @@ def hook_makeOutline(VO, blines):
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
+    ENC = VO.enc
 
     # {adornment style: level, ...}
     # Level indicates when the first instance of this style was found.
@@ -158,6 +152,7 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
     Body = VO.Body
     Z = len(Body)
     bnodes, levels = VO.bnodes, VO.levels
+    ENC = VO.enc
 
     # blnum1 blnum2 is first and last lnums of Body region pasted, inserted
     # during up/down, or promoted/demoted.
@@ -234,7 +229,7 @@ def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnum
                 L3 = Body[bln+1].rstrip()
             else:
                 L3 = ''
-            ad_ = deduce_ad_style(L1,L2,L3)
+            ad_ = deduce_ad_style(L1,L2,L3,ENC)
 
             # change adornment style
             # see deduce_ad_style() for diagram
@@ -315,7 +310,7 @@ def get_new_ad(levels_ads, ads_levels, level):
     return levels_ads[64]
 
 
-def deduce_ad_style(L1,L2,L3):
+def deduce_ad_style(L1,L2,L3,ENC):
     """Deduce adornment style given first 3 lines of Body node.
     1st line is bnode line. Lines must be rstripped.
     """
@@ -351,11 +346,12 @@ def deduce_ad_style(L1,L2,L3):
 
 def deduce_ad_style_test(VO):
     """ Test to verify deduce_ad_style(). Execute from Vim
-      :py voom.VOOMS[1].mmode.deduce_ad_style_test(voom.VOOMS[1])
+      :py voom.VOOMS[1].mModule.deduce_ad_style_test(voom.VOOMS[1])
     """
     bnodes, levels, Body = VO.bnodes, VO.levels, VO.Body
     ads_levels = VO.ads_levels
     levels_ads = dict([[v,k] for k,v in ads_levels.items()])
+    ENC = VO.enc
 
     for i in xrange(2, len(bnodes)+1):
         bln = bnodes[i-1]
@@ -365,7 +361,7 @@ def deduce_ad_style_test(VO):
             L3 = Body[bln+1].rstrip()
         else:
             L3 = ''
-        ad = deduce_ad_style(L1,L2,L3)
+        ad = deduce_ad_style(L1,L2,L3,ENC)
         lev = levels[i-1]
         print i, ad, levels_ads[lev]
         assert ad == levels_ads[lev]

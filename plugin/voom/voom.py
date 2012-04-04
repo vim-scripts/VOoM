@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2011-11-27
+# Last Modified: 2012-04-02
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.1
+# Version: 4.2
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -25,21 +25,28 @@ shuffle = None # random.shuffle
 # voom_WhatEver() is Python code for Voom_WhatEver() function in voom.vim
 # VO is instance of VoomOutline class, stored in dict VOOMS
 
+# {body: VO, ...}
+VOOMS = {}
 
-#---Constants and Settings--------------------{{{1
+#---Constants and Settings--------------------{{{1=
 
 # default start fold marker string and regexp
 MARKER = '{{{'                            #}}}
 MARKER_RE = re.compile(r'{{{(\d+)(x?)')   #}}}
 
-VOOM_SCRIPT = vim.eval('s:voom_script_py')
+# {'markdown': 'markdown', 'pandoc': 'markdown', ...}
+if vim.eval("exists('g:voom_ft_modes')")=='1':
+    FT_MODES = vim.eval('g:voom_ft_modes')
+else:
+    FT_MODES = {}
+# default markup mode
+if vim.eval("exists('g:voom_default_mode')")=='1':
+    MODE = vim.eval('g:voom_default_mode')
+else:
+    MODE = ''
 
 # {filetype: make_head_<filetype> function, ...}
 MAKE_HEAD = {}
-
-#VOOMS = {}    # {body: VoomOutline instance, ...}
-# Dict VOOMS is created in voom.vim, not here. Thus, this module can be
-# reloaded without destroying outline data.
 
 
 #---Outline Construction----------------------{{{1o
@@ -66,25 +73,9 @@ def voom_Init(body): #{{{2
     VO.bname = vim.eval('l:firstLine')
     # Body &filetype
     VO.filetype = vim.eval('&filetype')
+    VO.enc = get_vim_encoding()
 
-    # markup mode, l:qargs is mode's name
-    VO.mmode = 0
-    qargs = vim.eval('l:qargs').strip()
-    if qargs:
-        module = 'voom_mode_%s' %qargs
-        try:
-            mmode = __import__(module)
-            VO.mmode = mmode
-            VO.bname += ', %s' %qargs
-            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), os.path.abspath(mmode.__file__).replace("'","''")))
-        except ImportError:
-            vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %module.replace("'","''"))
-            return
-
-    # marker and rstrip_char attribs are not needed in non-default modes but
-    # let's keep them anyway
-
-    # start fold marker string and regexp
+    # start fold marker string and regexp (default and 'fmr' modes)
     marker = vim.eval('&foldmarker').split(',')[0]
     VO.marker = marker
     if marker==MARKER:
@@ -92,17 +83,61 @@ def voom_Init(body): #{{{2
     else:
         VO.marker_re = re.compile(re.escape(marker) + r'(\d+)(x?)')
 
-    # chars to strip from right side of Tree headlines
+    # chars to strip from right side of Tree headlines (default and 'fmr' modes)
     if vim.eval("exists('g:voom_rstrip_chars_{&ft}')")=="1":
         VO.rstrip_chars = vim.eval("g:voom_rstrip_chars_{&ft}")
     else:
         VO.rstrip_chars = vim.eval("&commentstring").split('%s')[0].strip() + " \t"
 
-    if VO.mmode:
-        vim.command('let l:mmode=1')
-    else:
-        vim.command('let l:mmode=0')
+    ### get markup mode, l:qargs is mode's name ###
+    mModule = 0
+    qargs = vim.eval('l:qargs').strip() or FT_MODES.get(VO.filetype, MODE)
+    if qargs:
+        mName = 'voom_mode_%s' %qargs
+        try:
+            mModule = __import__(mName)
+            VO.bname += ', %s' %qargs
+            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), os.path.abspath(mModule.__file__).replace("'","''")))
+        except ImportError:
+            vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %mName.replace("'","''"))
+            return
 
+    VO.mModule = mModule
+    ### define mode-specific methods ###
+    # no markup mode, default behavior
+    if not mModule:
+        VO.mmode = 0
+        if VO.filetype in MAKE_HEAD:
+            VO.makeOutline = makeOutlineH
+        else:
+            VO.makeOutline = makeOutline
+        VO.newHeadline = newHeadline
+        VO.changeLevBodyHead = changeLevBodyHead
+        VO.hook_doBodyAfterOop = 0
+    # markup mode for fold markers, similar to the default behavior
+    elif getattr(mModule,'MODE_FMR',0):
+        VO.mmode = 0
+        f = getattr(mModule,'hook_makeOutline',0)
+        if f:
+            VO.makeOutline = f
+        elif VO.filetype in MAKE_HEAD:
+            VO.makeOutline = makeOutlineH
+        else:
+            VO.makeOutline = makeOutline
+        VO.newHeadline = getattr(mModule,'hook_newHeadline',0) or newHeadline
+        VO.changeLevBodyHead = changeLevBodyHead
+        VO.hook_doBodyAfterOop = 0
+    # markup mode not for fold markers
+    else:
+        VO.mmode = 1
+        VO.makeOutline = getattr(mModule,'hook_makeOutline',0) or makeOutline
+        VO.newHeadline = getattr(mModule,'hook_newHeadline',0) or newHeadline
+        # These must be False if not defined by the markup mode.
+        VO.changeLevBodyHead = getattr(mModule,'hook_changeLevBodyHead',0)
+        VO.hook_doBodyAfterOop = getattr(mModule,'hook_doBodyAfterOop',0)
+
+    ### the end ###
+    vim.command('let l:mmode=%s' %VO.mmode)
     VOOMS[body] = VO
 
 
@@ -168,43 +203,51 @@ def makeOutline(VO, blines): #{{{2
     # Python list. But overall time to do outline update is the same and memory
     # usage is less because we don't create new list (see v3.0 notes)
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_makeOutline', 0)
-        if f: return f(VO,blines)
+    # Optimized for buffers in which most lines don't have fold markers.
 
+    # NOTE: duplicate code with makeOutlineH(), only head construction is different
     marker = VO.marker
     marker_re_search = VO.marker_re.search
     Z = len(blines)
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
-    h = MAKE_HEAD.get(VO.filetype, 0)
-    # NOTE: duplicate code, only head construction is different
-    # Optimized for buffers in which most lines don't have fold markers.
-    if not h:
-        c = VO.rstrip_chars
-        for i in xrange(Z):
-            if not marker in blines[i]: continue
-            bline = blines[i]
-            m = marker_re_search(bline)
-            if not m: continue
-            lev = int(m.group(1))
-            head = bline[:m.start()].lstrip().rstrip(c).strip('-=~').strip()
-            tline = ' %s%s|%s' %(m.group(2) or ' ', '. '*(lev-1), head)
-            tlines_add(tline)
-            bnodes_add(i+1)
-            levels_add(lev)
-    else:
-        for i in xrange(Z):
-            if not marker in blines[i]: continue
-            bline = blines[i]
-            m = marker_re_search(bline)
-            if not m: continue
-            lev = int(m.group(1))
-            head = h(bline,m)
-            tline = ' %s%s|%s' %(m.group(2) or ' ', '. '*(lev-1), head)
-            tlines_add(tline)
-            bnodes_add(i+1)
-            levels_add(lev)
+    c = VO.rstrip_chars
+    for i in xrange(Z):
+        if not marker in blines[i]: continue
+        bline = blines[i]
+        m = marker_re_search(bline)
+        if not m: continue
+        lev = int(m.group(1))
+        head = bline[:m.start()].lstrip().rstrip(c).strip('-=~').strip()
+        tline = ' %s%s|%s' %(m.group(2) or ' ', '. '*(lev-1), head)
+        tlines_add(tline)
+        bnodes_add(i+1)
+        levels_add(lev)
+    return (tlines, bnodes, levels)
+
+
+def makeOutlineH(VO, blines): #{{{2
+    """Identical to makeOutline(), duplicate code. The only difference is that
+    a custom function is used to construct Tree headline text.
+    """
+    # NOTE: duplicate code with makeOutline(), only head construction is different
+    marker = VO.marker
+    marker_re_search = VO.marker_re.search
+    Z = len(blines)
+    tlines, bnodes, levels = [], [], []
+    tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
+    h = MAKE_HEAD[VO.filetype]
+    for i in xrange(Z):
+        if not marker in blines[i]: continue
+        bline = blines[i]
+        m = marker_re_search(bline)
+        if not m: continue
+        lev = int(m.group(1))
+        head = h(bline,m)
+        tline = ' %s%s|%s' %(m.group(2) or ' ', '. '*(lev-1), head)
+        tlines_add(tline)
+        bnodes_add(i+1)
+        levels_add(lev)
     return (tlines, bnodes, levels)
 
 
@@ -237,8 +280,7 @@ def updateTree(body,tree): #{{{2
     VO = VOOMS[body]
     assert VO.tree == tree
     #blines = VO.Body[:] # wasteful, see v3.0 notes
-    Body = VO.Body
-    tlines, bnodes, levels  = makeOutline(VO,Body)
+    tlines, bnodes, levels  = VO.makeOutline(VO, VO.Body)
     tlines[0:0], bnodes[0:0], levels[0:0] = [VO.bname], [1], [1]
     VO.bnodes, VO.levels = bnodes, levels
 
@@ -453,6 +495,21 @@ def getSiblingsGroups(VO, siblings): #{{{2
     return results
 
 
+def nodesBodyRange(VO, ln1, ln2, withSubnodes=False): #{{{2
+    """Return Body start and end lnums (bln1, bln2) corresponding to nodes at
+    Tree lnums ln1 to ln2. Include ln2's subnodes if withSubnodes."""
+    bln1 = VO.bnodes[ln1-1]
+    if withSubnodes:
+        ln2 += nodeSubnodes(VO,ln2)
+    if ln2 < len(VO.bnodes):
+        bln2 = VO.bnodes[ln2]-1
+    else:
+        bln2 = len(VO.Body)
+    return (bln1,bln2)
+    # (bln1,bln2) can be (1,0), see voom_TreeSelect()
+    # this is what we want: getbufline(body,1,0)==[]
+
+
 #---Outline Navigation------------------------{{{1
 
 
@@ -462,9 +519,7 @@ def voom_TreeSelect(): #{{{2
     body = int(vim.eval('l:body'))
     VO = VOOMS[body]
     VO.snLn = lnum
-
     vim.command('let l:blnum1=%s' %(VO.bnodes[lnum-1]))
-
     if lnum < len(VO.bnodes):
         vim.command('let l:blnum2=%s' %(VO.bnodes[lnum]-1 or 1))
     else:
@@ -497,7 +552,7 @@ def voom_TreeToStartupNode(): #{{{2
 
 
 def voom_EchoUNL(): #{{{2
-    buftype = vim.eval('l:buftype')
+    bufType = vim.eval('l:bufType')
     body = int(vim.eval('l:body'))
     tree = int(vim.eval('l:tree'))
     lnum = int(vim.eval('l:lnum'))
@@ -505,7 +560,7 @@ def voom_EchoUNL(): #{{{2
     VO = VOOMS[body]
     assert VO.tree == tree
 
-    if buftype=='body':
+    if bufType=='Body':
         lnum = bisect.bisect_right(VO.bnodes, lnum)
 
     heads = nodeUNL(VO,lnum)
@@ -613,7 +668,7 @@ def intersectDicts(dictsAND, dictsNOT): #{{{2
     return res
 
 
-#---Outline Operations------------------------{{{1
+#---Outline Operations------------------------{{{1o
 # voom_Oop... functions are called from Voom_Oop... Vim functions.
 # They use local Vim vars set by the caller and can create and change Vim vars.
 # Most of them set lines in Tree and Body via vim.buffer objects.
@@ -635,37 +690,35 @@ def changeLevTreeHead(h, levDelta): #{{{2
 
 def changeLevBodyHead(VO, h, levDelta): #{{{2
     """Increase of decrease level number of Body headline by levDelta.
-    NOTE: markup modes can override this function with hook_changeLevBodyHead.
+    NOTE: markup modes can replace this function with hook_changeLevBodyHead.
     """
-    if levDelta==0:
-        return h
-    marker_re = VO.marker_re
-    m = marker_re.search(h)
+    if levDelta==0: return h
+    m = VO.marker_re.search(h)
     level = int(m.group(1))
     return '%s%s%s' %(h[:m.start(1)], level+levDelta, h[m.end(1):])
 
 
-def newHeadline(VO, level): #{{{2
+def newHeadline(VO, level, blnum, ln): #{{{2
     """Return (tree_head, bodyLines).
     tree_head is new headline string in Tree buffer (text after |).
     bodyLines is list of lines to insert in Body buffer.
     """
-    marker = VO.marker
     tree_head = 'NewHeadline'
-    bodyLines = ['---%s--- %s%s' %(tree_head, marker, level), '']
+    bodyLines = ['---%s--- %s%s' %(tree_head, VO.marker, level), '']
     return (tree_head, bodyLines)
 
 
 def setClipboard(s): #{{{2
     """Set Vim + register (system clipboard) to string s."""
-    if not s: return
-    # use '%s' for Vim string: all we need to do is double ' quotes
-    s = s.replace("'", "''")
-    vim.command("let @+='%s'" %s)
+    # important: use '' for Vim string
+    vim.command("let @+='%s'" %s.replace("'", "''"))
 
-    # TODO: failed once, empty clipboard after copy/delete >5MB outline, could
-    # not reproduce, probably stale system, perhaps a check for clipboard size
-    # is needed
+    # The above failed once: empty clipboard after copy/delete >5MB outline. Could
+    # not reproduce after Windows restart. Probably stale system. Thus the
+    # following check. It adds about 0.09 sec for each 1MB in the clipboard.
+    # 30-40% increase overall in the time of Copy operation (yy).
+    if not vim.eval('len(@+)')=='%s' %len(s):
+        vim.command("echoerr 'VOoM: error setting clipboard'")
 
 
 def voom_OopVerify(): #{{{2
@@ -673,7 +726,7 @@ def voom_OopVerify(): #{{{2
     VO = VOOMS[body]
     assert VO.tree == tree
 
-    tlines, bnodes, levels  = makeOutline(VO, VO.Body)
+    tlines, bnodes, levels  = VO.makeOutline(VO, VO.Body)
     if not len(VO.Tree)==len(tlines)+1:
         vim.command("echoerr 'VOoM: wrong Tree size'")
         return
@@ -716,20 +769,13 @@ def voom_OopSelEnd(): #{{{2
     return z
 
 
-def voom_OopSelectBodyRegion(): # {{{2
+def voom_OopSelectBodyRange(): # {{{2
     body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
     ln1, ln2 = int(vim.eval('l:ln1')), int(vim.eval('l:ln2'))
     VO = VOOMS[body]
     assert VO.tree == tree
-    bnodes = VO.bnodes
-
-    vim.command("let l:bln1=%s" %(bnodes[ln1-1]))
-    if ln2==1 and len(bnodes)>1 and bnodes[1]==1:
-        pass
-    if ln2 < len(bnodes):
-        vim.command("let l:bln2=%s" %(bnodes[ln2]-1))
-    else:
-        vim.command("let l:bln2=line('$')")
+    bln1, bln2 = nodesBodyRange(VO, ln1, ln2)
+    vim.command("let [l:bln1,l:bln2]=[%s,%s]" %(bln1,bln2))
 
 
 def voom_OopInsert(as_child=False): #{{{2
@@ -767,14 +813,7 @@ def voom_OopInsert(as_child=False): #{{{2
     else:
         bLnum = len(Body)
 
-    if not VO.mmode:
-        tree_head, bodyLines = newHeadline(VO,lev)
-    else:
-        f = getattr(VO.mmode, 'hook_newHeadline', 0)
-        if f:
-            tree_head, bodyLines = f(VO,lev,bLnum,ln)
-        else:
-            tree_head, bodyLines = newHeadline(VO,lev)
+    tree_head, bodyLines = VO.newHeadline(VO,lev,bLnum,ln)
 
     treeLine = '= %s|%s' %('. '*(lev-1), tree_head)
     Tree[ln:ln] = [treeLine]
@@ -845,9 +884,8 @@ def voom_OopCut(): #{{{2
     ### delete range in levels (same as in Tree)
     levels[ln1-1:ln2] = []
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f: f(VO, 'cut', 0,  None, None,  None, None,  bln1-1, ln1-1)
+    if VO.hook_doBodyAfterOop:
+        VO.hook_doBodyAfterOop(VO, 'cut', 0,  None, None,  None, None,  bln1-1, ln1-1)
 
     ### ---go back to Tree---
     vim.command('let l:blnShow=%s' %blnShow)
@@ -879,7 +917,7 @@ def voom_OopPaste(): #{{{2
         vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
         return
     pBlines = pText.split('\n') # Body lines to paste
-    pTlines, pBnodes, pLevels = makeOutline(VO, pBlines)
+    pTlines, pBnodes, pLevels = VO.makeOutline(VO, pBlines)
 
     ### verify that clipboard is a valid outline 
     if pBnodes==[] or pBnodes[0]!=1:
@@ -920,10 +958,7 @@ def voom_OopPaste(): #{{{2
     if levDelta:
         pTlines = [changeLevTreeHead(h, levDelta) for h in pTlines]
         pLevels = [(lev+levDelta) for lev in pLevels]
-        if not VO.mmode:
-            f = changeLevBodyHead
-        else:
-            f = getattr(VO.mmode, 'hook_changeLevBodyHead', 0)
+        f = VO.changeLevBodyHead
         if f:
             for bl in pBnodes:
                 pBlines[bl-1] = f(VO, pBlines[bl-1], levDelta)
@@ -953,10 +988,8 @@ def voom_OopPaste(): #{{{2
     ln1 = ln+1
     ln2 = ln+len(pBnodes)
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f:
-            f(VO, 'paste', levDelta,
+    if VO.hook_doBodyAfterOop:
+        VO.hook_doBodyAfterOop(VO, 'paste', levDelta,
                     blnShow, ln1,
                     blnShow+len(pBlines)-1, ln2,
                     None, None)
@@ -1021,10 +1054,7 @@ def voom_OopUp(): #{{{2
     else: bln2 = len(Body)
     blines = Body[bln1-1:bln2]
     if levDelta:
-        if not VO.mmode:
-            f = changeLevBodyHead
-        else:
-            f = getattr(VO.mmode, 'hook_changeLevBodyHead', 0)
+        f = VO.changeLevBodyHead
         if f:
             for bl in bnodes[ln1-1:ln2]:
                 blines[bl-bln1] = f(VO, blines[bl-bln1], levDelta)
@@ -1058,10 +1088,8 @@ def voom_OopUp(): #{{{2
     levels[ln1-1:ln2] = []
     levels[lnUp1-1:lnUp1-1] = nLevels
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f:
-            f(VO, 'up', levDelta,
+    if VO.hook_doBodyAfterOop:
+        VO.hook_doBodyAfterOop(VO, 'up', levDelta,
                     blnShow, lnUp1,
                     blnShow+len(blines)-1, lnUp1+len(nLevels)-1,
                     bln1-1+len(blines), ln1-1+len(nLevels))
@@ -1134,10 +1162,7 @@ def voom_OopDown(): #{{{2
     bln2 = bnodes[ln2]-1
     blines = Body[bln1-1:bln2]
     if levDelta:
-        if not VO.mmode:
-            f = changeLevBodyHead
-        else:
-            f = getattr(VO.mmode, 'hook_changeLevBodyHead', 0)
+        f = VO.changeLevBodyHead
         if f:
             for bl in bnodes[ln1-1:ln2]:
                 blines[bl-bln1] = f(VO, blines[bl-bln1], levDelta)
@@ -1178,10 +1203,8 @@ def voom_OopDown(): #{{{2
     levels[lnIns:lnIns] = nLevels
     levels[ln1-1:ln2] = []
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f:
-            f(VO, 'down', levDelta,
+    if VO.hook_doBodyAfterOop:
+        VO.hook_doBodyAfterOop(VO, 'down', levDelta,
                     blnShow, snLn,
                     blnShow+len(blines)-1, snLn+len(nLevels)-1,
                     bln1-1, ln1-1)
@@ -1223,14 +1246,10 @@ def voom_OopRight(): #{{{2
         return
 
     ### change levels of Body headlines
-    if not VO.mmode:
-        f = changeLevBodyHead
-    else:
-        f = getattr(VO.mmode, 'hook_changeLevBodyHead', 0)
+    f = VO.changeLevBodyHead
     if f:
         for bln in bnodes[ln1-1:ln2]:
-            bline = Body[bln-1]
-            Body[bln-1] = f(VO, bline, 1)
+            Body[bln-1] = f(VO, Body[bln-1], 1)
 
     # new snLn will be set to ln1
     blnShow = bnodes[ln1-1]
@@ -1240,12 +1259,10 @@ def voom_OopRight(): #{{{2
     nLevels = [(lev+1) for lev in nLevels]
     levels[ln1-1:ln2] = nLevels
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f:
-            if ln2 < len(bnodes): blnum2 = bnodes[ln2]-1
-            else: blnum2 = len(Body)
-            f(VO, 'right', 1, blnShow, ln1, blnum2, ln2, None, None)
+    if VO.hook_doBodyAfterOop:
+        if ln2 < len(bnodes): blnum2 = bnodes[ln2]-1
+        else: blnum2 = len(Body)
+        VO.hook_doBodyAfterOop(VO, 'right', 1, blnShow, ln1, blnum2, ln2, None, None)
 
     ### ---go back to Tree---
     vim.command("let &fdm=fdm_b")
@@ -1288,14 +1305,10 @@ def voom_OopLeft(): #{{{2
         return
 
     ### change levels of Body headlines
-    if not VO.mmode:
-        f = changeLevBodyHead
-    else:
-        f = getattr(VO.mmode, 'hook_changeLevBodyHead', 0)
+    f = VO.changeLevBodyHead
     if f:
         for bln in bnodes[ln1-1:ln2]:
-            bline = Body[bln-1]
-            Body[bln-1] = f(VO, bline, -1)
+            Body[bln-1] = f(VO, Body[bln-1], -1)
 
     # new snLn will be set to ln1
     blnShow = bnodes[ln1-1]
@@ -1305,12 +1318,10 @@ def voom_OopLeft(): #{{{2
     nLevels = [(lev-1) for lev in nLevels]
     levels[ln1-1:ln2] = nLevels
 
-    if VO.mmode:
-        f = getattr(VO.mmode, 'hook_doBodyAfterOop', 0)
-        if f:
-            if ln2 < len(bnodes): blnum2 = bnodes[ln2]-1
-            else: blnum2 = len(Body)
-            f(VO, 'left', -1, blnShow, ln1, blnum2, ln2, None, None)
+    if VO.hook_doBodyAfterOop:
+        if ln2 < len(bnodes): blnum2 = bnodes[ln2]-1
+        else: blnum2 = len(Body)
+        VO.hook_doBodyAfterOop(VO, 'left', -1, blnShow, ln1, blnum2, ln2, None, None)
 
     ### ---go back to Tree---
     vim.command("let &fdm=fdm_b")
@@ -1623,7 +1634,7 @@ def foldingCleanup(VO): #{{{3
 # outline operations is too tedious.
 
 
-def voom_OopSort(): #{{{3=
+def voom_OopSort(): #{{{3
     # Returning before setting l:blnShow means no changes were made.
     ### parse options {{{
     oDeep = False
@@ -1779,85 +1790,89 @@ def sortSiblings(VO, siblings, oIgnorecase, oUnicode, oEnc, oReverse, oFlip, oSh
 #---EXECUTE SCRIPT----------------------------{{{1
 #
 
-def voom_GetBodyLines(): #{{{2
-    body = int(vim.eval('l:body'))
-    VO = VOOMS[body]
-    ln1 = int(vim.eval('a:lnum'))
-
-    vim.command('let l:bln1=%s' %(VO.bnodes[ln1-1]) )
-
-    ln2 = ln1 + nodeSubnodes(VO, ln1)
-    if ln2 < len(VO.bnodes):
-        vim.command('let l:bln2=%s' %(VO.bnodes[ln2]-1))
-    else:
-        vim.command('let l:bln2="$"')
-    # (l:bln1,l:bln2) can be (1,0), see voom_TreeSelect()
-    # this is what we want here
-
-
-def voom_GetBodyLines1(): #{{{2
+def voom_GetVoomRange(withSubnodes=0): #{{{2
     body = int(vim.eval('l:body'))
     VO = VOOMS[body]
     lnum = int(vim.eval('a:lnum'))
-    buftype = vim.eval('l:buftype')
-    if buftype=='body':
+    if vim.eval('l:bufType')=='Body':
         lnum = bisect.bisect_right(VO.bnodes, lnum)
+    bln1, bln2 = nodesBodyRange(VO, lnum, lnum, withSubnodes)
+    vim.command("let [l:bln1,l:bln2]=[%s,%s]" %(bln1,bln2))
 
-    bln1 =  VO.bnodes[lnum-1]
-    vim.command("let l:bln1=%s" %bln1)
 
-    if lnum < len(VO.bnodes):
-        vim.command("let l:bln2=%s" %(VO.bnodes[lnum]-1))
+def voom_GetBuffRange(): #{{{2
+    body = int(vim.eval('l:body'))
+    ln1, ln2 = int(vim.eval('a:ln1')), int(vim.eval('a:ln2'))
+    VO = VOOMS[body]
+    bln1, bln2 = nodesBodyRange(VO, ln1, ln2)
+    vim.command("let [l:bln1,l:bln2]=[%s,%s]" %(bln1,bln2))
+
+
+def voom_Exec(): #{{{2
+    if vim.eval('l:bufType')=='Tree':
+        Buf = VOOMS[int(vim.eval('l:body'))].Body
     else:
-        vim.command("let l:bln2='$'")
-    # (l:bln1,l:bln2) can be (1,0), see voom_TreeSelect()
-    # this is what we want here
-
-
-def execScript(): #{{{2
-    """Execute script file."""
+        Buf = vim.current.buffer
+    bln1, bln2 = int(vim.eval('l:bln1')), int(vim.eval('l:bln2'))
+    blines = Buf[bln1-1:bln2]
+    # specifiy script encoding (Vim internal encoding) on the first line
+    enc = '# -*- coding: %s -*-' %get_vim_encoding()
+    # prepend extra \n's to make traceback lnums match buffer lnums
+    # TODO: find less silly way to adjust traceback lnums
+    script = '%s\n%s%s\n' %(enc, '\n'*(bln1-2), '\n'.join(blines))
+    d = {'vim':vim, 'VOOMS':VOOMS, 'voom':sys.modules['voom']}
     try:
-        #d = {'vim':vim, 'VOOMS':VOOMS, 'voom':sys.modules[__name__]}
-        d = { 'vim':vim, 'VOOMS':VOOMS, 'voom':sys.modules['voom'] }
-        execfile(VOOM_SCRIPT, d)
-        print '---end of Python script---'
+        exec script in d
     #except Exception: # does not catch vim.error
     except:
-        #typ,val,tb = sys.exc_info()
-        #lines = traceback.format_exception(typ,val,tb)
-        #print ''.join(lines)
-        #sys.stderr.write(''.join(lines) + '\n')
+        #traceback.print_exc()  # writes to sys.stderr
+        printTraceback(bln1,bln2)
 
-        #print traceback.format_exc()
-        #sys.stderr.write(traceback.format_exc() + '\n')
-        traceback.print_exc()  # writes to stderr, same as above
-        print
+    print '---end of Python script (%s-%s)---' %(bln1,bln2)
 
-        # id_20101214100357
-        # NOTES on printing tracebacks and Vim errors.
-        #
-        # We want Python traceback echoed as error message when printing on Vim
-        # command line (no PyLog).  Writing to sys.stderr accomplishes that.
-        #   :py sys.stderr.write('oopsy-doopsy')
-        # Note: writing to default sys.stderr (no PyLog) triggers Vim error.
-        #
-        # Vim code:
-        #
-        # 1) PyLog is enabled. Must execute this inside try/catch/entry.
-        # Otherwise, something weird happens when Vim error occurs, most likely
-        # Vim error echoing interferes with PyLog scrolling.
-        # The only downside is that only v:exception is printed, no details
-        # about Vim error location (v:throwpoint is useless).
-        #
-        # 2) PyLog is not enabled. Do not execute this inside try/catch/endtry.
-        # Python traceback is not printed if we do.
-        #
-        # Annoyance: When PyLog is not enabled there are always two useless
-        # extra lines on top with Vim error.
-        #   Error detected while processing function Voom_Exec:
-        #   line 63:
-        # This because printing to Vim default sys.stderr triggers Vim error.
-        #
+# id_20101214100357
+# NOTES on printing Python tracebacks and Vim errors.
+#
+# When there is no PyLog, we want Python traceback echoed as Vim error message.
+# Writing to sys.stderr accomplishes that:
+#   :py sys.stderr.write('oopsy-doopsy')
+# Drawback: writing to default sys.stderr (no PyLog) triggers Vim error.
+# Thus, without PyLog there are two useless lines on top with Vim error:
+#   Error detected while processing function Voom_Exec:
+#   line 63:
+#
+# Vim code:
+#
+# 1) PyLog is enabled. Must execute this inside try/catch/entry.
+# Otherwise, something weird happens when Vim error occurs, most likely
+# Vim error echoing interferes with PyLog scrolling.
+# The only downside is that only v:exception is printed, no details
+# about Vim error location (v:throwpoint is useless).
+#
+# 2) PyLog is not enabled. Do not execute this inside try/catch/endtry.
+# Python traceback is not printed if we do.
+#
+
+
+def printTraceback(bln1,bln2): #{{{2
+    """Print traceback from exception caught during Voomexec."""
+    out = None
+    # like traceback.format_exc(), traceback.print_exc()
+    try:
+        etype, value, tb = sys.exc_info()
+        out = traceback.format_exception(etype, value, tb)
+        #out = traceback.format_exception(etype, value, tb.tb_next)
+    finally:
+        etype = value = tb = None
+    if not out:
+        sys.stderr.write('ERROR: Voomexec failed to format Python traceback')
+        return
+    info = '  ...exception executing script (%s-%s)...\n' %(bln1,bln2)
+    if bln1==1:
+        info += '  ...subtract 1 from traceback lnums to get buffer lnums...\n'
+    out[1:2] = [info]
+    #out[1:1] = [info]
+    sys.stderr.write(''.join(out))
 
 
 #---LOG BUFFER--------------------------------{{{1
@@ -1932,7 +1947,7 @@ def get_vim_encoding(): #{{{2
     # See |encoding|, mbyte.c, values are from |encoding-values|
     enc = vim.eval('&enc')
     if enc in ('utf-8','ucs-2','ucs-2le','utf-16','utf-16le','ucs-4','ucs-4le'):
-        enc = 'utf-8'
+        return 'utf-8'
     return enc
 
 
