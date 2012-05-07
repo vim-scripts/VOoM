@@ -7,20 +7,21 @@ Screenshots and an animation: http://vim-voom.github.com/
 VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. (See :help fold-marker. Markers are specified by option 'foldmarker'. End fold markers with levels, }}}3, }}}2, etc. are not supported.)
 
 VOoM currently can handle several other markup formats that have headlines and support an outline structure. (Headlines are also called headings, headers, section headers, titles.) The following markup modes are available:
-        wiki  -- MediaWiki, headlines are surrounded by '='
-        vimwiki  -- vimwiki plugin (vimscript #2226)
-        viki  -- Viki/Deplate plugin (vimscript #861)
-        org  -- Emacs Org-mode
-        rest  -- reStructuredText section titles
-        markdown  -- Markdown, both header styles
-        txt2tags  -- txt2tags titles and numbered titles
-        asciidoc  -- AsciiDoc document and section titles, both styles
-        html  -- HTML heading tags, single line only
-        thevimoutliner  -- The Vim Outliner plugin (vimscript #517)
-        vimoutliner  -- VimOutliner plugin (vimscript #3515)
-        cwiki  -- vimscript #2176
-        python  -- Python code browser, blocks between 'class' and 'def' are also nodes
-        fmr, fmr1, fmr2  -- start fold markers with levels (variations of the default mode) 
+        fmr, fmr1, fmr2  -- start fold markers with levels (variations of the default mode);
+        wiki  -- MediaWiki, headlines are surrounded by '=';
+        vimwiki  -- vimwiki plugin (vimscript #2226);
+        viki  -- Viki/Deplate plugin (vimscript #861);
+        org  -- Emacs Org-mode;
+        rest  -- reStructuredText section titles;
+        markdown  -- Markdown, both header styles;
+        hashes  -- #, ##, ###, etc. (atx-style headers, a subset of Markdown format);
+        txt2tags  -- txt2tags titles and numbered titles;
+        asciidoc  -- AsciiDoc document and section titles, both styles;
+        thevimoutliner  -- The Vim Outliner plugin (vimscript #517);
+        vimoutliner  -- VimOutliner plugin (vimscript #3515);
+        cwiki  -- vimscript #2176;
+        html  -- HTML heading tags, single line only;
+        python  -- Python code browser, blocks between 'class' and 'def' are also nodes.
 
 NOTE: By default, the :Voom command without an argument creates outline from lines with start fold markers with level numbers. To outline another format, an argument specifying the desired markup mode must be provided.
 For a Markdown (MultiMarkdown, Pandoc) file:
@@ -35,7 +36,7 @@ FEATURES:
         - Automagic outline update on entering the Tree buffer.
         - Not a 'filetype' plugin. Not tied to a particular outline format. Has (almost) no side effects on the buffer being outlined.
         - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
-        - Many single-key mappings for efficient outline navigation, which can be combined into complex commands, e.g.,"UVD" selects all siblings of the current node. Outlines can also be navigated with the mouse.
+        - Many one-character mappings for efficient outline navigation, which can be combined into complex commands, e.g.,"UVD" selects all siblings of the current node. Outlines can also be navigated with the mouse.
         - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.
         - Command to search nodes. Boolean AND/NOT search (in addition to Vim's \|).
 

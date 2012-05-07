@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2012-04-02
+# Last Modified: 2012-04-16
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.2
+# Version: 4.3
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -23,12 +23,16 @@ shuffle = None # random.shuffle
 
 # see voom.vim for conventions
 # voom_WhatEver() is Python code for Voom_WhatEver() function in voom.vim
-# VO is instance of VoomOutline class, stored in dict VOOMS
 
-# {body: VO, ...}
-VOOMS = {}
 
 #---Constants and Settings--------------------{{{1=
+
+# VO is instance of VoomOutline class, stored in dict VOOMS
+# create VOOMS in voom.vim: less disruption if this module is reloaded
+#VOOMS = {} # {body: VO, ...}
+
+# {filetype: make_head_<filetype> function, ...}
+MAKE_HEAD = {}
 
 # default start fold marker string and regexp
 MARKER = '{{{'                            #}}}
@@ -44,9 +48,6 @@ if vim.eval("exists('g:voom_default_mode')")=='1':
     MODE = vim.eval('g:voom_default_mode')
 else:
     MODE = ''
-
-# {filetype: make_head_<filetype> function, ...}
-MAKE_HEAD = {}
 
 
 #---Outline Construction----------------------{{{1o

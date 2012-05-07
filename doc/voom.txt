@@ -1,7 +1,7 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2012-04-04
+Last Modified: 2012-05-06
 VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.2
+Version: 4.3
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
@@ -43,6 +43,7 @@ section headers, titles.) Available markup modes:
     org            |voom_mode_org|
     rest           |voom_mode_rest|
     markdown       |voom_mode_markdown|
+    hashes         |voom_mode_hashes|
     txt2tags       |voom_mode_txt2tags|
     asciidoc       |voom_mode_asciidoc|
     html           |voom_mode_html|
@@ -60,9 +61,9 @@ FEATURES:
       Has (almost) no side effects on the buffer being outlined.
     - Fast and efficient enough to handle MB-sized files with >1000 headlines.
       (Some modes can be slower.)
-    - Many single-key mappings for efficient outline navigation, which can be
-      combined into complex commands, e.g.,"UVD" selects all siblings of the
-      current node. Outlines can also be navigated with the mouse.
+    - Many one-character mappings for efficient outline navigation, which can
+      be combined into complex commands, e.g., "UVD" selects all siblings of
+      the current node. Outlines can also be navigated with the mouse.
     - Outline structure manipulation: move nodes Up/Down, Promote/Demote,
       Copy/Cut/Paste, Insert New Headline, Sort in various ways.
     - Command to search nodes. Boolean AND/NOT search (in addition to |/bar|).
@@ -1648,7 +1649,7 @@ suitable for Wikipedia, vim.wikia.com, etc. >
     ==== headline level 4 ====<!--comment-->
     etc.
 
-First = must be at start of line.
+First = must be at the start of the line.
 Closing = are required.
 Trailing whitespace is ok.
 Whitespace around the text is not required.
@@ -1713,7 +1714,7 @@ Mode for outlining Viki/Deplate headings:
     *** headline level 3
     **** headline level 4
 
-The first * must be at start of line.
+The first * must be at the start of the line.
 There must be a whitespace after the last * .
 
 Headlines are ignored inside special regions other than #Region:
@@ -1741,7 +1742,7 @@ Mode for outlining Emacs Org-mode headlines:
     *** headline level 3
     **** headline level 4
 
-The first * must be at start of line.
+The first * must be at the start of the line.
 There must be a whitespace after the last * .
 
 ==============================================================================
@@ -1853,7 +1854,7 @@ Underline-style, levels 1 and 2 only: >
     header level 2
     --------------
 
-Hashes-style: >
+Hashes-style (also see |voom_mode_hashes|): >
     # header level 1
     ## header level 2
     ### header level 3 ###
@@ -1919,6 +1920,33 @@ OTHER NOTES
 If a headline is not preceded by a blank line, outline operations may add one.
 
 An underline-style headline should not contain leading or trailing #'s.
+
+==============================================================================
+hashes   [[[3~
+                                                 *voom_mode_hashes*
+:Voom hashes
+MODULE: ../plugin/voom/voom_mode_hashes.py
+Headlines are marked by #'s. This is a subset of Markdown format (atx-style
+headers): >
+
+    # headline level 1
+    ##  headline level 2
+    text
+    ###headline level 3
+    ### headline level 3
+
+#'s must be at the start of the line.
+A whitespace after #'s is optional.
+
+This mode is much simpler and more efficient than the full Markdown mode
+(|voom_mode_markdown|) because it does not have to deal with underlined
+headlines and closing #'s.
+
+NOTE: This mode can be easily modified:
+    a) To use any ASCII character as a marker instead of '#'.
+    b) To require a whitespace after the marker chars (as in org-mode).
+    c) To strip optional closing #'s.
+See comments in the module file.
 
 ==============================================================================
 txt2tags   [[[3~
@@ -3198,7 +3226,17 @@ see v3.0 notes.
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.2, 2012-04-04   [[[3x~
+v4.3, 2012-05-06   [[[3x~
+
+PROBLEM: The Voom command cannot handle buffer names containing %, #, etc.
+Session restore is also affected.
+Whitespace in names is also a problem on some systems (Jonathan Reeve).
+SOLUTION: Do fnameescape() when :edit, :file, :tabnew, etc.
+
+Added |voom_mode_hashes|.
+
+
+v4.2, 2012-04-04   [[[3~
 
 New commands for quitting and toggling outline window (|voom_quit|):
 "q", VoomToggle, Voomtoggle, Voomquit, VoomQuitAll.

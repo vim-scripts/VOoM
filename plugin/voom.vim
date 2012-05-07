@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2012-04-02
+" Last Modified: 2012-05-05
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.2
+" Version: 4.3
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -44,7 +44,7 @@ if !exists('s:voom_did_quickload')
     " support for Vim sessions (:mksession)
     au BufFilePost __PyLog__ call Voom_LogSessionLoad()
     au BufFilePost *_VOOM\d\+ call Voom_TreeSessionLoad()
-    let s:voom_did_quickload = 'v4.2'
+    let s:voom_did_quickload = 'v4.3'
     finish
 endif
 
@@ -72,7 +72,7 @@ import sys, vim
 if not vim.eval("s:voom_dir") in sys.path:
     sys.path.append(vim.eval("s:voom_dir"))
 import voom
-#sys.modules['voom'].VOOMS = {}
+sys.modules['voom'].VOOMS = {}
 EOF
     au! FuncUndefined Voom_*
     let s:voom_did_init = 1
@@ -291,7 +291,7 @@ func! Voom_Help() "{{{2
     endif
 
     """ open voom.txt as regular file
-    exe 'tabnew '.help_path
+    exe 'tabnew '.fnameescape(help_path)
     if fnamemodify(bufname(""), ":t")!=#'voom.txt'
         echoerr "VOoM: internal error"
         return
@@ -754,7 +754,7 @@ func! Voom_TreeCreate(body) "{{{2
 " Create new Tree buffer for Body body in the current window.
     let b_name = fnamemodify(bufname(a:body),":t")
     if b_name=='' | let b_name='NoName' | endif
-    silent exe 'edit '.b_name.'_VOOM'.a:body
+    silent exe 'edit '.fnameescape(b_name).'_VOOM'.a:body
     let tree = bufnr('')
     let blnr = s:voom_bodies[a:body].blnr
 
@@ -1206,11 +1206,12 @@ func! Voom_TreeSessionLoad() "{{{2
     if has_key(s:voom_trees,tree) | return | endif
     """ try to find Body matching this Tree buffer name
     let treeName = fnamemodify(tname,':t')
-    if treeName !~# '\c^.\+_VOOM\d\+$' | return | endif
-    let bodyName = substitute(treeName, '\c_VOOM\d\+$', '', '')
-    let [body, bodyWnr] = [bufnr(bodyName.'$'), bufwinnr(bodyName.'$')]
-    "echo treeName tree '|' bodyName body bodyWnr
-    " Body must exist in another window in the current tabpage
+    if treeName !~# '^.\+_VOOM\d\+$' | return | endif
+    let bodyName = substitute(treeName, '\C_VOOM\d\+$', '', '')
+    let bodyNameM = substitute(bodyName, '[', '[[]', 'g') . '$'
+    let [body, bodyWnr] = [bufnr(bodyNameM), bufwinnr(bodyNameM)]
+    "echo 'DEBUG' treeName tree '|' bodyName body bodyWnr
+    " Body must exist and be in a window in the current tabpage
     if body < 0 || bodyName !=# fnamemodify(bufname(body),':t')
         return
     elseif bodyWnr < 0 || bodyWnr == winnr() || bodyWnr != bufwinnr(body)
@@ -1222,11 +1223,11 @@ func! Voom_TreeSessionLoad() "{{{2
         return
     endif
     " rename Tree (current buffer), if needed, to correct Body bufnr
-    let tname_new = substitute(tname, '\c_VOOM\d\+$', '_VOOM'.body, '')
+    let tname_new = substitute(tname, '\C_VOOM\d\+$', '_VOOM'.body, '')
     if tname !=# tname_new
         if bufexists(tname_new) | return | endif
         let bnrMax_ = bufnr('$')
-        exe 'silent file '.tname_new
+        exe 'silent file '.fnameescape(tname_new)
         " An unlisted buffer is created to hold the old name. Kill it.
         let bnrMax = bufnr('$')
         if bnrMax > bnrMax_ && bnrMax==bufnr(tname.'$')
