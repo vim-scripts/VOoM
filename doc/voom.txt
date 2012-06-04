@@ -1,7 +1,7 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2012-05-06
+Last Modified: 2012-06-03
 VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.3
+Version: 4.4
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
@@ -37,36 +37,37 @@ not supported.
 VOoM currently can handle several other markup formats that have headlines and
 support an outline structure. (Headlines are also called headings, headers,
 section headers, titles.) Available markup modes:
-    wiki           |voom_mode_wiki|
-    vimwiki        |voom_mode_vimwiki|
-    viki           |voom_mode_viki|
-    org            |voom_mode_org|
-    rest           |voom_mode_rest|
-    markdown       |voom_mode_markdown|
-    hashes         |voom_mode_hashes|
-    txt2tags       |voom_mode_txt2tags|
-    asciidoc       |voom_mode_asciidoc|
-    html           |voom_mode_html|
-    thevimoutliner |voom_mode_thevimoutliner|
-    vimoutliner    |voom_mode_vimoutliner|
-    python         |voom_mode_python|
-    fmr1, fmr2     |voom_mode_fmr|
-    various other  |voom_mode_various|
+    fmr, fmr1, fmr2  |voom_mode_fmr|
+    wiki             |voom_mode_wiki|
+    vimwiki          |voom_mode_vimwiki|
+    viki             |voom_mode_viki|
+    org              |voom_mode_org|
+    rest             |voom_mode_rest|
+    markdown         |voom_mode_markdown|
+    hashes           |voom_mode_hashes|
+    txt2tags         |voom_mode_txt2tags|
+    asciidoc         |voom_mode_asciidoc|
+    latex            |voom_mode_latex|
+    html             |voom_mode_html|
+    thevimoutliner   |voom_mode_thevimoutliner|
+    vimoutliner      |voom_mode_vimoutliner|
+    python           |voom_mode_python|
+    various other    |voom_mode_various|
 
 
 FEATURES:
-    - Works with Vim buffers, not with files on disk as ctags-based tools.
+    - Outline structure manipulation: move nodes up/down, promote/demote,
+      copy/cut/paste, insert new node, sort in various ways, randomize.
+    - Many one-character mappings for efficient outline navigation, which can
+      be combined into complex commands, e.g., "UVD" selects all siblings of
+      the current node. Outlines can also be navigated with the mouse.
+    - Command to search nodes. Boolean AND/NOT search (in addition to |/bar|).
     - Automatic outline update on entering the Tree buffer.
+    - Works with Vim buffers, not with files on disk as ctags-based tools.
     - Not a 'filetype' plugin. Not tied to a particular outline format.
       Has (almost) no side effects on the buffer being outlined.
     - Fast and efficient enough to handle MB-sized files with >1000 headlines.
       (Some modes can be slower.)
-    - Many one-character mappings for efficient outline navigation, which can
-      be combined into complex commands, e.g., "UVD" selects all siblings of
-      the current node. Outlines can also be navigated with the mouse.
-    - Outline structure manipulation: move nodes Up/Down, Promote/Demote,
-      Copy/Cut/Paste, Insert New Headline, Sort in various ways.
-    - Command to search nodes. Boolean AND/NOT search (in addition to |/bar|).
 
 
 There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
@@ -516,14 +517,14 @@ Various options   [[[3~
 g:voom_verify_oop   ~
     Verify outline after every outline operation (doesn't apply to :VoomSort).
     Default is 1 (enabled).
-    Set to 0 to disable (not recommended, especially with markup modes).
+    Set to 0 to disable (NOT RECOMMENDED, especially with markup modes).
 
     This option turns on outline verification after most outline operations.
     It will alert to outline corruption, which is very likely if there is a bug
     in outline operation. The downside is that there is a performance hit,
     usually noticeable only with large outlines (>1000 headlines).
-    NOTE: do not disable this option when using "rest" or "python" outlining
-    modes -- these markups have some intrinsic problems.
+    NOTE: Do not disable this option when using complex outlining modes like
+    "rest", "latex", "python" -- these markups have intrinsic problems.
 
 g:voom_rstrip_chars_{filetype}   ~
     NOTE: Not applicable when a non-default markup mode is used
@@ -668,37 +669,36 @@ X                   Go to previous marked node. (N)
 ------------------------------------------------------------------------------
 show (echo) information for node under the cursor
 ------------------------------------------------------------------------------
-s                   Show Tree headline (text after first '|'). (N)
+s                   Show Tree headline (text after the first '|'). (N)
 S                   Show UNL. Same as :Voomunl (|voom_Voomunl|). (N)
 
 
 ------------------------------------------------------------------------------
 OUTLINE OPERATIONS (TREE BUFFER) ~
 ------------------------------------------------------------------------------
-i I a A             Edit headline of node under the cursor. (N)
+i  I                Edit headline text of node under the cursor. (N)
+
+aa  <LocalLeader>a
+                    Add new node after the current node. (N)
+
+AA  <LocalLeader>A
+                    Add new node as the first child of the current node. (N)
 
 R                   Switch to Body buffer, select the line range corresponding
                     to the current node or to nodes in Visual selection. (N,V)
 
-<LocalLeader>i      Insert new node after the current node. (N)
+^^  <C-Up>  <LocalLeader>u
+                    Move node(s) Up. (N,V)
 
-<LocalLeader>I      Insert new node as first child of the current node. (N)
+__  <C-Down>  <LocalLeader>d
+                    Move node(s) Down. (N,V)
 
-<C-Up>
-^^
-<LocalLeader>u      Move node(s) Up. (N,V)
-
-<C-Down>
-__
-<LocalLeader>d      Move node(s) Down. (N,V)
-
-<C-Left>
-<<
-<LocalLeader>l      Move node(s) Left (Promote). (N,V)
+<<  <C-Left>  <LocalLeader>l
+                    Move node(s) Left, that is  Promote. (N,V)
                     Nodes must be at the end of their subtree.
-<C-Right>
->>
-<LocalLeader>r      Move node(s) Right (Demote). (N,V)
+
+>>  <C-Right>  <LocalLeader>r
+                    Move node(s) Right, that is Demote. (N,V)
 
 ------------------------------------------------------------------------------
 COPY/CUT/PASTE (these use Vim's + register: system clipboard)
@@ -1161,8 +1161,10 @@ can be used instead by defining custom "g:voom_return_key" and "g:voom_tab_key"
             - In Tree buffer: move cursor to window with the corresponding
               Body buffer.
 
-(The command :Voom also cycles between Tree and Body. This is like <Return> but
-without selecting new node.)
+The command :Voom also cycles between Tree and Body. This is like <Return> but
+without selecting new node.
+The command "i" in the Tree buffer (Edit Headline) is also handy for jumping to
+the first line of the corresponding node in the Body buffer.
 
 All other mappings are for Tree buffers only.
 
@@ -1342,16 +1344,42 @@ Body buffer.
 ==============================================================================
 Edit Headline   [[[3~
 
-The only way to edit headline text is to edit the corresponding Body line.
+i  I                Begin editing the headline of node under the cursor.
+                    The cursor is moved into a window with the Body buffer and
+                    placed at the start of the Body headline and on the first
+                    word character (|\<|). Normal mode only.
 
-While in a Tree buffer, Normal mode:
+The only way to edit headline text is to edit the corresponding line in the
+Body buffer. This command does not modify the Body buffer, it just puts the
+cursor on the corresponding Body line. This can also be useful when browsing
+the outline instead of <Return> and <Tab> (|voom_shuttle_keys|).
 
-i I a A             Start editing headline under the cursor. The cursor is
-                    moved into Body window and placed on the first word
-                    character in Body headline (node's first line).
-                    To find the first word char, pattern |/\<| is used.
+NOTE: The cursor is always placed on the firt line of the corresponding Body
+node. In some markups (reST, AsciiDoc) the headline can be a few lines down.
 
-Most other text changing keys are either disabled or mapped to VOoM functions.
+==============================================================================
+Add New Headline   [[[3~
+
+aa  <LocalLeader>a
+                    Add new node after the current node. If the current node is
+                    folded, the new node is added after the fold.
+AA  <LocalLeader>A
+                    Add new node as the first child of the current node.
+
+                    (Mnemonic: Add Another node.)
+
+These Tree buffer Normal mode mappings add (insert) new headline in the Body
+buffer. The format of new headlines is determined by the current markup mode.
+The text is always "NewHeadline". The cursor is moved into the Body window and
+placed on "NewHeadline" where it can be edited ("caw", "caW").
+
+It's often easier to create new headline(s) by editing the Body buffer
+directly. I wrote a simple plugin that helps with inserting numbered fold
+markers: http://www.vim.org/scripts/script.php?script_id=2891
+
+TODO: make new headline text an argument of function Insert Node to make
+programmatic creation of outlines more convenient, especially when there are
+undelines/overlines (markdown, reST). Example code at #ID_20111006013436 .
 
 ==============================================================================
 Select Body Region   [[[3~
@@ -1360,53 +1388,25 @@ R                   Move cursor from Tree to Body buffer and select the line
                     range corresponding to node under the cursor (Normal mode)
                     or to all nodes in Visual selection (Visual mode).
 
-This Tree buffer mapping is handy when you want to limit :substitute or some
+This Tree buffer mapping is handy when you want to apply :substitute or some
 other range-accepting Vim command to a single node or a group of nodes. The
 command deals with individual nodes, not trees. Mnemonic: Range, Region.
 
 ==============================================================================
-Insert New Node   [[[3~
-
-To insert new node while in a Tree buffer (Normal mode):
-
-<LocalLeader>i      Insert new node after the current node.
-<LocalLeader>I      Insert new node as first child of the current node.
-
-                    By default, the new headline is "---NewHeadline---".
-                    The cursor is moved to Body window and placed on the new
-                    headline, where it can be edited ("caw", "caW", etc.).
-
-Often, it's easier to just edit Body buffer to insert a numbered fold marker.
-I wrote a simple plugin that helps with that:
-    http://www.vim.org/scripts/script.php?script_id=2891
-
-NOTE: When a markup mode is used, the format of new headlines is determined by
-the markup mode (|voom_markup_modes|). Text is always "NewHeadline".
-
-
-TODO: make new headline text an argument of function Insert Node to make
-programmatic creation of outlines more convenient, especially when there are
-undelines/overlines (markdown, reST). Example code at #ID_20111006013436 .
-
-==============================================================================
 Move/Copy/Cut/Paste Nodes   [[[3~
 
-<C-Up>
-^^
-<LocalLeader>u      Move node(s) up. (N,V)
+^^  <C-Up>  <LocalLeader>u
+                    Move node(s) up. (N,V)
 
-<C-Down>
-__
-<LocalLeader>d      Move node(s) down. (N,V)
+__  <C-Down>  <LocalLeader>d
+                    Move node(s) down. (N,V)
 
-<C-Left>
-<<
-<LocalLeader>l      Move node(s) left (promote). (N,V)
+<<  <C-Left>  <LocalLeader>l
+                    Move node(s) left, that is promote. (N,V)
                     Nodes must be at the end of their subtree.
 
-<C-Right>
->>
-<LocalLeader>r      Move node(s) right (demote). (N,V)
+>>  <C-Right>  <LocalLeader>r
+                    Move node(s) right, that is demote. (N,V)
 
 dd                  Cut node(s). (N,V)
 
@@ -2034,8 +2034,8 @@ One-line style overrides two-line style: >
     listing
     -------------
 
-When a style must be chosen during an outline operation (when level changes or
-when a new node is inserted), the style is chosen so that to preserve the
+When a style must be chosen during an outline operation (when changing level,
+pasting, inserting new node), the style is chosen so that to preserve the
 current style of the document. When that's not possible, the default is to use
 two-line and to add closing ='s. See |voom_mode_markdown| for details.
 
@@ -2296,6 +2296,136 @@ it is no longer a section title in accordance with AsciiDoc specifications, but
 VOoM will not know that (false-positive node) and will not issue any warnings.
 
 ==============================================================================
+latex   [[[3~
+                                                 *voom_mode_latex*
+:Voom latex
+MODULE: ../plugin/voom/voom_mode_latex.py
+Mode for outlining of LaTeX sections and some other markups.
+    http://en.wikipedia.org/wiki/LaTeX
+    http://en.wikibooks.org/wiki/LaTeX/Document_Structure#Sectioning_Commands
+
+In this mode, VOoM scans for lines containing standard LaTeX commands listed
+below. It is possible to customize these lists, see Customizing .
+LaTeX commands begin with "\" and may be indented with whitespace. There may be
+a whitespace between the command and "{".
+
+Sectioning commands, in order of increasing depth
+------------------------------------------------- >
+    \part{A Heading}
+    \chapter{A Heading}
+    \section{A Heading}
+    \subsection{A Heading}
+    \subsubsection{A Heading}
+    \paragraph{A Heading}
+    \subparagraph{A Heading}
+
+Documents can use any subset of section types. Level 1 is assigned the section
+that is the highest in the hierarchy. Levels for other section types are
+incremented sequentially, even if some intermediate section types are missing.
+
+The first "{" can be followed by any text, which allows multi-line titles: >
+    \section{Long long
+        long long title}
+
+There can be an asterisk before "{". It will appear in the Tree's marks column: >
+    \section*{An Unnumbered Section Title}
+
+Optional alternative titles are OK, as long as they do not contain an "{": >
+    \section[alternative title]{A Heading}
+
+
+Fixed level 1 elements
+---------------------- >
+    \begin{document}
+    \begin{abstract}
+    \begin{thebibliography}
+    \bibliography{...}
+    \end{document}
+
+"-" is placed in the Tree's marks column for such nodes.
+
+
+Verbatim commands, headlines are ignored in between
+--------------------------------------------------- >
+    \begin{verbatim}
+    ...
+    \end{verbatim}
+
+    \begin{comment}
+    ...
+    \end{comment}
+
+------------------------------------------------------------------------------
+Gotchas   [[[4~
+
+Obviously, sections should not be moved unless they are self-contained. It's up
+to the user to ensure that no TeX commands get broken when a section is moved.
+
+Level changes are disallowed for some nodes:
+    - Fixed level elements are always at level 1. They cannot be demoted or
+      pasted at another level.
+    - There is a maximum possible level that cannot be exceeded.
+Any disallowed levels created during an outline operation are corrected
+automatically and a warning is printed.
+
+When pasting an outline, especially into another outline, section types can
+change to match the structure of the target outline. As an extreme example,
+pasting into an empty outline changes all sections to defaults. For example,
+when the following LaTeX outline >
+    \section{Material and Methods}
+    \paragraph{Assorted Lengths of Wire}
+is copied or cut and then pasted into an empty LaTeX outline, it becomes >
+    \part{Material and Methods}
+    \chapter{Assorted Lengths of Wire}
+A workaround is to define custom SECTIONS as ["section","paragraph",...].
+
+In general, the relationship between levels and section types is not always
+unambiguous and depends on what section types are currently in use.
+
+In some cases, outline operations can trigger verification errors.
+Example: when \section is deleted, \subsection unexpectedly becomes level 1 >
+    \section{Section Heading}
+    \begin{thebibliography}
+    \subsection{Subsection Heading}
+
+VOoM does not detect LaTeX commands if they are preceded by text: >
+    Lorem ipsum. Lorem ipsum. \section{Section Heading}
+VOoM does not detect "begin{}...end{}" form of sectioning commands: >
+    \begin{section}{Section Heading}
+    \end{section}
+Fortunately, nobody writes like that.
+
+------------------------------------------------------------------------------
+Customizing   [[[4~
+
+The VOoM LaTeX mode can be customized by modifying Python variables
+    SECTIONS, ELEMENTS, VERBATIMS
+either directly in voom_mode_latex.py or by defining Vim variables in .vimrc:
+    g:voom_latex_sections
+    g:voom_latex_elements
+    g:voom_latex_verbatims
+
+SECTONS and VERBATIMS are lists of strings.
+ELEMENTS is a string that is used as Python regular expression.
+ELEMENTS and VERBATIMS can be empty.
+
+The following examples are equivalent to defaults: >
+
+    let g:voom_latex_sections = ['part', 'chapter', 'section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph']
+
+    let g:voom_latex_elements = '^\s*\\(begin\s*\{(document|abstract|thebibliography)\}|end\s*\{document\}|bibliography\s*\{)'
+
+    let g:voom_latex_verbatims = ['verbatim', 'comment']
+
+Examples of large documents that produce many false headlines and a fix:
+http://mirrors.ctan.org/macros/latex/contrib/memoir/doc-src/memman.tex
+Fix: >
+    let g:voom_latex_verbatims = ['verbatim', 'comment', 'lcode', 'egsource', 'egresult']
+http://mirrors.ctan.org/macros/latex/contrib/biblatex/doc/biblatex.tex
+Fix: >
+    let g:voom_latex_verbatims = ['verbatim', 'comment', 'ltxexample', 'lstlisting']
+
+==============================================================================
 html   [[[3~
                                                  *voom_mode_html*
 :Voom html
@@ -2528,8 +2658,8 @@ files of The Vim Outliner plugin (|voom_mode_thevimoutliner|).
 
 Heavy syntax highlighting can also make outline navigation slow, especially
 when selecting a node in a large outline for the first time. This is a problem
-with large reST, Markdown, AsciiDoc files. Disabling cursorline or cursorcolumn
-or both helps a bit (:set nocul nocuc).
+with large reST, Markdown, AsciiDoc, LaTeX files. Disabling cursorline or
+cursorcolumn or both helps a bit (:set nocul nocuc).
 
 
 4) Support for Vim Sessions (|:mksession|) is far from perfect. If 'ssop'
@@ -3226,7 +3356,32 @@ see v3.0 notes.
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.3, 2012-05-06   [[[3x~
+v4.4, 2012-05-03   [[[3x~
+
+Added LaTeX mode: |voom_mode_latex|.
+
+Better mappings for Insert New Headline: "aa", "AA". <LocalLeader>i/I were
+changed to <LocalLeader>a/A.
+
+Improved Edit Headline ("i", "I"). It now correctly positions the cursor on the
+headline text for most markups most of the time.
+
+Improved "C", "O": window layout was not always restored properly.
+
+Don't block commands Edit Headline, Select Body Range if Body is not editable.
+They don't modify Body. Edit Headline is useful as an alternative to Return.
+
+ID_20120520092604
+Significant change in voom.py in order to accommodate LaTeX mode. Levels of
+Tree lines during Paste/Up/Down/Left/Right are now set according to VO.levels,
+not levDelta as before. setLevTreeLines() replaced changeLevTreeHead(). This is
+done after VO.levels is adjusted and after hook_doBodyAfterOop() is done. Thus,
+hook_doBodyAfterOop() can correct disallowed levels by modifying items in
+VO.levels: fixed elements at level >1, maximum level exceeded. The Tree is then
+constructed with correct levels and will pass verification.
+
+
+v4.3, 2012-05-06   [[[3~
 
 PROBLEM: The Voom command cannot handle buffer names containing %, #, etc.
 Session restore is also affected.

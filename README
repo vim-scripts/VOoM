@@ -3,6 +3,7 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=2657
 VOoM (Vim Outliner of Markers) is a plugin for Vim that emulates a two-pane text outliner.
 
 Screenshots and an animation: http://vim-voom.github.com/
+Bug reports, questions, requests: https://github.com/vim-voom/vim-voom.github.com/issues
 
 VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. (See :help fold-marker. Markers are specified by option 'foldmarker'. End fold markers with levels, }}}3, }}}2, etc. are not supported.)
 
@@ -17,6 +18,7 @@ VOoM currently can handle several other markup formats that have headlines and s
         hashes  -- #, ##, ###, etc. (atx-style headers, a subset of Markdown format);
         txt2tags  -- txt2tags titles and numbered titles;
         asciidoc  -- AsciiDoc document and section titles, both styles;
+        latex  -- LaTeX sectioning and some other commands;
         thevimoutliner  -- The Vim Outliner plugin (vimscript #517);
         vimoutliner  -- VimOutliner plugin (vimscript #3515);
         cwiki  -- vimscript #2176;
@@ -32,13 +34,13 @@ And so on. There is argument completion -- type ":Voom " and hit <Tab> or <C-d>.
 
 
 FEATURES:
-        - Works with Vim buffers, not with files on disk as ctags-based tools.
+        - Outline structure manipulation: move nodes up/down, promote/demote, copy/cut/paste, insert new node, sort in various ways, randomize.
+        - Many one-character mappings for efficient outline navigation, which can be combined into complex commands, e.g.,"UVD" selects all siblings of the current node. Outlines can also be navigated with the mouse.
+        - Command to search nodes. Boolean AND/NOT search (in addition to Vim's \|).
         - Automagic outline update on entering the Tree buffer.
+        - Works with Vim buffers, not with files on disk as ctags-based tools.
         - Not a 'filetype' plugin. Not tied to a particular outline format. Has (almost) no side effects on the buffer being outlined.
         - Fast and efficient enough to handle MB-sized files with >1000 headlines. (Some modes can be slower.)
-        - Many one-character mappings for efficient outline navigation, which can be combined into complex commands, e.g.,"UVD" selects all siblings of the current node. Outlines can also be navigated with the mouse.
-        - Outline structure manipulation: move nodes Up/Down, Promote/Demote, Copy/Cut/Paste, Insert New Headline, Sort in various ways.
-        - Command to search nodes. Boolean AND/NOT search (in addition to Vim's \|).
 
 
 =========================================

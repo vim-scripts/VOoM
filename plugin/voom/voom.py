@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2012-04-16
+# Last Modified: 2012-05-24
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.3
+# Version: 4.4
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -677,16 +677,17 @@ def intersectDicts(dictsAND, dictsNOT): #{{{2
 # Returning before setting l:blnShow means no changes were made.
 
 
-def changeLevTreeHead(h, levDelta): #{{{2
-    """Increase of decrese level of Tree headline by levDelta:
-    insert or delete  levDelta*". "  string.
+def setLevTreeLines(tlines, levels, j): #{{{2
+    """Set level of each Tree line in tlines to corresponding level from levels.
+    levels should be VO.levels.
+    j is index of the first item in levels.
     """
-    if levDelta > 0:
-        return '%s%s%s' %(h[:2], '. '*levDelta, h[2:])
-    elif levDelta < 0:
-        return '%s%s' %(h[:2], h[2-2*levDelta:])
-    else:
-        return h
+    results = []
+    i = 0
+    for t in tlines:
+        results.append('%s%s%s' %(t[:2], '. '*(levels[j+i]-1), t[t.index('|'):]))
+        i+=1
+    return results
 
 
 def changeLevBodyHead(VO, h, levDelta): #{{{2
@@ -726,25 +727,28 @@ def voom_OopVerify(): #{{{2
     body, tree = int(vim.eval('a:body')), int(vim.eval('a:tree'))
     VO = VOOMS[body]
     assert VO.tree == tree
+    ok = True
 
     tlines, bnodes, levels  = VO.makeOutline(VO, VO.Body)
     if not len(VO.Tree)==len(tlines)+1:
         vim.command("echoerr 'VOoM: wrong Tree size'")
+        vim.command("call Voom_ErrorMsg('VOoM: OUTLINE IS LIKELY CORRUPT!!! YOU MUST UNDO THE LAST OPERATION!!!')")
         return
     tlines[0:0], bnodes[0:0], levels[0:0] = [VO.bname], [1], [1]
     snLn = VO.snLn
     tlines[snLn-1] = '=%s' %tlines[snLn-1][1:]
 
-    ok = True
-    if not VO.Tree[:] == tlines:
-        vim.command("echoerr 'VOoM: DIFFERENT Tree lines'")
-        ok = False
     if not VO.bnodes == bnodes:
         vim.command("echoerr 'VOoM: DIFFERENT bnodes'")
-        ok = False
+        vim.command("call Voom_ErrorMsg('VOoM: OUTLINE IS LIKELY CORRUPT!!! YOU MUST UNDO THE LAST OPERATION!!!')")
+        return
     if not VO.levels == levels:
-        vim.command("echoerr 'VOoM: DIFFERENT levels'")
         ok = False
+        vim.command("echoerr 'VOoM: DIFFERENT levels'")
+    if not VO.Tree[:] == tlines:
+        ok = False
+        vim.command("echoerr 'VOoM: DIFFERENT Tree lines'")
+
     if ok:
         vim.command("let l:ok=1")
 
@@ -957,7 +961,6 @@ def voom_OopPaste(): #{{{2
     ### adjust levels of nodes being inserted
     levDelta = lev - pLevels[0]
     if levDelta:
-        pTlines = [changeLevTreeHead(h, levDelta) for h in pTlines]
         pLevels = [(lev+levDelta) for lev in pLevels]
         f = VO.changeLevBodyHead
         if f:
@@ -982,7 +985,7 @@ def voom_OopPaste(): #{{{2
     # insert pBnodes after ln
     bnodes[ln:ln] = pBnodes
 
-    ### insert new levels in levels (same as in Tree)
+    ### insert new levels in levels
     levels[ln:ln] = pLevels
 
     ### start and end lnums of inserted region
@@ -1001,7 +1004,9 @@ def voom_OopPaste(): #{{{2
     # remove = mark before modifying Tree
     snLn = VO.snLn
     Tree[snLn-1] = ' ' + Tree[snLn-1][1:]
-    ### insert new headlines in Tree (same as in levels)
+    ### adjust levels of new headlines, insert them in Tree
+    if levDelta:
+        pTlines = setLevTreeLines(pTlines, levels, ln1-1)
     Tree[ln:ln] = pTlines
 
     ### start and end lnums of inserted region
@@ -1105,7 +1110,7 @@ def voom_OopUp(): #{{{2
     ### update Tree (same as for levels)
     tlines = Tree[ln1-1:ln2]
     if levDelta:
-        tlines = [changeLevTreeHead(h, levDelta) for h in tlines]
+        tlines = setLevTreeLines(tlines, levels, lnUp1-1)
     # cut, then insert
     Tree[ln1-1:ln2] = []
     Tree[lnUp1-1:lnUp1-1] = tlines
@@ -1219,7 +1224,7 @@ def voom_OopDown(): #{{{2
     ### update Tree (same as for levels)
     tlines = Tree[ln1-1:ln2]
     if levDelta:
-        tlines = [changeLevTreeHead(h, levDelta) for h in tlines]
+        tlines = setLevTreeLines(tlines, levels, snLn-1)
     # insert, then cut
     Tree[lnIns:lnIns] = tlines
     Tree[ln1-1:ln2] = []
@@ -1271,7 +1276,7 @@ def voom_OopRight(): #{{{2
 
     ### change levels of Tree lines (same as for VO.levels)
     tlines = Tree[ln1-1:ln2]
-    tlines = [changeLevTreeHead(h, 1) for h in tlines]
+    tlines = setLevTreeLines(tlines, levels, ln1-1)
     Tree[ln1-1:ln2] = tlines
 
     ### set snLn to ln1
@@ -1330,7 +1335,7 @@ def voom_OopLeft(): #{{{2
 
     ### change levels of Tree lines (same as for VO.levels)
     tlines = Tree[ln1-1:ln2]
-    tlines = [changeLevTreeHead(h, -1) for h in tlines]
+    tlines = setLevTreeLines(tlines, levels, ln1-1)
     Tree[ln1-1:ln2] = tlines
 
     ### set snLn to ln1

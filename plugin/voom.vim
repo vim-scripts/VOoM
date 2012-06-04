@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2012-05-05
+" Last Modified: 2012-06-03
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.3
+" Version: 4.4
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -44,7 +44,7 @@ if !exists('s:voom_did_quickload')
     " support for Vim sessions (:mksession)
     au BufFilePost __PyLog__ call Voom_LogSessionLoad()
     au BufFilePost *_VOOM\d\+ call Voom_TreeSessionLoad()
-    let s:voom_did_quickload = 'v4.3'
+    let s:voom_did_quickload = 'v4.4'
     finish
 endif
 
@@ -959,6 +959,9 @@ func! Voom_TreeSyntax(body) "{{{2
     elseif FT==#'html' || FT==#'xml'
         syn match Comment /^[^|]\+|\zs<!.*/ contains=Todo
         syn keyword Todo contained TODO XXX FIXME
+    elseif FT==#'tex'
+        syn match Comment /^[^|]\+|\zs%.*/ contains=Todo
+        syn keyword Todo contained TODO XXX FIXME
     else
         """ organizer nodes: /headline/
         "syn match Directory @^[^|]\+|\zs/.*@ contains=Todo
@@ -983,27 +986,28 @@ func! Voom_TreeMap() "{{{2=
 
     """ disable keys that change text {{{
 " disable common text change commands
-noremap <buffer><silent> i <Nop>
-noremap <buffer><silent> I <Nop>
-noremap <buffer><silent> a <Nop>
-noremap <buffer><silent> A <Nop>
-noremap <buffer><silent> o <Nop>
-noremap <buffer><silent> O <Nop>
-noremap <buffer><silent> s <Nop>
-noremap <buffer><silent> S <Nop>
-noremap <buffer><silent> r <Nop>
-noremap <buffer><silent> R <Nop>
-noremap <buffer><silent> x <Nop>
-noremap <buffer><silent> X <Nop>
-noremap <buffer><silent> D <Nop>
-noremap <buffer><silent> J <Nop>
-noremap <buffer><silent> c <Nop>
-noremap <buffer><silent> C <Nop>
-noremap <buffer><silent> P <Nop>
-noremap <buffer><silent> . <Nop>
-noremap <buffer><silent> = <Nop>
-noremap <buffer><silent> <Ins> <Nop>
-noremap <buffer><silent> <Del> <Nop>
+noremap <buffer><silent> i <Esc>
+noremap <buffer><silent> I <Esc>
+noremap <buffer><silent> a <Esc>
+noremap <buffer><silent> A <Esc>
+noremap <buffer><silent> o <Esc>
+noremap <buffer><silent> O <Esc>
+noremap <buffer><silent> s <Esc>
+noremap <buffer><silent> S <Esc>
+noremap <buffer><silent> r <Esc>
+noremap <buffer><silent> R <Esc>
+noremap <buffer><silent> x <Esc>
+noremap <buffer><silent> X <Esc>
+noremap <buffer><silent> D <Esc>
+noremap <buffer><silent> J <Esc>
+noremap <buffer><silent> c <Esc>
+noremap <buffer><silent> C <Esc>
+noremap <buffer><silent> P <Esc>
+noremap <buffer><silent> . <Esc>
+noremap <buffer><silent> = <Esc>
+noremap <buffer><silent> ~ <Esc>
+noremap <buffer><silent> <Ins> <Esc>
+noremap <buffer><silent> <Del> <Esc>
 noremap <buffer><silent> <C-x> <Esc>
 noremap <buffer><silent> p <Esc>
 noremap <buffer><silent> d <Esc>
@@ -1013,23 +1017,16 @@ noremap <buffer><silent> ^ <Esc>
 noremap <buffer><silent> _ <Esc>
 
 " disable undo (also case conversion)
-noremap <buffer><silent> u <Nop>
-noremap <buffer><silent> U <Nop>
-noremap <buffer><silent> <C-r> <Nop>
+noremap <buffer><silent> u <Esc>
+noremap <buffer><silent> U <Esc>
+noremap <buffer><silent> <C-r> <Esc>
 
 " disable creation/deletion of folds
-noremap <buffer><silent> zf <Nop>
-noremap <buffer><silent> zF <Nop>
-noremap <buffer><silent> zd <Nop>
-noremap <buffer><silent> zD <Nop>
-noremap <buffer><silent> zE <Nop>
-    """ }}}
-
-    """ edit headline {{{
-nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit()<CR>
-nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit()<CR>
-nnoremap <buffer><silent> a :<C-u>call Voom_OopEdit()<CR>
-nnoremap <buffer><silent> A :<C-u>call Voom_OopEdit()<CR>
+noremap <buffer><silent> zf <Esc>
+noremap <buffer><silent> zF <Esc>
+noremap <buffer><silent> zd <Esc>
+noremap <buffer><silent> zD <Esc>
+noremap <buffer><silent> zE <Esc>
     """ }}}
 
     """ node navigation and selection {{{
@@ -1097,61 +1094,67 @@ vnoremap <buffer><silent> D :<C-u>call Voom_Tree_KJUD('D','v')<CR>
     """ }}}
 
     """ outline operations {{{
+" edit headline
+nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit()<CR>
+nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit()<CR>
+
 " insert new node
-nnoremap <buffer><silent> <LocalLeader>i  :<C-u>call Voom_OopInsert('')<CR>
-nnoremap <buffer><silent> <LocalLeader>I  :<C-u>call Voom_OopInsert('as_child')<CR>
+nnoremap <buffer><silent> <LocalLeader>a :<C-u>call Voom_OopInsert('')<CR>
+nnoremap <buffer><silent>             aa :<C-u>call Voom_OopInsert('')<CR>
+nnoremap <buffer><silent> <LocalLeader>A :<C-u>call Voom_OopInsert('as_child')<CR>
+nnoremap <buffer><silent>             AA :<C-u>call Voom_OopInsert('as_child')<CR>
 
 " move
-nnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'n')<CR>
-nnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'n')<CR>
-nnoremap <buffer><silent>             ^^  :<C-u>call Voom_Oop('up', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>u  :<C-u>call Voom_Oop('up', 'v')<CR>
-vnoremap <buffer><silent>         <C-Up>  :<C-u>call Voom_Oop('up', 'v')<CR>
-vnoremap <buffer><silent>             ^^  :<C-u>call Voom_Oop('up', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>u :<C-u>call Voom_Oop('up', 'n')<CR>
+nnoremap <buffer><silent>         <C-Up> :<C-u>call Voom_Oop('up', 'n')<CR>
+nnoremap <buffer><silent>             ^^ :<C-u>call Voom_Oop('up', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>u :<C-u>call Voom_Oop('up', 'v')<CR>
+vnoremap <buffer><silent>         <C-Up> :<C-u>call Voom_Oop('up', 'v')<CR>
+vnoremap <buffer><silent>             ^^ :<C-u>call Voom_Oop('up', 'v')<CR>
 
-nnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'n')<CR>
-nnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'n')<CR>
-nnoremap <buffer><silent>             __  :<C-u>call Voom_Oop('down', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>d  :<C-u>call Voom_Oop('down', 'v')<CR>
-vnoremap <buffer><silent>       <C-Down>  :<C-u>call Voom_Oop('down', 'v')<CR>
-vnoremap <buffer><silent>             __  :<C-u>call Voom_Oop('down', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>d :<C-u>call Voom_Oop('down', 'n')<CR>
+nnoremap <buffer><silent>       <C-Down> :<C-u>call Voom_Oop('down', 'n')<CR>
+nnoremap <buffer><silent>             __ :<C-u>call Voom_Oop('down', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>d :<C-u>call Voom_Oop('down', 'v')<CR>
+vnoremap <buffer><silent>       <C-Down> :<C-u>call Voom_Oop('down', 'v')<CR>
+vnoremap <buffer><silent>             __ :<C-u>call Voom_Oop('down', 'v')<CR>
 
-nnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'n')<CR>
-nnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'n')<CR>
-nnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>l  :<C-u>call Voom_Oop('left', 'v')<CR>
-vnoremap <buffer><silent>       <C-Left>  :<C-u>call Voom_Oop('left', 'v')<CR>
-vnoremap <buffer><silent>             <<  :<C-u>call Voom_Oop('left', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>l :<C-u>call Voom_Oop('left', 'n')<CR>
+nnoremap <buffer><silent>       <C-Left> :<C-u>call Voom_Oop('left', 'n')<CR>
+nnoremap <buffer><silent>             << :<C-u>call Voom_Oop('left', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>l :<C-u>call Voom_Oop('left', 'v')<CR>
+vnoremap <buffer><silent>       <C-Left> :<C-u>call Voom_Oop('left', 'v')<CR>
+vnoremap <buffer><silent>             << :<C-u>call Voom_Oop('left', 'v')<CR>
 
-nnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'n')<CR>
-nnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'n')<CR>
-nnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>r  :<C-u>call Voom_Oop('right', 'v')<CR>
-vnoremap <buffer><silent>      <C-Right>  :<C-u>call Voom_Oop('right', 'v')<CR>
-vnoremap <buffer><silent>             >>  :<C-u>call Voom_Oop('right', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>r :<C-u>call Voom_Oop('right', 'n')<CR>
+nnoremap <buffer><silent>      <C-Right> :<C-u>call Voom_Oop('right', 'n')<CR>
+nnoremap <buffer><silent>             >> :<C-u>call Voom_Oop('right', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>r :<C-u>call Voom_Oop('right', 'v')<CR>
+vnoremap <buffer><silent>      <C-Right> :<C-u>call Voom_Oop('right', 'v')<CR>
+vnoremap <buffer><silent>             >> :<C-u>call Voom_Oop('right', 'v')<CR>
 
 " cut/copy/paste
-nnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'n')<CR>
-vnoremap <buffer><silent>  dd  :<C-u>call Voom_Oop('cut', 'v')<CR>
+nnoremap <buffer><silent> dd :<C-u>call Voom_Oop('cut', 'n')<CR>
+vnoremap <buffer><silent> dd :<C-u>call Voom_Oop('cut', 'v')<CR>
 
-nnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'n')<CR>
-vnoremap <buffer><silent>  yy  :<C-u>call Voom_Oop('copy', 'v')<CR>
+nnoremap <buffer><silent> yy :<C-u>call Voom_Oop('copy', 'n')<CR>
+vnoremap <buffer><silent> yy :<C-u>call Voom_Oop('copy', 'v')<CR>
 
-nnoremap <buffer><silent>  pp  :<C-u>call Voom_OopPaste()<CR>
+nnoremap <buffer><silent> pp :<C-u>call Voom_OopPaste()<CR>
 
 " mark/unmark
-nnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>m   :<C-u>call Voom_OopMark('mark', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>m :<C-u>call Voom_OopMark('mark', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>m :<C-u>call Voom_OopMark('mark', 'v')<CR>
 
-nnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'n')<CR>
-vnoremap <buffer><silent> <LocalLeader>M   :<C-u>call Voom_OopMark('unmark', 'v')<CR>
+nnoremap <buffer><silent> <LocalLeader>M :<C-u>call Voom_OopMark('unmark', 'n')<CR>
+vnoremap <buffer><silent> <LocalLeader>M :<C-u>call Voom_OopMark('unmark', 'v')<CR>
 
 " mark node as selected node
-nnoremap <buffer><silent> <LocalLeader>=   :<C-u>call Voom_OopMarkStartup()<CR>
+nnoremap <buffer><silent> <LocalLeader>= :<C-u>call Voom_OopMarkStartup()<CR>
 
 " select Body region
-nnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRange('n')<CR>
-vnoremap <buffer><silent> R  :<C-u>call Voom_OopSelectBodyRange('v')<CR>
+nnoremap <buffer><silent> R :<C-u>call Voom_OopSelectBodyRange('n')<CR>
+vnoremap <buffer><silent> R :<C-u>call Voom_OopSelectBodyRange('v')<CR>
     """ }}}
 
     """ save/Restore Tree folding {{{
@@ -1178,7 +1181,7 @@ nnoremap <buffer><silent> q :<C-u>call Voom_DeleteOutline()<CR>
     return
     " Use noremap to disable keys. This must be done first.
     " Use nnoremap and vnoremap in VOoM mappings, don't use noremap.
-    " Some keys should be disabled via <Esc> instead of <Nop>:
+    " It's better to disable keys by mapping to <Esc> instead of <Nop>:
     "       ../doc/voom.txt#id_20110121201243
     "
     " Do not map <LeftMouse>. Not triggered on first click in the buffer.
@@ -1188,7 +1191,7 @@ nnoremap <buffer><silent> q :<C-u>call Voom_DeleteOutline()<CR>
     " Can't use Ctrl: <C-i> is Tab; <C-u>, <C-d> are page up/down.
     " Use <LocalLeader> instead of Ctrl.
     "
-    " Still up for grabs: <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { }
+    " Still up for grabs: <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { } ~
 endfunc
 
 
@@ -1559,11 +1562,10 @@ func! Voom_Tree_CO(action, mode) "{{{3
     if lnum==1 | return | endif
 
     """ do 'zC' or 'zO' for all siblings of current node
+    let winsave_dict = winsaveview()
     if a:mode==#'n'
         keepj normal! 0f|
         let ind = virtcol('.')-1
-
-        let winsave_dict = winsaveview()
 
         " go the uppermost sibling: up to parent, down to sibling
         call search('\m^[^|]\{0,'.(ind-2).'}|', 'bWe')
@@ -1589,9 +1591,6 @@ func! Voom_Tree_CO(action, mode) "{{{3
         catch /^Vim\%((\a\+)\)\=:E490/
         endtry
 
-        call winrestview(winsave_dict)
-        exe 'keepj normal! '.lnum.'G0f|'
-
     """ do 'zC' or 'zO' for all nodes in Visual selection
     elseif a:mode==#'v'
         try
@@ -1601,7 +1600,9 @@ func! Voom_Tree_CO(action, mode) "{{{3
         endtry
     endif
 
+    exe 'keepj normal! '.lnum.'G0f|'
     call Voom_TreeZV()
+    call winrestview(winsave_dict)
 endfunc
 
 
@@ -1658,7 +1659,7 @@ func! Voom_OopSelectBodyRange(mode) "{{{3
     let tree = bufnr('')
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    "if Voom_BufEditable(body) < 0 | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1692,9 +1693,10 @@ func! Voom_OopEdit() "{{{3
     let tree = bufnr('')
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    "if Voom_BufEditable(body) < 0 | return | endif
     let lnum = line('.')
     if lnum==1 | return | endif
+    let head = getline(lnum)[1+stridx(getline(lnum),'|') :]
 
     python vim.command("let l:bLnr=%s" %voom.VOOMS[int(vim.eval('l:body'))].bnodes[int(vim.eval('l:lnum'))-1])
 
@@ -1712,7 +1714,8 @@ func! Voom_OopEdit() "{{{3
     if do_zz
         normal! zz
     endif
-    " put cursor on the first word char
+    " put cursor on the headline text, then on the first word char
+    call search('\V'.substitute(head,'\','\\\\','g'), 'c', line('.'))
     call search('\m\<', 'c', line('.'))
     let &lz=lz_
 endfunc
@@ -2161,9 +2164,12 @@ func! Voom_OopSort(ln1,ln2,qargs) "{{{3
     let &lz=lz_
 
     " Sorting must not change the number of headlines!
-    " (This is problem with reST and Python modes.)
+    " (This is problem with reST, asciidoc, Python modes.)
     if Z != line('$')
-        call Voom_ErrorMsg("VOoM (sort): ERROR has occurred during sorting!!!", "The number of headlines has changed!!!", "You must undo this sort!!!")
+        let d = line('$') - Z
+        echoerr "VOoM (sort): ERROR OCCURRED DURING SORTING!!! YOU MUST UNDO THIS SORT!!!"
+        call Voom_ErrorMsg("             Total number of nodes has changed by ".d.".")
+        call Voom_ErrorMsg("             If a blank line is required before headlines (reST, AsciiDoc), make sure each node is ending with a blank line.")
     endif
 endfunc
 
@@ -2253,15 +2259,14 @@ func! Voom_OopVerify(body, tree, op) "{{{3
         return
     endif
 
+    let l:ok = 0
     python voom.voom_OopVerify()
-    if exists('l:ok')
-        return
-    endif
+    if l:ok | return | endif
 
     echoerr 'VOoM: outline verification failed after "'.a:op.'". Forcing outline update.'
     let s:voom_bodies[a:body].tick_ = -1
     if bufnr('')!=a:tree
-        echoerr 'Current buffer is not Tree! Aborting outline update.'
+        echoerr 'Current buffer is not Tree!!! Outline update aborted.'
         return
     endif
     call Voom_TreeBufEnter()
