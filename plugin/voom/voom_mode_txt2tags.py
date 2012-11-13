@@ -1,5 +1,5 @@
 # voom_mode_txt2tags.py
-# Last Modified: 2011-05-01
+# Last Modified: 2012-10-22
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
@@ -15,13 +15,14 @@ See |voom_mode_txt2tags|,  ../../doc/voom.txt#*voom_mode_txt2tags*
 """
 
 import re
-# from txt2tags.py
+# headline regexps from txt2tags.py:
 #   titskel = r'^ *(?P<id>%s)(?P<txt>%s)\1(\[(?P<label>[\w-]*)\])?\s*$'
 #   bank[   'title'] = re.compile(titskel%('[=]{1,5}','[^=](|.*[^=])'))
 #   bank['numtitle'] = re.compile(titskel%('[+]{1,5}','[^+](|.*[^+])'))
-# === headline ===
+
+# === headline ===[optional-label]
 headline1_match = re.compile(r'^ *(=+)([^=].*[^=]|[^=])(\1)(\[[\w-]*\])?\s*$').match
-# +++ headline +++
+# +++ headline +++[optional-label]
 headline2_match = re.compile(r'^ *(\++)([^+].*[^+]|[^+])(\1)(\[[\w-]*\])?\s*$').match
 
 
@@ -33,35 +34,37 @@ def hook_makeOutline(VO, blines):
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
 
-    areaVerb,areaRaw,areaTagged = False,False,False
+    # tags between which headlines should be ignored: Verbatim/Raw/Tagged/Comment Areas
+    areaTags = {'```' : 1, '"""' : 2, "'''" : 3, '%%%' : 4}
+    inArea = '' # set to Area tag when in an ignored Area
     for i in xrange(Z):
         bline = blines[i]
 
-        # ignore Verbatim/Raw/Tagged Areas
-        bline_rs = bline.rstrip()
-        if bline_rs=='```' and not (areaRaw or areaTagged):
-            areaVerb = not areaVerb; continue
-        elif bline_rs=='"""' and not (areaVerb or areaTagged):
-            areaRaw = not areaRaw; continue
-        elif bline_rs=="'''" and not (areaVerb or areaRaw):
-            areaTagged = not areaTagged; continue
-        if areaVerb or areaRaw or areaTagged: continue
+        # ignore Verbatim/Raw/Tagged/Comment Areas
+        bline_rs = bline.rstrip() # tests show rstrip() is needed for these tags
+        if bline_rs in areaTags:
+            if not inArea:
+                inArea = bline_rs
+            elif inArea==bline_rs:
+                inArea = ''
+            continue
+        if inArea: continue
 
         # there can be leading spaces but not tabs
         bline = bline.lstrip(' ')
         if bline.startswith('='):
             m = headline1_match(bline)
             if not m: continue
-            plus = ''
+            plus = ' '
         elif bline.startswith('+'):
             m = headline2_match(bline)
             if not m: continue
-            plus = '+ '
+            plus = '+'
         else:
             continue
         lev = len(m.group(1))
-        head = '%s%s' %(plus, m.group(2).strip())
-        tline = '  %s|%s' %('. '*(lev-1), head)
+        head = m.group(2).strip()
+        tline = ' %s%s|%s' %(plus, '. '*(lev-1), head)
         tlines_add(tline)
         bnodes_add(i+1)
         levels_add(lev)
@@ -81,7 +84,6 @@ def hook_newHeadline(VO, level, blnum, tlnum):
             lev = '='*level
         else:
             lev = '+'*level
-            tree_head = '+ NewHeadline'
     else:
         lev = '='*level
     bodyLines = ['%s NewHeadline %s' %(lev, lev), '']

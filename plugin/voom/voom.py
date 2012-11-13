@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2012-05-24
+# Last Modified: 2012-11-05
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.4
+# Version: 4.5
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -651,21 +651,24 @@ def intersectDicts(dictsAND, dictsNOT): #{{{2
     Return dict: intersection of all dicts in dictsAND and non-itersection with
     all dicts in dictsNOT.
     """
-    if not dictsAND: return {}
-    D1 = dictsAND[0]
+    if not dictsAND:
+        return {}
     if len(dictsAND)==1:
-        res = D1
+        res = dictsAND[0]
     else:
         res = {}
-    # get intersection with all other AND dicts
-    for D in dictsAND[1:]:
-        for item in D1:
-            if item in D: res[item] = 0
-    # get non-intersection with NOT dicts
-    for D in dictsNOT:
-        keys = res.keys()
-        for key in keys:
-            if key in D: del res[key]
+        # intersection with other dicts in dictsAND
+        for key in dictsAND[0]:
+            for d in dictsAND[1:]:
+                if not key in d:
+                    break
+            else:
+                res[key] = 0
+    # non-intersection with all dicts in dictsNOT
+    for d in dictsNOT:
+        for key in d:
+            if key in res:
+                del res[key]
     return res
 
 
@@ -781,6 +784,21 @@ def voom_OopSelectBodyRange(): # {{{2
     assert VO.tree == tree
     bln1, bln2 = nodesBodyRange(VO, ln1, ln2)
     vim.command("let [l:bln1,l:bln2]=[%s,%s]" %(bln1,bln2))
+
+
+def voom_OopEdit(): # {{{2
+    body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
+    lnum, op = int(vim.eval('l:lnum')), vim.eval('a:op')
+    VO = VOOMS[body]
+    assert VO.tree == tree
+    if op=='i':
+        bLnr = VO.bnodes[lnum-1]
+    elif op=='I':
+        if lnum < len(VO.bnodes):
+            bLnr = VO.bnodes[lnum]-1
+        else:
+            bLnr = len(VO.Body)
+    vim.command("let l:bLnr=%s" %(bLnr))
 
 
 def voom_OopInsert(as_child=False): #{{{2

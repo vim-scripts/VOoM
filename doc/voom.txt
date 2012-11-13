@@ -1,7 +1,7 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2012-06-03
+Last Modified: 2012-11-13
 VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.4
+Version: 4.5
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
@@ -22,7 +22,7 @@ License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
 ==============================================================================
 Overview   [[[1~
                                                  *voom_overview*
-VOoM (Vim Outliner of Markers) is a plugin for Vim that emulates a two-pane
+VOoM (Vim Outliner of Markups) is a plugin for Vim that emulates a two-pane
 text outliner.
 
 Screenshots and an animation: http://vim-voom.github.com/
@@ -34,9 +34,10 @@ allows features not possible with other markups (|fold-marker|).
 Markers are specified by option 'foldmarker'. End fold markers with levels are
 not supported.
 
-VOoM currently can handle several other markup formats that have headlines and
-support an outline structure. (Headlines are also called headings, headers,
-section headers, titles.) Available markup modes:
+VOoM can currently handle various markup formats that have headlines and
+support an outline structure, including popular lightweight markup languages.
+(Headlines are also called headings, headers, section headers, titles.)
+Available markup modes:
     fmr, fmr1, fmr2  |voom_mode_fmr|
     wiki             |voom_mode_wiki|
     vimwiki          |voom_mode_vimwiki|
@@ -311,7 +312,7 @@ There are several Windows Vim installers (version 7.3).
 Installer from vim.org, http://www.vim.org/download.php#pc, probably installs
 Vim compiled against Python 2.7.
 Installer from http://sourceforge.net/projects/cream/files/ (gVim one-click
-installer for Windows) has Vim compiled against Python 2.6 according to release
+installer for Windows) has Vim compiled against Python 2.7 according to release
 notes.
 
 It is not hard to compile your own Python-enabled gvim.exe and vim.exe. See
@@ -320,32 +321,34 @@ http://vim.wikia.com/wiki/Build_Python-enabled_Vim_on_Windows_with_MinGW?useskin
 ==============================================================================
 Installation   [[[1~
                                                  *voom_install*
-Copy content of the plugin folder (file "voom.vim", directory "voom" with
-Python files) to your local Vim plugin folder: >
-    $HOME/vimfiles/plugin/   (Windows)
-    $HOME/.vim/plugin/       (*nix)
-Copy "doc/voom.txt" to the local doc folder. >
-    $HOME/vimfiles/doc/      (Windows)
-    $HOME/.vim/doc/          (*nix)
-This will make commands Voom, Voomlog, Voomexec, Voomhelp available in any
-buffer.
-
-Execute the :helptags command to install "voom.txt" as Vim help and to
+Move the contents of folders "plugin" and "doc" into the respective folders in
+you local Vim directory, that is >
+    $HOME/vimfiles/     (Windows)
+or >
+    $HOME/.vim/         (Linux)
+Execute the :helptags command to install "doc/voom.txt" as Vim help and to
 generate help tags (|add-local-help|): >
     :helptags $HOME/vimfiles/doc
     :helptags $HOME/.vim/doc
 
-VOoM can also be run from any directory without installing anything, see
-    Overview -> QUICK DEMO.
+Alternatively, use Pathogen and install VOoM as a bundle:
+    http://www.vim.org/scripts/script.php?script_id=2332
 
-NOTE: VOoM uses quickload mechanism (|write-plugin-quickload|). The bulk of
-the script "voom.vim" is sourced and Python module "voom.py" is imported only
-after a Voom command is executed for the first time.
+To try VOoM without installing anything, just source "plugin/voom.vim",
+see node "Overview -> QUICK DEMO".
 
-NOTE: VOoM Python modules are located in folder "voom" which must be in the
-directory of "voom.vim". When "voom.vim" is sourced, its Python code adds
-"voom" directory to sys.path and then imports "voom.py". This creates file
-"voom.pyc" if needed.
+Folders "voom_addons", "voom_samples" are not needed to run VOoM and can be
+placed anywhere or deleted.
+
+NOTE: VOoM uses the quickload mechanism (|write-plugin-quickload|). The bulk of
+the Vim script "voom.vim" is sourced and Python module "voom.py" is imported
+only after a Voom command is executed for the first time.
+
+NOTE: The folder "plugin/voom" contains VOoM Python modules. When "voom.vim" is
+sourced, its Python code adds the "voom" directory to sys.path and then imports
+"voom.py" and other required .py files. This folder will also contain .pyc
+files created by Python. In some rare cases it may be necessary to delete the
+old .pyc files when installing a new version.
 
 ==============================================================================
 Options   [[[1o~
@@ -559,9 +562,10 @@ When a Tree buffer is created, its 'filetype' is set to "voomtree"
 When __PyLog__ buffer is created, its 'filetype' is set to "voomlog".
 This should allow user customization of these buffers (bufhidden, syntax,
 wrap/norwap, list/nolist, etc.) via standard Vim configuration files: >
-    $HOME/.vim/ftplugin/voomtree.vim
-    $HOME/.vim/syntax/voomtree.vim
-    $HOME/.vim/after/syntax/log.vim
+    ~/.vim/ftplugin/voomtree.vim
+    ~/.vim/after/ftplugin/voomtree.vim
+    ~/.vim/syntax/voomtree.vim
+    ~/.vim/after/syntax/log.vim
     etc.
 
 To modify default Tree buffer-local mappings or create new ones:
@@ -584,7 +588,7 @@ nonstandard foldmarker is specified on file's modeline.
 # ALL MAPPINGS & COMMANDS #   [[[1x=  ~
                                                  *voom_map*
 ------------------------------------------------------------------------------
-MAIN COMMANDS ~
+    MAIN COMMANDS ~
 ------------------------------------------------------------------------------
 :Voom               Create outline of the current buffer. |voom_Voom|
 :Voom {MarkupName}  Create outline using markup mode defined in module
@@ -594,10 +598,11 @@ MAIN COMMANDS ~
 :Voomlog            Create __PyLog__ buffer. |voom_Voomlog|
 
 ------------------------------------------------------------------------------
-SHUTTLE KEYS (BODY AND TREE BUFFERS) ~
+    SHUTTLE KEYS (BODY AND TREE BUFFERS) ~
 ------------------------------------------------------------------------------
-These cycle between Tree and Body windows. Configurable by the user.
-Body: Normal mode. Tree: Normal and Visual modes. |voom_shuttle_keys|
+                    These keys cycle between Tree and Body windows.
+                    Body: Normal mode. Tree: Normal and Visual modes.
+                    Configurable by the user, see |voom_shuttle_keys|.
 
 <Return>            Select node under the cursor. If already selected, move
                     cursor to Tree or Body window. A Tree or Body window is
@@ -607,7 +612,7 @@ Body: Normal mode. Tree: Normal and Visual modes. |voom_shuttle_keys|
 
 
 ------------------------------------------------------------------------------
-OUTLINE NAVIGATION (TREE BUFFER) ~
+    OUTLINE NAVIGATION (TREE BUFFER) ~
 ------------------------------------------------------------------------------
 <LeftRelease>       Mouse left button click. Select node under mouse.
                     Toggle node's expanded/contracted state if the click is
@@ -624,13 +629,8 @@ OUTLINE NAVIGATION (TREE BUFFER) ~
                     If the current node is expanded, it is contracted first.
 
 ------------------------------------------------------------------------------
-expand/contract nodes
+    EXPAND/CONTRACT NODES
 ------------------------------------------------------------------------------
-zc, zo, zM, zR, zv, etc.
-                    These are Vim's standard folding commands.
-                    They expand/contract nodes (|fold-commands|).
-                    Note: zf, zF, zd, zD, zE are disabled.
-
 <Space>             Expand/contract the current node (node under the cursor). (N)
 
 O                   Recursively expand the current node and its siblings. (N)
@@ -641,8 +641,13 @@ C                   Recursively contract the current node and its siblings. (N)
                     Recursively contract all nodes in Visual selection. (V)
                     Similar to |zC|.
 
+zc, zo, zM, zR, zv, etc.
+                    These are Vim's standard folding commands.
+                    They expand/contract nodes (|fold-commands|).
+                    Note: zf, zF, zd, zD, zE are disabled.
+
 ------------------------------------------------------------------------------
-move cursor to another node (in addition to j, k, H, M, L, etc.)
+    MOVE CURSOR TO ANOTHER NODE (in addition to j, k, H, M, L, etc.)
 ------------------------------------------------------------------------------
 o                   Down to the first child of the current node (like |zo|). (N)
 
@@ -658,7 +663,7 @@ D                   Down to the downmost sibling. (N,V)
 =                   Put cursor on the currently selected node. (N)
 
 ------------------------------------------------------------------------------
-go to specially marked node |voom_special_marks|
+    GO TO SPECIALLY MARKED NODE |voom_special_marks|
 ------------------------------------------------------------------------------
 x                   Go to next marked node (find headline marked with 'x'). (N)
 X                   Go to previous marked node. (N)
@@ -667,19 +672,20 @@ X                   Go to previous marked node. (N)
                     headline). Warns if there are several such nodes. (N)
 
 ------------------------------------------------------------------------------
-show (echo) information for node under the cursor
+    SHOW (ECHO) INFORMATION FOR NODE UNDER THE CURSOR
 ------------------------------------------------------------------------------
 s                   Show Tree headline (text after the first '|'). (N)
 S                   Show UNL. Same as :Voomunl (|voom_Voomunl|). (N)
 
 
 ------------------------------------------------------------------------------
-OUTLINE OPERATIONS (TREE BUFFER) ~
+    OUTLINE OPERATIONS (TREE BUFFER) ~
 ------------------------------------------------------------------------------
-i  I                Edit headline text of node under the cursor. (N)
+i                   Edit the first line (headline) of the current node. (N)
+I                   Edit the last line of the current node. (N)
 
 aa  <LocalLeader>a
-                    Add new node after the current node. (N)
+                    Add new node after the current node or fold. (N)
 
 AA  <LocalLeader>A
                     Add new node as the first child of the current node. (N)
@@ -700,17 +706,29 @@ __  <C-Down>  <LocalLeader>d
 >>  <C-Right>  <LocalLeader>r
                     Move node(s) Right, that is Demote. (N,V)
 
-------------------------------------------------------------------------------
-COPY/CUT/PASTE (these use Vim's + register: system clipboard)
-------------------------------------------------------------------------------
 yy                  Copy node(s). (N,V)
 
 dd                  Cut node(s).  (N,V)
 
-pp                  Paste node(s) after the current node. (N)
+pp                  Paste node(s) after the current node or fold. (N)
+
+                    NOTE: Copy, Cut, Paste use the "+ register, that is the
+                    system clipboard.
 
 ------------------------------------------------------------------------------
-MARK/UNMARK |voom_special_marks|
+    SORT |voom_sort|
+------------------------------------------------------------------------------
+:VoomSort [options] Sort siblings of node under the cursor.
+                    Options are: "deep" (also sort all descendant nodes),
+                    "i" (ignore-case), "u" (Unicode-aware), "r" (reverse-sort),
+                    "flip" (reverse), "shuffle".
+
+:[range]VoomSort [options]
+                    Sort siblings in the [range], the start and end range lines
+                    must be different.
+
+------------------------------------------------------------------------------
+    MARK/UNMARK |voom_special_marks|
 ------------------------------------------------------------------------------
 <LocalLeader>m      Mark node(s): add 'x' to Body headlines. (N,V)
 
@@ -721,19 +739,7 @@ MARK/UNMARK |voom_special_marks|
                     Tree line 1, all '=' marks are removed. (N)
 
 ------------------------------------------------------------------------------
-SORTING |voom_sort|
-------------------------------------------------------------------------------
-:VoomSort [options] Sort siblings of node under the cursor.
-                    Options are: "deep" (also sort all descendant nodes),
-                    "i" (ignore-case), "u" (Unicode-aware), "r" (reverse-sort),
-                    "flip" (reverse), "shuffle".
-
-:[range]VoomSort [options]
-                    Sort siblings in the [range], start and end range lines
-                    must be different.
-
-------------------------------------------------------------------------------
-SAVE/RESTORE TREE BUFFER FOLDING |voom_tree_folding|
+    SAVE/RESTORE TREE BUFFER FOLDING |voom_tree_folding|
 ------------------------------------------------------------------------------
 :[range]VoomFoldingSave
                     Save Tree folding (writes 'o' marks in Body headlines).
@@ -758,19 +764,19 @@ SAVE/RESTORE TREE BUFFER FOLDING |voom_tree_folding|
 
 
 ------------------------------------------------------------------------------
-SEARCH NODES (Body and Tree buffers) ~
+    SEARCH NODES (Body and Tree buffers) ~
 ------------------------------------------------------------------------------
-:Voomunl            Display node's UNL: Uniform Node Locator. |voom_Voomunl|
+:Voomunl            Display node's UNL (Uniform Node Locator). |voom_Voomunl|
 
 :Voomgrep [pattern(s)]
-                    Search current outline for pattern and display results in
+                    Search the outline for pattern(s) and display results in
                     the quickfix window as list of UNLs of nodes with matches.
-                    Performs boolean AND and NOT searches if there are several
-                    patterns separated by words "and" or "not". Uses word at
-                    cursor if no patterns are provided. |voom_Voomgrep|
+                    Patterns are separated by words "and" or "not", in which
+                    case Boolean AND/NOT search is performed. If no patterns
+                    are provided, the word at cursor is used. |voom_Voomgrep|
 
 ------------------------------------------------------------------------------
-QUIT (DELETE), TOGGLE OUTLINE ~
+    QUIT (DELETE), TOGGLE OUTLINE ~
 ------------------------------------------------------------------------------
                     (see |voom_quit|)
 q                   Delete outline. (Tree buffer Normal mode mapping)
@@ -782,14 +788,14 @@ q                   Delete outline. (Tree buffer Normal mode mapping)
 :Voomtoggle         Minimize/Restore Tree window. (Tree or Body)
 
 ------------------------------------------------------------------------------
-VARIOUS ~
+    VARIOUS ~
 ------------------------------------------------------------------------------
 
 <LocalLeader>e      Execute node. Same as :Voomexec. Tree buffer only. (N)
 
-Several additional commands is created if there exists variable
-"g:voom_create_devel_commands". These commands are useful only during VOoM
-development. See node "Commands" in ../plugin/voom.vim for details.
+    Several additional commands are created if there exists user variable
+    "g:voom_create_devel_commands". These commands are useful only during VOoM
+    development. See node "Commands" in ../plugin/voom.vim for details.
  
 
 ==============================================================================
@@ -1122,7 +1128,7 @@ buffer), except that if current buffer is a Body they also delete the outline.
 ==============================================================================
 Outline Navigation   [[[2o~
 
-See |voom_map| for list of all mappings. This section explains the basics.
+See |voom_map| for a list of all mappings. This section explains the basics.
 
 ------------------------------------------------------------------------------
 If mouse is enabled (GUI Vim), outline can be browsed with the mouse alone
@@ -1163,8 +1169,9 @@ can be used instead by defining custom "g:voom_return_key" and "g:voom_tab_key"
 
 The command :Voom also cycles between Tree and Body. This is like <Return> but
 without selecting new node.
-The command "i" in the Tree buffer (Edit Headline) is also handy for jumping to
-the first line of the corresponding node in the Body buffer.
+
+Commands "i" and "I" in the Tree buffer can also be handy for jumping to the
+first or last line of the corresponding node in the Body buffer.
 
 All other mappings are for Tree buffers only.
 
@@ -1211,14 +1218,14 @@ are multiple windows, previous window (^Wp) is re-used if possible.
 :Voomunl   [[[3~
                                                  *voom_Voomunl*
 :Voomunl    This commands displays UNL (Uniform Node Locator) of node under
-            the cursor. The UNL string is also copied into register "n" for
-            easy pasting.
+            the cursor. The UNL string is also copied into register "n for easy
+            pasting.
 
-The current buffer must be a Tree or a Body. If current buffer is a Body, the
-outline data and the Tree will be updated if needed.
+The current buffer must be a Tree or a Body. If the current buffer is a Body,
+the outline data and the Tree will be updated if needed.
 
 The term UNL is from Leo's unl.py plugin:
-http://webpages.charter.net/edreamleo/plugins.html#unl-py
+    http://webpages.charter.net/edreamleo/plugins.html#unl-py
 An UNL is like a path to the node. It lists headlines of all ancestor nodes.
 Example: >
     Part 2 -> Chapter 4 -> Section 3 -> subsection 5
@@ -1232,7 +1239,8 @@ S           Show UNL. Same as :Voomunl. (N)
                                                  *voom_Voomgrep*
 :Voomgrep {pattern}
             Search Body buffer for {pattern} and display results in the
-            |quickfix| window as a list of UNLs of nodes with matches.
+            quickfix window (|quickfix|, |copen|) as a list of UNLs (Uniform
+            Node Locators) of nodes with matches.
 
 :Voomgrep
             As above, but use word under the cursor for pattern, as when
@@ -1249,35 +1257,37 @@ S           Show UNL. Same as :Voomunl. (N)
 :Voomgrep {pattern1} and {pattern2} not {pattern3} not {pattern4} ...
             Boolean AND and NOT searches combined.
 
-The current buffer must be a Tree or a Body. If current buffer is a Body, the
-outline data and the Tree are updated if needed. Searches are always performed
-in Body buffer. If current buffer is a Tree buffer, the cursor moves to window
-with the corresponding Body.
+The current buffer must be a Tree or a Body. If the current buffer is a Body,
+the outline data and the Tree are updated if needed. Searches are always
+performed in Body buffer. If the current buffer is a Tree buffer, the cursor
+moves to a window with the corresponding Body buffer.
 
 For each pattern, function |search()| is used to search the entire Body
 buffer, from top to bottom. According to docs, 'ignorecase', 'smartcase' and
 'magic' are used.
 
-The search with each pattern stops after >10,000 matches are found. Results of
+The search with each pattern stops after >10000 matches are found. Results of
 boolean searches are likely to be wrong in this case.
 
-The results are displayed in the quickfix window (|quickfix-window|) as a list
-of UNLs of nodes. For example, after executing >
+The results are displayed in the quickfix window (|copen|) as a list of UNLs.
+For example, after executing >
     :Voomg Spam and ham not bacon
-in "test_outline.txt" the result is: >
-    || Voomgrep Spam {32 matches}  AND ham {5 matches}  NOT bacon {5 matches}
-    test_outline.txt|130| n43:28|tests -> Voomgrep tests -> n43 lunch
-    test_outline.txt|137| n44:2 |tests -> Voomgrep tests -> n44 dinner
+in "test_outline.txt" the quickfix window will display: >
 
-Numbers after the file name are:
-    - Body line number of the first match in this node
-    - node number, that is node's Tree line number
-    - number of matches in this node for all AND patterns
+     test_outline.txt [D:\SCRIPTS\VOoM\voom_samples], b1
+     :Voomgrep Spam {34 matches}  AND ham {6 matches}  NOT bacon {5 matches}  
+    |149| n46:28|tests -> Voomgrep tests -> n46 lunch
+    |156| n47:2 |tests -> Voomgrep tests -> n47 dinner
 
-If the search was successful, the first AND pattern is copied into the search
-register "@/" so that "n" and "N" commands and search highlight can be used.
+The numbers between || are:
+    - Body line number of the first match in this node. <Return> or mouse
+      double-click moves the cursor to this line in the Body buffer.
+    - Node number, that is the corresponding Tree line number.
+    - The total number of matches in this node for all AND patterns.
 
 PATTERNS AND BOOLEAN OPERATORS:
+
+    - There is no OR operator. Use \| instead, see |\bar|.
 
     - Patterns should not span several lines. Multi-line patterns are likely
       to produce meaningless results because they can span several nodes.
@@ -1285,13 +1295,13 @@ PATTERNS AND BOOLEAN OPERATORS:
     - Operators AND and NOT that separate patterns are not case sensitive:
       they can be "and", "AND", "not", "NOT", "aND", etc.
 
-    - Operators AND and NOT should not be combined or grouped. Command
-      :Voomgrep ham and not spam
-      searches for "ham" AND "not spam".
-
     - Whitespace around each pattern and around AND and NOT is ignored.
       Use "\s", "\t", "[ ]", "\%x20" to specify leading or trailing
       whitespace.
+
+    - Operators AND/NOT should not be concatenated. The command
+        :Voomgrep ham and not bacon
+      searches for "ham" AND "not bacon".
 
     - To include literal words "and" or "not" in a pattern: >
         :Voomgrep Spam and\ ham not\ bacon
@@ -1302,37 +1312,39 @@ PATTERNS AND BOOLEAN OPERATORS:
       example, to do case-insensitive search for nodes with ham and spam: >
         :Voomgrep \cham and \cspam
 <
-TIPS:
+If the search was successful, all AND patterns are copied into the search
+register "/ and added to the search history so that search highlight and
+commands n, N, etc. can be used. NOTE: This does not always work correctly with
+multiple AND patterns because they have to be combined into one pattern:
+    - A "\c" or "\C" switch in one AND pattern will be applied to all AND
+      patterns. If both "\c" and "\C" are present, "\c" wins.
+    - Possibly some other complex regexps might be problematic.
+You can get the pattern used for search and highlight after :Voomgrep by
+pressing /<Up> .
 
-    - The readability of UNLs in the quickfix window is much better when
-      the -> separators are highlighted, see screenshot at
-      http://vim-voom.github.com/ . I have the following two lines in
-      $HOME/vimfiles/after/syntax/qf.vim: >
-          syn match Title / -> /
-          syn match LineNr /| n\d\+:\d\+\s*|/
-<
-    - To avoid long paths in the quickfix window, set working directory to the
-      current file, see
-      http://vim.wikia.com/wiki/Set_working_directory_to_the_current_file
+NOTE: The command :Voomgrep slightly modifies the default look of the quickfix
+window for better readability -- buffer name is removed, syntax highlighting is
+tweaked. These changes are lost when the quickfix list is reloaded (:colder,
+:cnewer, etc.)
+
 
 ==============================================================================
 Outline Operations   [[[2o~
 
-Outline operations are performed using Tree buffer-local mappings, that is
-they are always performed in a Tree buffer.
+Outline operations are always performed in a Tree buffer via buffer-local
+mappings or commands.
 
-When appropriate, operations are automatically applied to branches, that is to
-top level nodes and all their descendant nodes. E.g., moving a node, moves the
-node and all its descendants. The level numbers of the node and its
-descendants are automatically adjusted to the new position in the outline.
+When appropriate, operations are automatically applied to subtrees, that is to
+top-level nodes and all their descendant nodes. E.g., moving a node moves the
+node and all its descendants and level are adjusted for all descendants.
 
-Most operations can be performed on a range of sibling nodes using Visual
-mode. The range is checked for being a valid range: all top level nodes should
-be at the same level.
+Most operations can be performed on a range of sibling nodes in Visual
+selection. The range is checked for being a valid range: all top-level nodes
+should be at the same level.
 
-Where the moved or inserted nodes end up depends on the expanded/contracted
-status of the node after which the nodes are inserted. This should be obvious
-and replicates default behavior of the tree pane in Leo outlining editor.
+When nodes are moved after a folded subtree, they are inserted after the fold,
+that is after the visible node. This behavior should be intuitive and similar
+to the behavior of most outliner programs, as well as of Vim folds.
 
 Most outline operations usually modify the corresponding Body buffer. Thus,
 they are disabled if the Body is 'nomodifiable' or 'readonly'. The exceptions
@@ -1342,20 +1354,21 @@ An outline operation can be undone with one undo command in the corresponding
 Body buffer.
 
 ==============================================================================
-Edit Headline   [[[3~
+Edit Headline, Edit Last Line   [[[3~
 
-i  I                Begin editing the headline of node under the cursor.
-                    The cursor is moved into a window with the Body buffer and
-                    placed at the start of the Body headline and on the first
-                    word character (|\<|). Normal mode only.
+i                   Edit headline, that is the first Body line of node under
+                    the cursor. The cursor is moved into a window with the Body
+                    buffer and placed on the first line of the corresponding
+                    Body node. Usually, the cursor will be positioned at the
+                    start of the headline text and on the first word character
+                    (|\<|). Note that in some markups (reST, AsciiDoc) the
+                    actual headline can be a few lines down.
 
-The only way to edit headline text is to edit the corresponding line in the
-Body buffer. This command does not modify the Body buffer, it just puts the
-cursor on the corresponding Body line. This can also be useful when browsing
-the outline instead of <Return> and <Tab> (|voom_shuttle_keys|).
+I                   Edit the last Body line of node under the cursor.
 
-NOTE: The cursor is always placed on the firt line of the corresponding Body
-node. In some markups (reST, AsciiDoc) the headline can be a few lines down.
+These Normal mode commands do not modify the Body buffer. They only move the
+cursor from the Tree to the corresponding Body line. They can also be used
+instead of <Return> or <Tab> (|voom_shuttle_keys|) for browsing an outline.
 
 ==============================================================================
 Add New Headline   [[[3~
@@ -1377,10 +1390,6 @@ It's often easier to create new headline(s) by editing the Body buffer
 directly. I wrote a simple plugin that helps with inserting numbered fold
 markers: http://www.vim.org/scripts/script.php?script_id=2891
 
-TODO: make new headline text an argument of function Insert Node to make
-programmatic creation of outlines more convenient, especially when there are
-undelines/overlines (markdown, reST). Example code at #ID_20111006013436 .
-
 ==============================================================================
 Select Body Region   [[[3~
 
@@ -1390,10 +1399,10 @@ R                   Move cursor from Tree to Body buffer and select the line
 
 This Tree buffer mapping is handy when you want to apply :substitute or some
 other range-accepting Vim command to a single node or a group of nodes. The
-command deals with individual nodes, not trees. Mnemonic: Range, Region.
+command deals with individual nodes, not subtrees. Mnemonic: Range, Region.
 
 ==============================================================================
-Move/Copy/Cut/Paste Nodes   [[[3~
+Move, Copy, Cut, Paste [[[3~
 
 ^^  <C-Up>  <LocalLeader>u
                     Move node(s) up. (N,V)
@@ -1408,26 +1417,96 @@ __  <C-Down>  <LocalLeader>d
 >>  <C-Right>  <LocalLeader>r
                     Move node(s) right, that is demote. (N,V)
 
-dd                  Cut node(s). (N,V)
+yy                  Copy node(s) to the "+ register. (N,V)
 
-yy                  Copy node(s). (N,V)
+dd                  Cut node(s) and copy contents to the "+ register. (N,V)
 
-pp                  Paste node(s) after the current node. (N)
+pp                  Paste node(s) from the "+ register after the current node
+                    or fold. (N)
+                    The clipboard is checked for being a valid VOoM outline:
+                    the first line in the clipboard must be a headline.
 
 With the exception of Paste, these Tree buffer mappings are available in
 Normal and Visual modes. In Visual mode the range is checked for being valid:
-top level nodes in the range must be siblings.
+top nodes in the range must be siblings.
 
-These commands always apply to branches, that is to top level nodes and all
-their descendant nodes, even when only part of a branch is selected.
+These commands always apply to subtrees, that is to top-level nodes and all
+their descendant nodes, even when only part of a subtree is selected.
 
-Commands Cut/Copy/Paste use Vim's + register, that is system clipboard.
-
-The command Paste checks clipboard for being a valid VOoM outline. The first
-line in the clipboard must be a headline.
+Note that commands Cut, Copy, Paste use the "+ register, that is the system
+clipboard (|registers|, |quote+|). This means you can move nodes between
+outlines in different instances of Vim, or copy/paste in other applications.
 
 ==============================================================================
-Mark/Unmark Nodes   [[[3~
+Sort Outline   [[[3~
+                                                 *voom_sort*
+The command :VoomSort sorts sibling nodes according to their Tree headline text
+(string after character | in Tree buffer). Nodes are siblings if they have the
+same level and the same parent. This command must be executed in Tree buffer.
+
+:VoomSort           Sort siblings of the current node (node under the cursor).
+                    Headlines are sorted by byte value, in ascending order.
+
+:[range]VoomSort    Sort siblings in the range. Start and end range lines must
+                    be different (|[range]|).
+                    Note that if the range is actually one line, all siblings
+                    of the node at that line are sorted. E.g.,
+                        :57,57VoomSort
+                        :57VoomSort
+                    sorts siblings of node at Tree line 57.
+
+:VoomSort [options]
+:[range]VoomSort [options]
+                    Sort according to options. Options are any combination of
+                    the following words, separated by whitespace:
+                             deep, i, u, r, flip, shuffle.
+    OPTIONS:
+
+    deep            Deep (recursive) sort. Sort top-level siblings and siblings
+                    of their descendants. When the cursor is on the 2nd Tree
+                    line (first headline) and no range is given, entire outline
+                    is sorted.
+
+    i               Ignore-case. Case-insensitive sort. Without the "u" option
+                    this should affect only A-Za-z letters. To handle other
+                    letters, include the "u" option.
+
+    u               Unicode-aware sort. Convert headlines to Python Unicode
+                    strings before sorting. This option is probably needed only
+                    for case-insensitive sorts.
+
+    r               Reverse-sort, sort in descending order.
+
+    flip            Reverse the order of nodes without sorting anything.
+
+    shuffle         Shuffle nodes randomly.
+
+
+Example 1, perform deep sort, ignore-case, Unicode-aware: >
+    :VoomSort deep i u
+
+Example 2, sort siblings in Visual selection: >
+    :'<,'>VoomSort
+NOTE: make sure at least 2 lines are selected. Otherwise, the range contains
+only one line, which means all siblings of the selected line will be sorted.
+
+
+Sorting and reverse-sorting do not change relative order of nodes with equal
+headlines.
+
+Options "r", "flip", "shuffle" cannot be combined.
+
+
+It is easy to create custom commands that perform sorting with a particular set
+of options. For example, if you often do case-insensitive, non-recursive sort
+you can add the following line to vimrc: >
+    com! VoomSortI call Voom_OopSort(line('.'), line('.'), 'i u')
+The command :VoomSortI will be identical to ":VoomSort i u".
+It does not except a range. To make it work with a range: >
+    com! -range VoomSortI call Voom_OopSort(<line1>, <line2>, 'i u')
+
+==============================================================================
+Mark or Unmark Nodes   [[[3~
 
 NOTE: Not available when a markup mode is used (|voom_markup_modes|), unless
 it's an "fmr" mode (|voom_mode_fmr|).
@@ -1452,8 +1531,6 @@ Related Tree mappings, Normal mode:
 x                   Go to next marked node and select it.
 X                   Go to previous marked node and select it.
 
-TODO: mark/unmark only visible nodes (not hidden in folds). Could be add-on.
-
 ==============================================================================
 Mark Node As Startup Node   [[[3~
 
@@ -1475,7 +1552,7 @@ Related Tree mappings, Normal mode:
                     several such nodes. Mnemonic: + is Shift-=
 
 ==============================================================================
-Save/Restore Tree Folding   [[[3~
+Save or Restore Tree Folding   [[[3~
                                                  *voom_tree_folding*
 NOTE: Not available when a markup mode is used (|voom_markup_modes|), unless
 it's an "fmr" mode (|voom_mode_fmr|).
@@ -1527,74 +1604,6 @@ There as also the following Tree buffer mappings, Normal mode:
                     Same as :%VoomFoldingRestore.
 
 Mnemonics for mappings:  Foldins Save/Restore, Folding All Save/Restore.
-
-==============================================================================
-Sort Outline   [[[3~
-                                                 *voom_sort*
-The command :VoomSort sorts sibling nodes according to their Tree headline text
-(string after character | in Tree buffer). Nodes are siblings if they have the
-same level and the same parent. This command must be executed in Tree buffer.
-
-:VoomSort           Sort siblings of the current node (node under the cursor).
-                    Headlines are sorted by byte value, in ascending order.
-
-:[range]VoomSort    Sort siblings in the range. Start and end range lines must
-                    be different (|[range]|).
-                    Note that if the range is actually one line, all siblings
-                    of the node at that line are sorted. E.g.,
-                        :57,57VoomSort
-                        :57VoomSort
-                    sorts siblings of node at Tree line 57.
-
-:VoomSort [options]
-:[range]VoomSort [options]
-                    Sort according to options. Options are any combination of
-                    the following words, separated by whitespace:
-                             deep, i, u, r, flip, shuffle.
-    OPTIONS:
-
-    deep            Deep (recursive) sort. Sort top level siblings and siblings
-                    of their descendants. When the cursor is on the 2nd Tree
-                    line (first headline) and no range is given, entire outline
-                    is sorted.
-
-    i               Ignore-case. Case-insensitive sort. Without the "u" option
-                    this should affect only A-Za-z letters. To handle other
-                    letters, include the "u" option.
-
-    u               Unicode-aware sort. Convert headlines to Python Unicode
-                    strings before sorting. This option is probably needed only
-                    for case-insensitive sorts.
-
-    r               Reverse-sort, sort in descending order.
-
-    flip            Reverse the order of nodes without sorting anything.
-
-    shuffle         Shuffle nodes randomly.
-
-
-Example 1, perform deep sort, ignore-case, Unicode-aware: >
-    :VoomSort deep i u
-
-Example 2, sort siblings in Visual selection: >
-    :'<,'>VoomSort
-NOTE: make sure at least 2 lines are selected. Otherwise, the range contains
-only one line, which means all siblings of the selected line will be sorted.
-
-
-Sorting and reverse-sorting do not change relative order of nodes with equal
-headlines.
-
-Options "r", "flip", "shuffle" cannot be combined.
-
-
-It is easy to create custom commands that perform sorting with a particular set
-of options. For example, if you often do case-insensitive, non-recursive sort
-you can add the following line to vimrc: >
-    com! VoomSortI call Voom_OopSort(line('.'), line('.'), 'i u')
-The command :VoomSortI will be identical to ":VoomSort i u".
-It does not except a range. To make it work with a range: >
-    com! -range VoomSortI call Voom_OopSort(<line1>, <line2>, 'i u')
 
 ==============================================================================
 MARKUP MODES   [[[2~
@@ -1966,12 +1975,13 @@ Both Titles and Numbered Titles are recognized. Anchors are OK. >
 There can be leading spaces, but not tabs.
 The number of = or + chars must be the same on both sides.
 
-Titles are ignored inside Verbatim, Raw, and Tagged Areas, that is between
-pairs of lines of ```, """, '''. These areas cannot be nested.
+Titles are ignored inside Verbatim, Raw, Tagged, Comment Areas, that is between
+pairs of lines of ```, """, ''', %%%.
 
-In the Tree, the text of Numbered Titles is prepended with "+ " to help
-distinguish them from regular titles. The type of the title is preserved during
-outline operations.
+Numbered Titles are indicated in the Tree buffer by "+" in the 2nd column to
+help distinguish them from non-numbered titles.
+
+The type of the Title (numbered or not) is preserved during outline operations.
 
 ==============================================================================
 asciidoc   [[[3~
@@ -2319,9 +2329,9 @@ Sectioning commands, in order of increasing depth
     \paragraph{A Heading}
     \subparagraph{A Heading}
 
-Documents can use any subset of section types. Level 1 is assigned the section
-that is the highest in the hierarchy. Levels for other section types are
-incremented sequentially, even if some intermediate section types are missing.
+Documents can use any subset of section types. Level 1 is assigned to the
+section that is the highest in the hierarchy. Levels for other section types
+are incremented sequentially.
 
 The first "{" can be followed by any text, which allows multi-line titles: >
     \section{Long long
@@ -2967,7 +2977,7 @@ placed in $HOME/.vim/plugin/ like any other plugin.
 
 For finer control, user option "g:voom_user_command" should be used to load
 add-ons only when file voom.vim is being sourced. This option defines a string
-to be executed via |execute|. This is the last thing done in voom.vim: >
+to be executed via |execute|. This is the last thing done in plugin/voom.vim: >
     if exists('g:voom_user_command')
         execute g:voom_user_command
     endif
@@ -2983,10 +2993,10 @@ To source the file, put this in vimrc: >
     let g:voom_user_command = "source D:/SCRIPTS/VOoM/voom_addons.vim"
 
 METHOD 3: Add-ons are in Python module voom_addons.py somewhere in Python
-search path (directory ./plugin/voom will do). To import the module, put this
+search path (directory ../plugin/voom will do). To import the module, put this
 in vimrc: >
     let g:voom_user_command = "python import voom_addons"
-The voom.py module should be accessed from within voom_addons.py as follows: >
+The voom.py module can be accessed from within voom_addons.py as follows: >
     import sys
     voom = sys.modules['voom']
 
@@ -3030,8 +3040,10 @@ current buffer is a VOoM buffer (Tree or Body) and refuse to execute if it's
 not. It should update outline if current buffer is a Body. Sample add-on
 "voom_info.vim" shows how to do that.
 
-To create Tree-local mappings or commands use ~/.vim/ftplugin/voomtree.vim --
-Tree buffer filetype is set to "voomtree" when Tree buffer is created.
+To create Tree-local mappings or commands use >
+    ~/.vim/ftplugin/voomtree.vim
+    ~/.vim/after/ftplugin/voomtree.vim
+The filetype of Tree buffers is set to "voomtree".
 
 
 USING ADD-ONS TO CUSTOMIZE VOoM
@@ -3353,10 +3365,60 @@ Wiped out Bodies are also unloaded. Tree has no reason to exist after Body has
 been wiped out. Sadly, wiping out Tree from Body BufWipeout au is too risky,
 see v3.0 notes.
 
+
+==============================================================================
+TODO   [[[2~
+
+Rewrite everything using |autoload| instead of FuncUndefined au.
+
+Insert New Node: make new headline text an argument of function to make
+programmatic creation of outlines more convenient, especially when there are
+underlines/overlines (markdown, reST). Example code at #ID_20111006013436 .
+
+Add command to Mark/Unmark only visible nodes (not hidden in folds).
+Could be add-on.
+
+Set jump mark when selecting node from Tree with <Enter> or other actions.
+This could be used as outline browsing history.
+Currently no jump marks are created in Tree or Body during node navigation or
+manipulation (:keepj when G, gg, etc).
+It is difficult to decide which commands should set a mark.
+
+Outline navigation functions should probably also check that the current buffer
+is Tree (Voom_BufNotTree) in case external script makes a mistake.
+
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.4, 2012-05-03   [[[3x~
+v4.5, 2012-11-13   [[[3x~
+
+New Tree mapping: "I" jumps to the last line of the current node.
+
+Improved txt2tags mode.
+ - Ignore headlines in Comment Areas, that is between %%% .
+ - Display "+" for numbered titles in the Tree marks column instead of
+   prepending "+" to headline text.
+
+Fixed a bug in :Voomgrep search. Results were correct only for the first 2 AND
+patterns. False results were produced when searching with >2 AND patterns
+because intersection was computed incorrectly.
+
+Improved display of :Voomgrep results.
+ - Buffer name is removed from lines in the quickfix buffer to save space.
+ - Syntax highlighting is adjusted automatically -- it is no longer necessary
+   to customize syntax/qf.vim.
+ - All AND patterns are added to the "/ register, not only the first one as
+   before. This does not always work correctly with multiple AND patterns --
+   "\c" and "\C" are problematic.
+
+Rewrote :Voomgrep input parser function.
+
+Added check that the current buffer is Tree to top-level functions for outline
+operations (Voom_BufNotTree). This is in case an external script or command
+makes a mistake and executes in wrong buffer.
+
+
+v4.4, 2012-06-03   [[[3~
 
 Added LaTeX mode: |voom_mode_latex|.
 
@@ -3576,9 +3638,6 @@ Initial gg restores view after jumping around when creating folds.
 
 Added "keepj" when jumping around Tree and Body via G or gg.
 No jump marks are created in Tree or Body during node navigation or manipulation.
-
-TODO: set jump mark when selecting node from Tree with <Enter> or other
-actions. Outline browsing history.
 
 
 Vim code for outline navigation   id_20110116213809

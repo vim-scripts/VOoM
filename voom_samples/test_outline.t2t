@@ -136,22 +136,27 @@ ft=html,xml
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
- +++ n44 breakfast +++[ref]
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
+
+
+ +++ n45 breakfast +++[ref]
 eggs
 bacon
 
- +++ n45 lunch +++[ref]
+ +++ n46 lunch +++[ref]
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
- +++ n46 dinner +++[ref]
+ +++ n47 dinner +++[ref]
 eggs
 Spam
 ham
 
- +++ n47 snack +++[ref]
+ +++ n48 snack +++[ref]
 bacon
 spam
 HAM

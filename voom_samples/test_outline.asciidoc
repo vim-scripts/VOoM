@@ -236,16 +236,21 @@ h Voomgrep tests
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
+
+
 [[X3]]
 [ATTR]
-h n44 breakfast
+h n45 breakfast
 ~~~~~~~~~~~~~~~
 eggs
 bacon
 
 [[X3]]
 [ATTR]
-h n45 lunch
+h n46 lunch
 ~~~~~~~~~~~
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
@@ -254,7 +259,7 @@ ham
 
 [[X3]]
 [ATTR]
-h n46 dinner
+h n47 dinner
 ~~~~~~~~~~~~
 eggs
 Spam
@@ -262,7 +267,7 @@ ham
 
 [[X3]]
 [ATTR]
-h n47 snack
+h n48 snack
 ~~~~~~~~~~~
 bacon
 spam

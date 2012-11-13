@@ -155,22 +155,27 @@ hVoomgrep tests
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
-### hn44 breakfast ###
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
+
+
+### hn45 breakfast ###
 eggs
 bacon
 
-### hn45 lunch ###
+### hn46 lunch ###
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
-### hn46 dinner ###
+### hn47 dinner ###
 eggs
 Spam
 ham
 
-### hn47 snack ###
+### hn48 snack ###
 bacon
 spam
 HAM

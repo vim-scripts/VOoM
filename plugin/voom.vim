@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2012-06-03
+" Last Modified: 2012-11-12
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.4
+" Version: 4.5
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -44,7 +44,7 @@ if !exists('s:voom_did_quickload')
     " support for Vim sessions (:mksession)
     au BufFilePost __PyLog__ call Voom_LogSessionLoad()
     au BufFilePost *_VOOM\d\+ call Voom_TreeSessionLoad()
-    let s:voom_did_quickload = 'v4.4'
+    let s:voom_did_quickload = 'v4.5'
     finish
 endif
 
@@ -421,6 +421,15 @@ func! Voom_BufEditable(body) "{{{2
         call Voom_ErrorMsg("VOoM: Body buffer ".a:body." (".bname.") is 'nomodifiable' or 'readonly'")
         return -1
     endif
+endfunc
+
+
+func! Voom_BufNotTree(bnr) "{{{2
+    if has_key(s:voom_trees, a:bnr)
+        return 0
+    endif
+    call Voom_ErrorMsg('VOoM: current buffer is not Tree')
+    return 1
 endfunc
 
 
@@ -1094,9 +1103,9 @@ vnoremap <buffer><silent> D :<C-u>call Voom_Tree_KJUD('D','v')<CR>
     """ }}}
 
     """ outline operations {{{
-" edit headline
-nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit()<CR>
-nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit()<CR>
+" edit Body text
+nnoremap <buffer><silent> i :<C-u>call Voom_OopEdit('i')<CR>
+nnoremap <buffer><silent> I :<C-u>call Voom_OopEdit('I')<CR>
 
 " insert new node
 nnoremap <buffer><silent> <LocalLeader>a :<C-u>call Voom_OopInsert('')<CR>
@@ -1191,7 +1200,7 @@ nnoremap <buffer><silent> q :<C-u>call Voom_DeleteOutline()<CR>
     " Can't use Ctrl: <C-i> is Tab; <C-u>, <C-d> are page up/down.
     " Use <LocalLeader> instead of Ctrl.
     "
-    " Still up for grabs: <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { } ~
+    " Still up for grabs: <C-x> <C-j> <C-k> <C-p> <C-n> [ ] { } ~ -
 endfunc
 
 
@@ -1643,7 +1652,6 @@ func! Voom_TreeToMark(back) "{{{3
     else
         let found = search('\C\v^.x', 'w')
     endif
-
     if found==0
         call Voom_WarningMsg("VOoM: there are no marked nodes")
     else
@@ -1657,6 +1665,7 @@ endfunc
 func! Voom_OopSelectBodyRange(mode) "{{{3
 " Move to Body and select region corresponding to node(s) in the Tree.
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     "if Voom_BufEditable(body) < 0 | return | endif
@@ -1688,17 +1697,19 @@ func! Voom_OopSelectBodyRange(mode) "{{{3
 endfunc
 
 
-func! Voom_OopEdit() "{{{3
-" Edit headline text: move into Body, put cursor on headline.
+func! Voom_OopEdit(op) "{{{3
+" Edit Body. Move cursor to Body on the node's first (i) or last (I) line.
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     "if Voom_BufEditable(body) < 0 | return | endif
     let lnum = line('.')
-    if lnum==1 | return | endif
+    "if lnum==1 | return | endif
     let head = getline(lnum)[1+stridx(getline(lnum),'|') :]
 
-    python vim.command("let l:bLnr=%s" %voom.VOOMS[int(vim.eval('l:body'))].bnodes[int(vim.eval('l:lnum'))-1])
+    " compute l:bLnr -- Body lnum to which to jump
+    python voom.voom_OopEdit()
 
     let lz_ = &lz | set lz
     if Voom_ToBody(body) < 0 | let &lz=lz_ | return | endif
@@ -1714,9 +1725,11 @@ func! Voom_OopEdit() "{{{3
     if do_zz
         normal! zz
     endif
-    " put cursor on the headline text, then on the first word char
-    call search('\V'.substitute(head,'\','\\\\','g'), 'c', line('.'))
-    call search('\m\<', 'c', line('.'))
+    if a:op=='i'
+        " put cursor on the headline text, then on the first word char
+        call search('\V'.substitute(head,'\','\\\\','g'), 'c', line('.'))
+        call search('\m\<', 'c', line('.'))
+    endif
     let &lz=lz_
 endfunc
 
@@ -1724,6 +1737,7 @@ endfunc
 func! Voom_OopInsert(as_child) "{{{3
 " Insert new node, headline text should be NewHeadline.
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     if Voom_BufEditable(body) < 0 | return | endif
@@ -1769,6 +1783,7 @@ endfunc
 func! Voom_OopPaste() "{{{3
 " Paste nodes in the clipboard.
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     if Voom_BufEditable(body) < 0 | return | endif
@@ -1810,6 +1825,7 @@ func! Voom_OopMark(op, mode) "{{{3
 
     " Checks and init vars. {{{
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if s:voom_bodies[body].mmode
         call Voom_ErrorMsg('VOoM: marked nodes are not available in this markup mode')
@@ -1868,6 +1884,7 @@ endfunc
 func! Voom_OopMarkStartup() "{{{3
 " Mark current node as startup node.
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if s:voom_bodies[body].mmode
         call Voom_ErrorMsg('VOoM: startup nodes are not available in this markup mode')
@@ -1904,6 +1921,7 @@ func! Voom_Oop(op, mode) "{{{3
 
     " Checks and init vars. {{{
     let tree = bufnr('')
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     if a:op!='copy' && Voom_BufEditable(body) < 0 | return | endif
@@ -2075,10 +2093,7 @@ func! Voom_OopFolding(ln1, ln2, action) "{{{3
 
     " must be in Tree buffer
     let tree = bufnr('')
-    if !has_key(s:voom_trees, tree)
-        call Voom_ErrorMsg("VOoM: this command must be executed in Tree buffer")
-        return
-    endif
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if s:voom_bodies[body].mmode
         call Voom_ErrorMsg('VOoM: Tree folding operations are not available in this markup mode')
@@ -2128,10 +2143,7 @@ func! Voom_OopSort(ln1,ln2,qargs) "{{{3
 
     " must be in Tree buffer
     let tree = bufnr('')
-    if !has_key(s:voom_trees, tree)
-        call Voom_ErrorMsg("VOoM (sort): this command must be executed in Tree buffer")
-        return
-    endif
+    if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
     if Voom_BufLoaded(body) < 0 | return | endif
     if Voom_BufEditable(body) < 0 | return | endif
@@ -2463,8 +2475,8 @@ endfunc
 func! Voom_Grep(input) "{{{2
 " Seach Body for pattern(s). Show list of UNLs of nodes with matches.
 " Input can have several patterns separated by boolean 'AND' and 'NOT'.
-" Stop each search after 10,000 matches.
-" Set search register to the first AND pattern.
+" Stop each search after 10000 matches.
+" Set "/ register to AND patterns.
 
     """ Process input first in case we are in Tree and want word under cursor.
     if a:input==''
@@ -2472,6 +2484,8 @@ func! Voom_Grep(input) "{{{2
         let input = substitute(input, '\s\+$', '', '')
         if input=='' | return | endif
         let [pattsAND, pattsNOT] = [['\<'.input.'\>'], []]
+        call histdel('cmd', -1)
+        call histadd('cmd', 'Voomgrep '.pattsAND[0])
     else
         let input = substitute(a:input, '\s\+$', '', '')
         if input=='' | return | endif
@@ -2497,13 +2511,14 @@ func! Voom_Grep(input) "{{{2
     endif
 
     """ Search for each pattern with search().
+    let [lnum,cnum] = [line('.'), col('.')]
     let lz_ = &lz | set lz
     let winsave_dict = winsaveview()
     let [matchesAND, matchesNOT] = [[], []]
     for patt in pattsAND
         let matches = Voom_GrepSearch(patt)
         if matches==[0]
-            call Voom_WarningMsg('VOoM (Voomgrep): pattern not found: '.patt)
+            call Voom_ErrorMsg('VOoM (Voomgrep): pattern not found: '.patt)
             call winrestview(winsave_dict)
             call winline()
             let &lz=lz_
@@ -2518,31 +2533,60 @@ func! Voom_Grep(input) "{{{2
     call winline()
     let &lz=lz_
 
-    """ Highlight first AND pattern.
+    let [lenAND, lenNOT] = [len(pattsAND), len(pattsNOT)]
+    """ Highlight all AND pattern.
     " Problem: there is no search highlight after :noh
-    " Consider: use matchadd() if several AND patterns
-    if len(pattsAND)>0
-        let @/ = pattsAND[0]
+    " Problem: \c \C get combined
+    if lenAND
+        if lenAND==1
+            let @/ = pattsAND[0]
+        else
+            " add \m or \M to to negate any preceding \v \V \m \M
+            let mm = &magic ? '\m' : '\M'
+            let @/ = mm.'\%('. join(pattsAND, mm.'\)\|\%(') .mm.'\)'
+        endif
+        call histadd('search', @/)
     endif
 
     """ Set and display quickfix list.
-    " first line shows patterns and number of matches
-    let line1 = ''
-    for i in range(len(pattsAND))
+    let [line1] = getbufline(tree,1)
+    " 2nd line shows patterns and numbers of matches
+    let line2 = ''
+    for i in range(lenAND)
         let L = matchesAND[i]
-        let line1 = i==0 ? line1.pattsAND[i].' {' : line1.'AND '.pattsAND[i].' {'
-        let line1 = L[-1]==0 ? line1. (len(L)-1) .' matches}  ' : line1.'>10,000 matches}  '
+        let line2 = i==0 ? line2.pattsAND[i].' {' : line2.'AND '.pattsAND[i].' {'
+        let line2 = L[-1]==0 ? line2. (len(L)-1) .' matches}  ' : line2.'>10000 matches}  '
     endfor
-    for i in range(len(pattsNOT))
+    for i in range(lenNOT)
         let L = matchesNOT[i]
-        let line1 = line1.'NOT '.pattsNOT[i].' {'
-        let line1 = L[-1]==0 ? line1. (len(L)-1) .' matches}  ' : line1.'>10,000 matches}  '
+        let line2 = line2.'NOT '.pattsNOT[i].' {'
+        let line2 = L[-1]==0 ? line2. (len(L)-1) .' matches}  ' : line2.'>10000 matches}  '
     endfor
-    let line1 = 'Voomgrep '. substitute(line1,"'","''",'g')
-    exe "call setqflist([{'text':'".line1."'}])"
+    let line2 = ':Voomgrep '.line2
+    " initiate quickfix list with two lines
+    call setqflist([{'text':line1, 'bufnr':body, 'lnum':lnum, 'col':cnum}, {'text':line2}])
 
     python voom.voom_Grep()
+
     botright copen
+    " Configure quickfix buffer--strip file names, adjust syntax hi.
+    if &buftype!=#'quickfix' || &ma || &mod | return | endif
+    setl ma
+    let ul_=&ul | setl ul=-1
+    silent 1,2s/\m^.\{-}|.\{-}|//
+    call histdel('search', -1)
+    if line('$')>2
+        silent 3,$s/\m^.\{-}\ze|//
+        call histdel('search', -1)
+    endif
+    keepj normal! 1G0
+    let &ul=ul_
+    setl nomod noma
+    syn clear
+    syn match Title /\%1l.*/
+    syn match Statement /\%2l.*/
+    syn match LineNr /^|.\{-}|.\{-}|/
+    syn match Title / -> /
 endfunc
 
 
@@ -2551,28 +2595,23 @@ func! Voom_GrepParseInput(input) "{{{2
 " There can be a leading NOT, but not leading AND.
 " Segregate patterns into AND and NOT lists.
     let [pattsAND, pattsNOT] = [[], []]
-    " split at AND
-    let andParts = split(a:input, '\v\c\s+and\s+')
-    let i = 1
-    for part in andParts
-        " split at NOT
-        let notParts = split(part, '\v\c\s+not\s+')
-        " check for leading NOT
-        if i==1
-            let i+=1
-            let parts1 = split(notParts[0], '\v\c^\s*not\s+', 1)
-            if len(parts1)>1
-                call add(pattsNOT, parts1[1])
-            else
-                call add(pattsAND, notParts[0])
-            endif
-        else
-            call add(pattsAND, notParts[0])
-        endif
-        if len(notParts)>1
-            let pattsNOT+=notParts[1:]
-        endif
-    endfor
+    let S = a:input
+    " bop -- preceding boolean operator: 1 if AND, 0 if NOT
+    " i -- start of pattern
+    " j,k -- start,end+1 of the next operator string
+    let k = matchend(S, '\v\c^\s*not\s+')
+    let [i,bop] = k==-1 ? [0,1] : [k,0]
+    let OP = '\v\c\s+(and|not)\s+'
+    let j = match(S,OP,i)
+    while j > -1
+        let patt = S[i : j-1]
+        call add(bop ? pattsAND : pattsNOT, patt)
+        let k = matchend(S,OP,i)
+        let bop = S[j : k] =~? 'and' ? 1 : 0
+        let i = k
+        let j = match(S,OP,i)
+    endwhile
+    call add(bop ? pattsAND : pattsNOT, S[i : ])
     return [pattsAND, pattsNOT]
 endfunc
 

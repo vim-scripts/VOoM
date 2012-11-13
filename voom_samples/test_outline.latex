@@ -180,26 +180,31 @@ ft=html,xml
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
 
-\section{n44 breakfast}
+
+
+\section{n45 breakfast}
 eggs
 bacon
 
 
-\section{n45 lunch}
+\section{n46 lunch}
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
 
-\section{n46 dinner}
+\section{n47 dinner}
 eggs
 Spam
 ham
 
 
-\section{n47 snack}
+\section{n48 snack}
 bacon
 spam
 HAM

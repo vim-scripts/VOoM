@@ -223,14 +223,19 @@ Voomgrep tests
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
 
-n44 breakfast  
+
+
+n45 breakfast  
 =============
 eggs
 bacon
 
 
-n45 lunch  
+n46 lunch  
 =========
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
@@ -238,14 +243,14 @@ Spam Spam Spam Spam Spam Spam Spam Spam Spam
 ham
 
 
-n46 dinner  
+n47 dinner  
 ==========
 eggs
 Spam
 ham
 
 
-n47 snack  
+n48 snack  
 =========
 bacon
 spam

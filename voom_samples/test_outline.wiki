@@ -137,22 +137,27 @@ ft=html,xml
 :Voomg Spam and\\ ham not\\ bacon
 \Spam// ' "
 
-=== n44 breakfast === <!--{{{3-->
+1 match
+:Voomg Spam and ham and findme
+:Voomg Spam and h\vam and \Vfin\.me
+
+
+=== n45 breakfast === <!--{{{3-->
 eggs
 bacon
 
-=== n45 lunch === <!--{{{3-->
+=== n46 lunch === <!--{{{3-->
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 Spam Spam Spam Spam Spam Spam Spam Spam Spam 
 ham
 
-=== n46 dinner === <!--{{{3-->
+=== n47 dinner === <!--{{{3-->
 eggs
 Spam
 ham
 
-=== n47 snack === <!--{{{3-->
+=== n48 snack === <!--{{{3-->
 bacon
 spam
 HAM
