@@ -1,16 +1,16 @@
 " This is a sample VOoM add-on.
-" It creates global command :VoomInfo which prints various outline information
-" about the current buffer if it's a VOoM buffer (Tree or Body)
+" It creates global command :VoomPrintStats which prints information about the
+" current outline if the current buffer is a VOoM buffer (Tree or Body).
 
 " This file can be sourced at any time like a regular Vim script. E.g., it can
 " be dropped in folder ~/.vim/plugin/ . Of course, VOoM has to be installed for
-" the command :VoomInfo to work.
-" This works because the name of command function starts with 'Voom_'
+" the command :VoomPrintStats to work.
+" This works because the name of the command function starts with 'Voom_' -- it
+" will trigger FuncUndefined autocommand if voom.vim has not been sourced yet.
 
+com! VoomPrintStats call Voom_PrintStats()
 
-com! VoomInfo call Voom_Info()
-
-func! Voom_Info()
+func! Voom_PrintStats()
     """"""" standard code for every VOoM add-on command
     " Determine if the current buffer is a VOoM Tree buffer, Body buffer, or neither.
     let [bufType,body,tree] = Voom_GetBufInfo()
@@ -36,7 +36,7 @@ func! Voom_Info()
 
     """"""" script-specific code
     " Get Python-side data. This creates Vim local variables.
-    py voom_Info()
+    py voom_PrintStats()
 
     echo 'VOoM version:' Voom_GetVar('s:voom_did_quickload')
     echo '__PyLog__ buffer number:' Voom_GetVar('s:voom_logbnr')
@@ -54,7 +54,7 @@ func! Voom_Info()
 endfunc
 
 python << EOF
-def voom_Info():
+def voom_PrintStats():
     body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
     VO = voom.VOOMS[body]
     bnodes, levels = VO.bnodes, VO.levels

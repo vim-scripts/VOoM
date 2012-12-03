@@ -1,7 +1,7 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2012-11-13
+Last Modified: 2012-12-03
 VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.5
+Version: 4.6
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
@@ -73,8 +73,7 @@ FEATURES:
 
 There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
 
-:Voom
-:Voom {MarkupMode}
+:Voom [MarkupMode]
             Create outline of the current buffer. By default, outline is
             constructed from lines with start fold markers with level numbers.
             To work with headlines in a different format, an argument
@@ -325,14 +324,14 @@ Move the contents of folders "plugin" and "doc" into the respective folders in
 you local Vim directory, that is >
     $HOME/vimfiles/     (Windows)
 or >
-    $HOME/.vim/         (Linux)
+    $HOME/.vim/         (Unix)
 Execute the :helptags command to install "doc/voom.txt" as Vim help and to
 generate help tags (|add-local-help|): >
     :helptags $HOME/vimfiles/doc
     :helptags $HOME/.vim/doc
 
-Alternatively, use Pathogen and install VOoM as a bundle:
-    http://www.vim.org/scripts/script.php?script_id=2332
+Alternatively, use a Vim plugin manager (pathogen, vundle, vim-addon-manager)
+and install VOoM as a bundle.
 
 To try VOoM without installing anything, just source "plugin/voom.vim",
 see node "Overview -> QUICK DEMO".
@@ -488,17 +487,18 @@ User options "g:voom_ft_modes" and "g:voom_default_mode" change which markup
 mode the command :Voom will use when it is invoked without an argument. These
 variables do not exist by default, they must be created by the user in .vimrc.
 
+
 g:voom_ft_modes   ~
 "g:voom_ft_modes" is a Vim dictionary: keys are filetypes (|ft|), values are
 corresponding markup modes (|voom_markup_modes|). Example: >
     let g:voom_ft_modes = {'markdown': 'markdown', 'pandoc': 'markdown'}
-
 This option allows automatic selection of markup mode according to filetype of
 the source buffer. If "g:voom_ft_modes" is defined as above, and 'filetype' of
 the current buffer is "markdown" or "pandoc", then the command >
     :Voom
 is identical to the command >
     :Voom markdown
+
 
 g:voom_default_mode   ~
 "g:voom_default_mode" is a string with the name of the default markup mode.
@@ -510,9 +510,14 @@ is equivalent to >
     :Voom asciidoc
 unless "g:voom_ft_modes" is defined and has an entry for the current filetype.
 
+
 NOTE: To overide these two options, that is to force the original default mode,
 specify the "fmr" mode (|voom_mode_fmr|): >
     :Voom fmr
+
+NOTE: The name of the current markup mode, if any, is noted on the first line
+of the Tree buffer. You can also run the command :Voominfo [all] to see
+detailed information.
 
 ==============================================================================
 Various options   [[[3~
@@ -790,6 +795,8 @@ q                   Delete outline. (Tree buffer Normal mode mapping)
 ------------------------------------------------------------------------------
     VARIOUS ~
 ------------------------------------------------------------------------------
+Voominfo [all]      Print information about the current outline and VOoM
+                    internals. Uses Python "print" function. (any buffer)
 
 <LocalLeader>e      Execute node. Same as :Voomexec. Tree buffer only. (N)
 
@@ -809,6 +816,8 @@ Create Outline   [[[2o~
             outline from them, and display it in a specially configured,
             non-modifiable buffer called Tree buffer. The current buffer
             becomes a Body buffer.
+            The argument specifies the format of headlines (|voom_markup_modes|).
+            See also |g:voom_ft_modes|.
 
 :Voom       By default, headlines are lines with start fold markers with level
             numbers: {{{3, {{{1, etc. The level of each headline is set to the
@@ -827,10 +836,6 @@ Create Outline   [[[2o~
             (|fold-marker|). If this is the case, Body nodes are also folds.
             This is not required. Body buffer folding has no effect on outline
             construction or outline operations.
-
-:Voom {MarkupMode}
-            The format of headlines is specified by the {MarkupMode}
-            (|voom_markup_modes|).
 
 NOTE: A TREE BUFFER IS NOT MODIFIABLE AND SHOULD NEVER BE EDITED DIRECTLY.
 It has many buffer-local mappings for navigating the outline and for performing
@@ -1613,14 +1618,19 @@ markers with levels. To outline buffer with a different headline markup, it is
 necessary to specify the markup mode. For example, command >
     :Voom MySuperDuperWiki
 will try to create outline using MySuperDuperWiki markup mode.
-(To change the markup mode that the command :Voom uses when it is invoked
-without an argument, see |g:voom_ft_modes| and |g:voom_default_mode|.)
 
 A markup mode is defined in Python module named "voom_mode_{MarkupName}.py".
 It can be located anywhere in Python search path. The above command will try to
 import module "voom_mode_MySuperDuperWiki.py", which should modify the core
 code when handling this particular outline to accommodate idiosyncrasies of the
 MySuperDuperWiki markup language.
+
+You can define the markup mode that the command :Voom uses when it is invoked
+without an argument, see |g:voom_ft_modes| and |g:voom_default_mode|.
+
+The name of the current markup mode, if any, is noted on the first line of the
+Tree buffer. You can also run the command :Voominfo [all] to see detailed
+information.
 
 A fully functional markup mode will support all major VOoM commands and outline
 operations. Not supported are operations that rely on special node marks,
@@ -3016,7 +3026,7 @@ There is no special API. The following applies:
       external scripts to read "voom.vim" script-local outline data:
           Voom_GetBufInfo()
           Voom_GetData()
-      Sample add-on "voom_info.vim" shows how to use them: >
+      Sample add-on "voom_stats.vim" shows how to use them: >
           :let [bufType, body, tree] = Voom_GetBufInfo()
           :let [voom_bodies, voom_trees] = Voom_GetData()
 <
@@ -3038,7 +3048,7 @@ Add-ons can create global commands, menus and mappings.
 A global command that accesses VOoM outline data must first check that the
 current buffer is a VOoM buffer (Tree or Body) and refuse to execute if it's
 not. It should update outline if current buffer is a Body. Sample add-on
-"voom_info.vim" shows how to do that.
+"voom_stats.vim" shows how to do that.
 
 To create Tree-local mappings or commands use >
     ~/.vim/ftplugin/voomtree.vim
@@ -3371,9 +3381,12 @@ TODO   [[[2~
 
 Rewrite everything using |autoload| instead of FuncUndefined au.
 
+Create GitHub repo. Put extra stuff in another repo.
+
 Insert New Node: make new headline text an argument of function to make
 programmatic creation of outlines more convenient, especially when there are
 underlines/overlines (markdown, reST). Example code at #ID_20111006013436 .
+Also need args for mark and level.
 
 Add command to Mark/Unmark only visible nodes (not hidden in folds).
 Could be add-on.
@@ -3387,10 +3400,27 @@ It is difficult to decide which commands should set a mark.
 Outline navigation functions should probably also check that the current buffer
 is Tree (Voom_BufNotTree) in case external script makes a mistake.
 
+The "+ register many not be available in some Linux distros.
+
+Read-only modes written in VimScript: Vim regexp, folds.
+
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.5, 2012-11-13   [[[3x~
+v4.6, 2012-12-03   [[[3x~
+
+Warning message is no longer displayed when a markup mode is invoked.
+
+New command :Voominfo [all] prints information about the current outline and
+VOoM internals.
+
+Sample add-on voom_info.vim was renamed to voom_stats.vim.
+
+Got rid of s:voom_bodies[body].blnr. It was used only during outline creation.
+Renamed some voom.vim functions.
+
+
+v4.5, 2012-11-13   [[[3~
 
 New Tree mapping: "I" jumps to the last line of the current node.
 

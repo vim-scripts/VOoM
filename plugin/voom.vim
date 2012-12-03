@@ -1,7 +1,7 @@
 " voom.vim
-" Last Modified: 2012-11-12
+" Last Modified: 2012-12-02
 " VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-" Version: 4.5
+" Version: 4.6
 " Website: http://www.vim.org/scripts/script.php?script_id=2657
 " Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 " License: This program is free software. It comes without any warranty,
@@ -44,29 +44,25 @@ if !exists('s:voom_did_quickload')
     " support for Vim sessions (:mksession)
     au BufFilePost __PyLog__ call Voom_LogSessionLoad()
     au BufFilePost *_VOOM\d\+ call Voom_TreeSessionLoad()
-    let s:voom_did_quickload = 'v4.5'
+    let s:voom_did_quickload = 'v4.6'
     finish
 endif
 
 
 "---Initialize--------------------------------{{{1
 if !exists('s:voom_did_init')
-    let s:script_path = substitute(expand("<sfile>:p"),'\','/','g')
-    let s:script_dir = substitute(expand("<sfile>:p:h"),'\','/','g')
-    let s:voom_dir = s:script_dir.'/voom'
-
+    let s:script_path = expand("<sfile>:p")
+    let s:script_dir = expand("<sfile>:p:h")
+    let s:voom_dir = fnamemodify(s:script_dir, ':p') . 'voom'
     let s:voom_logbnr = 0
-
     " {tree : associated body,  ...}
     let s:voom_trees = {}
     " {body : {'tree' : associated tree,
-    "          'blnr' : Body cursor lnum, set when selecting node from Body,
     "          'snLn' : selected node Tree lnum,
     "          'mmode' : 0 (no mode or fmr mode) 1 (markup mode),
     "          'tick' : b:changedtick of Body on Body BufLeave,
     "          'tick_' : b:changedtick of Body on last Tree update}, {...}, ... }
     let s:voom_bodies = {}
-
 python << EOF
 import sys, vim
 if not vim.eval("s:voom_dir") in sys.path:
@@ -154,11 +150,10 @@ com! -range VoomFoldingCleanup call Voom_OopFolding(<line1>,<line2>, 'cleanup')
 com! Voomtoggle call Voom_ToggleTreeWindow()
 com! Voomquit call Voom_DeleteOutline()
 com! VoomQuitAll call Voom_DeleteOutlines()
+com! -nargs=? Voominfo call Voom_Voominfo(<q-args>)
 
 """ development helpers
 if exists('g:voom_create_devel_commands')
-    " print Vim-side data
-    com! VoomPrintData  call Voom_PrintData()
     " reload voom.vim (outlines are preserved)
     com! VoomReloadVim exe 'so '.s:script_path
     " wipe out Trees, PyLog, delete Python modules, reload voom.vim and voom.py
@@ -203,7 +198,7 @@ func! Voom_Init(qargs,...) "{{{2
     " becomes a Body buffer.
     let body = bnr
     let s:voom_bodies[body] = {}
-    let s:voom_bodies[body].blnr = line('.')
+    let blnr = line('.')
     let [b_name, b_dir] = [expand('%:p:t'), expand('%:p:h')]
     if b_name=='' | let b_name='No Name' | endif
     let l:firstLine = ' '.b_name.' ['.b_dir.'], b'.body
@@ -213,7 +208,7 @@ func! Voom_Init(qargs,...) "{{{2
     let s:voom_bodies[body].mmode = l:mmode
     call Voom_BodyConfig()
     call Voom_ToTreeWin()
-    call Voom_TreeCreate(body)
+    call Voom_TreeCreate(body, blnr)
     if a:0 && a:1
         call Voom_ToBody(body)
         return
@@ -400,32 +395,33 @@ func! Voom_ErrorMsg(...) "{{{2
 endfunc
 
 
-func! Voom_BufLoaded(body) "{{{2
-    if !bufloaded(a:body)
-        if bufexists(a:body)
-            let bname = fnamemodify(bufname(a:body),":t")
-            call Voom_ErrorMsg('VOoM: Body buffer '.a:body.' ('.bname.') is not loaded')
-        else
-            call Voom_ErrorMsg('VOoM: Body buffer '.a:body.' does not exist')
-        endif
-        return -1
+func! Voom_BufNotLoaded(body) "{{{2
+    if bufloaded(a:body)
+        return 0
     endif
-endfunc
-
-
-func! Voom_BufEditable(body) "{{{2
-" Check if Body is 'noma' or 'ro' before outline operation.
-" Also catches if buffer doesn't exist.
-    if getbufvar(a:body, "&ma")==0 || getbufvar(a:body, "&ro")==1
+    if bufexists(a:body)
         let bname = fnamemodify(bufname(a:body),":t")
-        call Voom_ErrorMsg("VOoM: Body buffer ".a:body." (".bname.") is 'nomodifiable' or 'readonly'")
-        return -1
+        call Voom_ErrorMsg('VOoM: Body buffer '.a:body.' ('.bname.') is not loaded')
+    else
+        call Voom_ErrorMsg('VOoM: Body buffer '.a:body.' does not exist')
     endif
+    return 1
 endfunc
 
 
-func! Voom_BufNotTree(bnr) "{{{2
-    if has_key(s:voom_trees, a:bnr)
+func! Voom_BufNotEditable(body) "{{{2
+    if getbufvar(a:body, "&ma")==1 && getbufvar(a:body, "&ro")==0
+        return 0
+    endif
+    let bname = fnamemodify(bufname(a:body),":t")
+    call Voom_ErrorMsg("VOoM: Body buffer ".a:body." (".bname.") is 'nomodifiable' or 'readonly'")
+    return 1
+" If buffer doesn't exist, getbufvar() returns '' .
+endfunc
+
+
+func! Voom_BufNotTree(tree) "{{{2
+    if has_key(s:voom_trees, a:tree)
         return 0
     endif
     call Voom_ErrorMsg('VOoM: current buffer is not Tree')
@@ -489,6 +485,25 @@ func! Voom_ToggleTreeWindow() "{{{2
 endfunc
 
 
+func! Voom_Voominfo(qargs) "{{{2
+    let bnr = bufnr('')
+    if has_key(s:voom_trees, bnr)
+        let [body, tree] = [s:voom_trees[bnr], bnr]
+    elseif has_key(s:voom_bodies, bnr)
+        let [body, tree] = [bnr, s:voom_bodies[bnr].tree]
+    else
+        let [body, tree] = [bnr, 0]
+    endif
+    let l:vimvars = ''
+    if a:qargs==#'all'
+        for var in ['s:script_path', 's:script_dir', 's:voom_dir', 's:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
+            let l:vimvars = l:vimvars . printf("%-13s = %s\n", var, string({var}))
+        endfor
+    endif
+    python voom.voom_Voominfo()
+endfunc
+
+
 "--- for external scripts --- {{{2
 
 func! Voom_GetVar(var) "{{{2
@@ -505,7 +520,7 @@ func! Voom_GetBufInfo(...) "{{{2
     let bnr = bufnr('')
     if has_key(s:voom_trees, bnr)
         let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
-        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1] | endif
+        if Voom_BufNotLoaded(body) | return ['Tree',-1,-1] | endif
     elseif has_key(s:voom_bodies, bnr)
         let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
         if Voom_BodyUpdateTree() < 0 | return ['Body',-1,-1] | endif
@@ -522,19 +537,6 @@ func! Voom_GetBufInfo(...) "{{{2
 "   error message. To supress the error message: Voom_GetBufInfo(1)
 " Return ['Body'/'Tree',-1,-1] if outline is not available.
 " Update outline if current buffer is Body.
-endfunc
-
-
-func! Voom_PrintData() "{{{2
-" Print Vim-side VOoM data.
-    redir => voomData
-    silent echo repeat('-', 60)
-    for v in ['s:voom_did_quickload', 's:voom_did_init', 's:voom_logbnr', 's:script_dir', 's:script_path', 's:voom_dir', 'g:voom_verify_oop', 's:voom_trees', 's:voom_bodies']
-        silent echo v '--' {v}
-    endfor
-    redir END
-    echo ' '
-    python print vim.eval('l:voomData')
 endfunc
 
 
@@ -759,13 +761,12 @@ endfunc
 
 "---TREE BUFFERS------------------------------{{{1
 
-func! Voom_TreeCreate(body) "{{{2
-" Create new Tree buffer for Body body in the current window.
+func! Voom_TreeCreate(body, blnr) "{{{2
+" Create new Tree buffer in the current window for Body body, Body line blnr.
     let b_name = fnamemodify(bufname(a:body),":t")
     if b_name=='' | let b_name='NoName' | endif
     silent exe 'edit '.fnameescape(b_name).'_VOOM'.a:body
     let tree = bufnr('')
-    let blnr = s:voom_bodies[a:body].blnr
 
     """ Finish initializing VOoM data for this Body.
     let s:voom_bodies[a:body].tree = tree
@@ -884,19 +885,15 @@ func! Voom_TreeBufEnter() "{{{2
 " Update outline if Body changed since last update. Redraw Tree if needed.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
-
     if !exists('w:voom_tree')
         call Voom_TreeConfigWin()
     endif
-
     """ update is not needed
     if s:voom_bodies[body].tick_==s:voom_bodies[body].tick
         return
     endif
-
     """ don't update if Body is not loaded
-    if Voom_BufLoaded(body) < 0 | return | endif
-
+    if Voom_BufNotLoaded(body) | return | endif
     """ do update
     let snLn_ = s:voom_bodies[body].snLn
     setl ma
@@ -911,7 +908,6 @@ func! Voom_TreeBufEnter() "{{{2
         let &ul=ul_
         setl noma
     endtry
-
     " The = mark is placed by updateTree()
     " When nodes are deleted by editing Body, snLn can get > last Tree lnum,
     " updateTree() will set snLn to the last line lnum.
@@ -1252,7 +1248,7 @@ func! Voom_TreeSessionLoad() "{{{2
     try
         exe 'noautocmd '.bodyWnr.'wincmd w'
         let s:voom_bodies[body] = {}
-        let s:voom_bodies[body].blnr = line('.')
+        let blnr = line('.')
         let b_dir = expand('%:p:h')
         let l:firstLine = ' '.bodyName.' ['.b_dir.'], b'.body
         let [l:mmode, l:qargs] = [-1, '']
@@ -1265,7 +1261,7 @@ func! Voom_TreeSessionLoad() "{{{2
         exe 'noautocmd '.wnr_.'wincmd w'
     endtry
     if bufnr('')==tree
-        call Voom_TreeCreate(body)
+        call Voom_TreeCreate(body, blnr)
     endif
 endfunc
 
@@ -1290,7 +1286,7 @@ func! Voom_TreeSelect(stayInTree) "{{{3
 " Leave cursor in Body if current line was in the selected node and !stayInTree.
     let tree = bufnr('')
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
     let lnum = line('.')
 
     let snLn = s:voom_bodies[body].snLn
@@ -1667,8 +1663,8 @@ func! Voom_OopSelectBodyRange(mode) "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    "if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    "if Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1702,8 +1698,8 @@ func! Voom_OopEdit(op) "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    "if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    "if Voom_BufNotEditable(body) | return | endif
     let lnum = line('.')
     "if lnum==1 | return | endif
     let head = getline(lnum)[1+stridx(getline(lnum),'|') :]
@@ -1739,8 +1735,8 @@ func! Voom_OopInsert(as_child) "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     if ln_status=='hidden'
@@ -1785,8 +1781,8 @@ func! Voom_OopPaste() "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     if ln_status=='hidden'
@@ -1831,8 +1827,8 @@ func! Voom_OopMark(op, mode) "{{{3
         call Voom_ErrorMsg('VOoM: marked nodes are not available in this markup mode')
         return
     endif
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1890,8 +1886,8 @@ func! Voom_OopMarkStartup() "{{{3
         call Voom_ErrorMsg('VOoM: startup nodes are not available in this markup mode')
         return
     endif
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     " current line must not be hidden in a fold
@@ -1923,8 +1919,8 @@ func! Voom_Oop(op, mode) "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if a:op!='copy' && Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if a:op!=#'copy' && Voom_BufNotEditable(body) | return | endif
     let ln = line('.')
     let ln_status = Voom_FoldStatus(ln)
     if ln_status=='hidden'
@@ -2099,8 +2095,8 @@ func! Voom_OopFolding(ln1, ln2, action) "{{{3
         call Voom_ErrorMsg('VOoM: Tree folding operations are not available in this markup mode')
         return
     endif
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if a:action!=#'restore' && Voom_BufEditable(body) < 0
+    if Voom_BufNotLoaded(body) | return | endif
+    if a:action!=#'restore' && Voom_BufNotEditable(body)
         return
     endif
 
@@ -2145,8 +2141,8 @@ func! Voom_OopSort(ln1,ln2,qargs) "{{{3
     let tree = bufnr('')
     if Voom_BufNotTree(tree) | return | endif
     let body = s:voom_trees[tree]
-    if Voom_BufLoaded(body) < 0 | return | endif
-    if Voom_BufEditable(body) < 0 | return | endif
+    if Voom_BufNotLoaded(body) | return | endif
+    if Voom_BufNotEditable(body) | return | endif
     if a:ln1 < 2 || a:ln2 < 2
         call Voom_ErrorMsg("VOoM (sort): first Tree line cannot be operated on")
         return
@@ -2348,7 +2344,6 @@ func! Voom_BodySelect() "{{{2
     let wnr_ = winnr()
     let tree = s:voom_bodies[body].tree
     let blnr = line('.')
-    let s:voom_bodies[body].blnr = blnr
 
     let bchangedtick = b:changedtick
     " Go to Tree. Outline will be updated on BufEnter.
@@ -2460,7 +2455,7 @@ func! Voom_EchoUNL() "{{{2
     let lnum = line('.')
     if has_key(s:voom_trees, bnr)
         let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
-        if Voom_BufLoaded(body) < 0 | return | endif
+        if Voom_BufNotLoaded(body) | return | endif
     elseif has_key(s:voom_bodies, bnr)
         let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
         if Voom_BodyUpdateTree() < 0 | return | endif
@@ -2497,7 +2492,7 @@ func! Voom_Grep(input) "{{{2
     if has_key(s:voom_trees, bnr)
         let body = s:voom_trees[bnr]
         let tree = bnr
-        if Voom_BufLoaded(body) < 0 | return | endif
+        if Voom_BufNotLoaded(body) | return | endif
         if Voom_ToBody(body) < 0 | return | endif
         if Voom_BodyCheckTicks(body) < 0 | return | endif
     elseif has_key(s:voom_bodies, bnr)
@@ -2810,7 +2805,7 @@ func! Voom_GetVoomRange(lnum, withSubnodes) "{{{2
     let bnr = bufnr('')
     if has_key(s:voom_trees, bnr)
         let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
-        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1,-1] | endif
+        if Voom_BufNotLoaded(body) | return ['Tree',-1,-1,-1] | endif
     elseif has_key(s:voom_bodies, bnr)
         let [bufType, body, tree] = ['Body', bnr, s:voom_bodies[bnr].tree]
         if Voom_BodyUpdateTree() < 0 | return ['Body',-1,-1,-1] | endif
@@ -2838,7 +2833,7 @@ func! Voom_GetBuffRange(ln1, ln2) "{{{2
     let bnr = bufnr('')
     if has_key(s:voom_trees, bnr)
         let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
-        if Voom_BufLoaded(body) < 0 | return ['Tree',-1,-1,-1] | endif
+        if Voom_BufNotLoaded(body) | return ['Tree',-1,-1,-1] | endif
         python voom.voom_GetBuffRange()
         return [bufType, body, l:bln1, l:bln2]
     elseif has_key(s:voom_bodies, bnr)
@@ -2867,7 +2862,7 @@ func! Voom_GetExecRange(lnum) "{{{2
     " Tree buffer: get start/end of Body node and subnodes.
     if has_key(s:voom_trees, bnr)
         let [bufType, body, tree] = ['Tree', s:voom_trees[bnr], bnr]
-        if Voom_BufLoaded(body) < 0 | return ['',-1,-1,-1] | endif
+        if Voom_BufNotLoaded(body) | return ['',-1,-1,-1] | endif
         python voom.voom_GetVoomRange(withSubnodes=1)
         return [bufType, body, l:bln1, l:bln2]
     endif

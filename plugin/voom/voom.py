@@ -1,7 +1,7 @@
 # voom.py
-# Last Modified: 2012-11-05
+# Last Modified: 2012-12-02
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.5
+# Version: 4.6
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
 # License: This program is free software. It comes without any warranty,
@@ -98,7 +98,6 @@ def voom_Init(body): #{{{2
         try:
             mModule = __import__(mName)
             VO.bname += ', %s' %qargs
-            vim.command("call Voom_WarningMsg('VOoM: mode ''%s'' [%s]')" %(qargs.replace("'","''"), os.path.abspath(mModule.__file__).replace("'","''")))
         except ImportError:
             vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %mName.replace("'","''"))
             return
@@ -145,7 +144,7 @@ def voom_Init(body): #{{{2
 def voom_TreeCreate(): #{{{2
     """This is part of Voom_TreeCreate(), called from Tree."""
     body = int(vim.eval('a:body'))
-    blnr = int(vim.eval('l:blnr')) # Body cursor lnum
+    blnr = int(vim.eval('a:blnr')) # Body cursor lnum
     VO = VOOMS[body]
 
     if VO.mmode:
@@ -342,6 +341,29 @@ def computeSnLn(body, blnr): #{{{2
 
 def voom_UnVoom(body): #{{{2
     if body in VOOMS: del VOOMS[body]
+
+
+def voom_Voominfo(): #{{{2
+    body, tree = int(vim.eval('l:body')), int(vim.eval('l:tree'))
+    vimvars = vim.eval('l:vimvars')
+    print '%s CURRENT VOoM OUTLINE %s' %('-'*10, '-'*18)
+    if not tree:
+        print 'current buffer %s is not a VOoM buffer' %body
+    else:
+        VO = VOOMS[body]
+        assert VO.tree == tree
+        print VO.bname
+        print 'Body buffer %s, Tree buffer %s' %(body,tree)
+        if VO.mModule:
+            print 'markup mode:     %s' %(os.path.abspath(VO.mModule.__file__))
+        else:
+            print 'markup mode:     NONE'
+        if VO.mmode==0:
+            print 'headline markers:  %s1, %s2, ...' %(VO.marker,VO.marker)
+    if vimvars:
+        print '%s VOoM INTERNALS %s' %('-'*10, '-'*24)
+        print 'voom.py:         %s' %(os.path.abspath(sys.modules['voom'].__file__))
+        print vimvars
 
 
 #---Outline Traversal-------------------------{{{1
