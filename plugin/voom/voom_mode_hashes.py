@@ -1,13 +1,9 @@
 # voom_mode_hashes.py
-# Last Modified: 2012-05-06
-# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
+# Last Modified: 2013-01-28
+# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
-# License: This program is free software. It comes without any warranty,
-#          to the extent permitted by applicable law. You can redistribute it
-#          and/or modify it under the terms of the Do What The Fuck You Want To
-#          Public License, Version 2, as published by Sam Hocevar.
-#          See http://sam.zoy.org/wtfpl/COPYING for more details.
+# License: CC0, see http://creativecommons.org/publicdomain/zero/1.0/
 
 """
 VOoM markup mode for headlines marked with #'s (atx-headers, a subset of Markdown format).

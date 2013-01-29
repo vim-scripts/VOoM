@@ -1,10 +1,10 @@
 *voom.txt*      VOoM -- Vim two-pane outliner
-Last Modified: 2012-12-03
-VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-Version: 4.6
+Last Modified: 2013-01-28
+Version: 4.7
+VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim 7.x
 Website: http://www.vim.org/scripts/script.php?script_id=2657
 Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
-License: WTFPL Version 2, see http://sam.zoy.org/wtfpl/COPYING
+License: CC0, see http://creativecommons.org/publicdomain/zero/1.0/
 
 
     Overview  . . . . . . . . . . . . . . . . . . . .|voom_overview|
@@ -52,18 +52,20 @@ Available markup modes:
     html             |voom_mode_html|
     thevimoutliner   |voom_mode_thevimoutliner|
     vimoutliner      |voom_mode_vimoutliner|
+    taskpaper        |voom_mode_taskpaper|
     python           |voom_mode_python|
     various other    |voom_mode_various|
 
 
-FEATURES:
+FEATURES AND BENEFITS:
     - Outline structure manipulation: move nodes up/down, promote/demote,
       copy/cut/paste, insert new node, sort in various ways, randomize.
     - Many one-character mappings for efficient outline navigation, which can
       be combined into complex commands, e.g., "UVD" selects all siblings of
       the current node. Outlines can also be navigated with the mouse.
-    - Command to search nodes. Boolean AND/NOT search (in addition to |/bar|).
-    - Automatic outline update on entering the Tree buffer.
+    - Command to search nodes. Boolean AND/NOT search (OR is provided by
+      |/bar|).
+    - Automagic outline update on entering the Tree buffer.
     - Works with Vim buffers, not with files on disk as ctags-based tools.
     - Not a 'filetype' plugin. Not tied to a particular outline format.
       Has (almost) no side effects on the buffer being outlined.
@@ -336,8 +338,8 @@ and install VOoM as a bundle.
 To try VOoM without installing anything, just source "plugin/voom.vim",
 see node "Overview -> QUICK DEMO".
 
-Folders "voom_addons", "voom_samples" are not needed to run VOoM and can be
-placed anywhere or deleted.
+The folder "voom_extras" is not needed to run VOoM and can be placed anywhere
+or deleted.
 
 NOTE: VOoM uses the quickload mechanism (|write-plugin-quickload|). The bulk of
 the Vim script "voom.vim" is sourced and Python module "voom.py" is imported
@@ -563,25 +565,28 @@ g:voom_create_devel_commands   ~
 ==============================================================================
 Customization tips   [[[3~
 
+Most VOoM commands can be mapped to key shortcuts or alias commands in .vimrc: >
+    nnoremap <LocalLeader><LocalLeader> :Voom<CR>
+    nnoremap <LocalLeader>n :Voomunl<CR>
+    com! VM Voom markdown
+    com! VMT VoomToggle markdown
+
 When a Tree buffer is created, its 'filetype' is set to "voomtree"
 When __PyLog__ buffer is created, its 'filetype' is set to "voomlog".
-This should allow user customization of these buffers (bufhidden, syntax,
+This allows user customization of these buffers (bufhidden, syntax,
 wrap/norwap, list/nolist, etc.) via standard Vim configuration files: >
     ~/.vim/ftplugin/voomtree.vim
-    ~/.vim/after/ftplugin/voomtree.vim
     ~/.vim/syntax/voomtree.vim
-    ~/.vim/after/syntax/log.vim
+    ~/.vim/after/ftplugin/voomtree.vim
+
+    ~/.vim/ftplugin/voomlog.vim
+    ~/.vim/syntax/voomlog.vim
     etc.
 
 To modify default Tree buffer-local mappings or create new ones:
     1. Create file ftplugin/voomtree.vim .
     2. Copy relevant mappings from voom.vim function Voom_TreeMap().
     3. Change {lhs} and/or {rhs}.
-
-Most VOoM commands can be mapped to key shortcuts in .vimrc: >
-    nnoremap <LocalLeader><LocalLeader> :Voom<CR>
-    nnoremap <LocalLeader>n :Voomunl<CR>
-
 
 To make Body headlines stand out, lines with fold markers can be highlighted.
 Since I use .txt files for notes, I have the following line in .vimrc  >
@@ -2521,6 +2526,31 @@ Headlines are lines with >=0 Tabs followed by any character except:
 Otherwise this mode is identical to the "thevimoutliner" mode.
 
 ==============================================================================
+taskpaper   [[[3~
+                                                 *voom_mode_taskpaper*
+:Voom taskpaper
+MODULE: ../plugin/voom/voom_mode_taskpaper.py
+TaskPaper format:
+    http://www.vim.org/scripts/script.php?script_id=2027
+    http://www.hogbaysoftware.com/products/taskpaper
+
+Everything is indented with tabs. The level is determined by the number of
+leading tabs.
+
+Outline is constructed from lines that are Projects or Tasks. Task lines start
+with "- ". Project lines end with ":" optionally followed tags.
+
+All other lines (Notes) always belong to the Project or Task directly above
+them, regardless of the indentation.
+
+The type of headline (Project or Task) is preserved during outline operations.
+
+The leading "- " is stripped from Task headlines.
+
+Projects are marked with "x" in the Tree buffer, so you can jump to the
+next/previous project by pressing x/X.
+
+==============================================================================
 python   [[[3~
                                                  *voom_mode_python*
 :Voom python
@@ -2947,8 +2977,8 @@ The lines in the __PyLog__ buffer will appear after the Ex mode is exited.
     id_20110213225841
 5) When __PyLog__ is enabled, a Python error in a Vim script does not result in
 Vim error. This is probably because Python's sys.stderr is redirected. This
-changes Vim error handling when a Python code is executed by Vim inside
-try/endtry. Example Vim script, try it with PyLog on: >
+disrupts Vim error handling when a Python code is executed by Vim inside
+try/endtry. Example Vim script, compare the output with PyLog off and on: >
     try
         python assert 1==2
         echo 'AFTER PYTHON ERROR -- should not be here'
@@ -3022,13 +3052,16 @@ There is no special API. The following applies:
 
     - All Vim functions in "voom.vim" are global and start with "Voom_".
 
-    - Vim-side data are script-local. Two functions in "voom.vim" allow
-      external scripts to read "voom.vim" script-local outline data:
-          Voom_GetBufInfo()
-          Voom_GetData()
-      Sample add-on "voom_stats.vim" shows how to use them: >
-          :let [bufType, body, tree] = Voom_GetBufInfo()
-          :let [voom_bodies, voom_trees] = Voom_GetData()
+    - Vim-side data are script-local. Several functions in "voom.vim" allow
+      external scripts to retrieve various outline information and data:
+            Voom_GetTypeBodyTree(...)
+            Voom_GetModeBodyTree()
+            Voom_GetBodiesTrees()
+            Voom_GetVar(var)
+      Sample add-on "voom_stats.vim" shows how to use them. Examples: >
+            :let [bufType, body, tree] = Voom_GetTypeBodyTree()
+            :let [mmode, body, tree] = Voom_GetModeBodyTree()
+            :let [voom_bodies, voom_trees] = Voom_GetBodiesTrees()
 <
       Function Voom_GetVar(var) allows external scripts to read any "voom.vim"
       script-local variable if it exists. Examples (these always exist) >
@@ -3039,6 +3072,10 @@ There is no special API. The following applies:
       Example: move cursor to Log window in the current tab >
           :let logwnr = bufwinnr(Voom_GetVar('s:voom_logbnr'))
           :if logwnr > 0 | exe logwnr.'wincmd w' | endif
+<
+    - Several functions allow external scripts to retrieve the content of
+      nodes (a range of Body lines), see
+            EXECUTING NODES (:Voomexec) -> Alternatives to :Voomexec
 
 
 USING ADD-ONS TO ADD NEW FUNCTIONALITY
@@ -3050,18 +3087,19 @@ current buffer is a VOoM buffer (Tree or Body) and refuse to execute if it's
 not. It should update outline if current buffer is a Body. Sample add-on
 "voom_stats.vim" shows how to do that.
 
-To create Tree-local mappings or commands use >
-    ~/.vim/ftplugin/voomtree.vim
-    ~/.vim/after/ftplugin/voomtree.vim
-The filetype of Tree buffers is set to "voomtree".
+The filetype of Tree buffers is set to "voomtree". Thus, you can use the
+following files in Vim user folder to create Tree-local mappings and commands: >
+    ftplugin/voomtree.vim
+    after/ftplugin/voomtree.vim
+Tree buffer syntax highlighting can be customized via >
+    syntax/voomtree.vim
 
 
-USING ADD-ONS TO CUSTOMIZE VOoM
--------------------------------
+USING ADD-ONS TO MODIFY VOoM
+----------------------------
 Add-ons can overwrite and modify core code functions and some data. Add-on
 "custom_headlines.vim" is an example of this approach. It shows how to
 customize construction of Tree headline text for individual filetypes.
-
 Such add-ons must be loaded after "voom.vim" has been sourced completely, that
 is via option g:voom_user_command as explained above.
 
@@ -3079,7 +3117,7 @@ Implementation notes   [[[1~
 Theory of Operation   [[[2~
 
 ==============================================================================
-why Python   [[[3~
+Why Python   [[[3~
 
 The main reason VOoM uses Python is because some of its critical code is much
 faster in Python than in Vim script.
@@ -3204,7 +3242,7 @@ echo 'Python: ' . reltimestr(reltime(start))
 Thus, Python code should be much faster when handling large lists.
 
 ==============================================================================
-separate Trees or single Tree   [[[3~
+Separate Trees or single Tree   [[[3~
 
 A single Tree buffer could be used to display outlines of many files. Tlist
 does that. This makes sense when working with several related files. Also,
@@ -3215,17 +3253,18 @@ more appropriate for text notes, when outline files are likely to be
 unrelated. Searching headlines is easier.
 
 ==============================================================================
-checking Bodies for ticks   [[[3~
+Checking Bodies for ticks   [[[3~
 
 Tree buffer and associated outline data are updated on entering Tree via
 BufEnter autocommand. To perform update only when the Body has changed since
 the last update, Body's b:changedtick is used as shown in the docs.
 Unfortunately, b:changedtick cannot be read with getbufvar(), so it's not
-accessible from Tree on BufEnter [1]. The workaround is to use Body's BufLeave
-autocommand to save Body's b:changedtick. So the entire update scheme is:
+accessible from Tree on BufEnter (see NOTE 1 below). The workaround is to use
+Body's BufLeave autocommand to save Body's b:changedtick.
+So the entire update scheme is:
     - on Body BufLeave save Body's b:changedtick as "tick"
     - on Tree BufEnter compare "tick_" to "tick"
-    - if different, do outline update and set "tick_" to "tick"
+    - if different, do the outline update and set "tick_" to "tick"
 
 The outline must be up to date when the cursor is in the Tree buffer. If it's
 not, the consequences could be unpleasant. Performing outline operations will
@@ -3238,10 +3277,10 @@ an external application while cursor is in Tree.
 Fortunately, most Voom commands involve a visit from Tree to Body or vice
 versa, so we can compare "tick_" directly to Body's "b:changedtick". If they
 are different: the command is aborted, outline update is forced, error message
-is displayed. Such check is performed during:
-    - selecting node from Tree or Body
-    - Voomgrep command initiated from Tree
-    - during every outline operation, before modifying buffers
+is displayed. Such check is performed:
+    - during any outline operation (before modifying the Body buffer)
+    - when selecting node from Tree or Body
+    - during Voomgrep command initiated from Tree
 The function that does this check is Voom_BodyCheckTicks().
 
 These checks can be tested by modifying Body and then moving to Tree with
@@ -3252,12 +3291,23 @@ error occurs during update.  voom.updateTree()) is always called from Vim code
 inside try/finally/endtry. It also sets Vim var l:ok to indicate success, see
 #id_20110213212708 .
 
+NOTE 1: This was fixed by Patch 7.3.105 -- b:changedtick can be obtained via
+getbufvar(). In VOoM 4.7 and above a few operations assume that this patch is
+present and first try to check Body ticks while in Tree in order to avoid an
+unneeded trip to Body and back. The code relies on the fact that
+    getbufvar(body,"changedtick")
+returns "" without the patch. When the value of getbufvar(body,"changedtick")
+is wrong, the next step is always to move cursor into Body (it may no longer
+exist, unloaded, etc.) and check for b:changedtick directly. This automatically
+takes care of versions before the patch. See code for operations Insert Node,
+Copy, Folding Save/Restore/Cleanup.
 
-    [1] 2011-01-21 Fixed by Patch 7.3.105 !!!
-    see #ID_20111006013436
+NOTE 2: Outline operations other than Sort do not rely on the outline update.
+They do a targeted adjustment of outline data and then verify the resulting
+outline against the outline produced by the wholesale update.
 
 ==============================================================================
-unloaded buffer + python == trouble   [[[3~
+Unloaded buffer + python == trouble   [[[3~
 
 Bad things happen when attempting to modify an unloaded buffer via Python
 vim.buffer object. (This might be considered a Vim bug.) Example:
@@ -3291,7 +3341,7 @@ There are checks that ensure that the buffer is loaded (bufloaded()) before it
 is modified via Python vim.buffer object.
 
 ==============================================================================
-wipe out Tree on BufUnload   [[[3~
+Wipe out Tree on BufUnload   [[[3~
 
 A Tree buffer should be wiped out and the corresponding VOoM data deleted
 after:
@@ -3323,7 +3373,7 @@ The PyLog buffer should also be wiped out when unloaded or deleted. There is a
 check that ensures that PyLog is loaded before printing to it.
 
 ==============================================================================
-unloaded, deleted, wiped out Bodies   [[[3~
+Unloaded, deleted, wiped out Bodies   [[[3~
 
 Unloaded Body buffers are a problem:
 
@@ -3381,7 +3431,16 @@ TODO   [[[2~
 
 Rewrite everything using |autoload| instead of FuncUndefined au.
 
-Create GitHub repo. Put extra stuff in another repo.
+Create GitHub repo. Put extra stuff in another repo?
+
+Voomgrep enhancements:
+    Hierarchical search.
+        +d after pattern (+descendants as in TaskPaper).
+    Show results by folding non-matching lines and nodes. (:VoomGrep)
+        Need command to restore previous folding settings.
+    "foo and not bar" seems better than "foo not bar" and easier to parse.
+
+Outline operations could use try/finally/endtry for maximum resilience.
 
 Insert New Node: make new headline text an argument of function to make
 programmatic creation of outlines more convenient, especially when there are
@@ -3407,7 +3466,39 @@ Read-only modes written in VimScript: Vim regexp, folds.
 ==============================================================================
 CHANGELOG   [[[2o~
 
-v4.6, 2012-12-03   [[[3x~
+v4.7, 2013-01-28   [[[3x~
+
+New markup mode: taskpaper (|voom_mode_taskpaper|).
+https://github.com/vim-voom/vim-voom.github.com/issues/6
+
+PROBLEM: https://github.com/vim-voom/vim-voom.github.com/issues/7
+The issue can be observed after adding the following au
+    :autocmd BufLeave,FocusLost * silent wall
+Error in Voom_OopFromBody(). Outline operations fail because b:changedtick is
+incremented when Body is saved on BufLeave, which triggers outline update on
+Tree BufEnter, which prematurely resets Tree to noma and also renders outline
+verification useless.
+SOLUTION: Block outline update when Tree is &ma. All outline operations that
+rely on verification set Tree ma for the duration of operation to suppress
+update. Force outline verification when Body's tick changes unexpectedly
+(s:verify overrides g:voom_verify_oop). Other small changes to make outline
+operations more resilient.
+
+License changed to CC0.
+
+Code tweaks:
+- Another foolproofing measure: Voom_BufNotTree(tree) checks if Tree is &ma.
+- Outline verification is now run after Folding Save/Restore.
+- Better use of getbufvar(body,"changedtick"). No need to check Vim version, it
+  returns "" if Vim < 7.3.105. Use it during Copy.
+- New function Voom_GetModeBodyTree() -- external scripts can use it to
+  determine the current markup mode.
+- Renamed several functions used by external scripts:
+      Voom_GetData() > Voom_GetBodiesTrees()
+      Voom_GetBufInfo() > Voom_GetTypeBodyTree()
+
+
+v4.6, 2012-12-03   [[[3~
 
 Warning message is no longer displayed when a markup mode is invoked.
 

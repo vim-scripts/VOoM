@@ -1,4 +1,4 @@
-# voom_mode_thevimoutliner.py
+# voom_mode_taskpaper.py
 # Last Modified: 2013-01-28
 # VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
@@ -6,21 +6,14 @@
 # License: CC0, see http://creativecommons.org/publicdomain/zero/1.0/
 
 """
-VOoM markup mode for The Vim Outliner format.
-See |voom_mode_thevimoutliner|,  ../../doc/voom.txt#*voom_mode_thevimoutliner*
-
-Headlines and body lines are indented with Tabs. Number of tabs indicates
-level. 0 Tabs means level 1.
-
-Headlines are lines with >=0 Tabs followed by any character except '|'.
-
-Blank lines are not headlines.
+VOoM markup mode for TaskPaper format.
+See |voom_mode_taskpaper|,  ../../doc/voom.txt#*voom_mode_taskpaper*
 """
 
-# Body lines start with these chars
-BODY_CHARS = {'|':0,}
+import re
+# match for Project line, as in syntax/taskpaper.vim
+project_match = re.compile(r'^.+:(\s+@[^ \t(]+(\([^)]*\))?)*$').match
 
-# ------ the rest is identical to voom_mode_vimoutliner.py -------------------
 def hook_makeOutline(VO, blines):
     """Return (tlines, bnodes, levels) for Body lines blines.
     blines is either Vim buffer object (Body) or list of buffer lines.
@@ -29,15 +22,22 @@ def hook_makeOutline(VO, blines):
     tlines, bnodes, levels = [], [], []
     tlines_add, bnodes_add, levels_add = tlines.append, bnodes.append, levels.append
     for i in xrange(Z):
-        bline = blines[i].rstrip()
-        if not bline:
+        bline = blines[i]
+        h = bline.lstrip('\t')
+        # line is a Task
+        if h.startswith('- '):
+            head = h[2:]
+            mark = ' '
+        # line is a Project
+        # the "in" test is for efficiency sake in case there is lots of Notes
+        elif h.endswith(':') or (':' in h and project_match(h)):
+            head = h
+            mark = 'x'
+        else:
             continue
-        head = bline.lstrip('\t')
-        if head[0] in BODY_CHARS:
-            continue
-        lev = len(bline) - len(head) + 1
+        lev = len(bline) - len(h) + 1
 
-        tline = '  %s|%s' %('. '*(lev-1), head)
+        tline = ' %s%s|%s' %(mark, '. '*(lev-1), head)
         tlines_add(tline)
         bnodes_add(i+1)
         levels_add(lev)
@@ -50,13 +50,11 @@ def hook_newHeadline(VO, level, blnum, tlnum):
     bodyLines is list of lines to insert in Body buffer.
     """
     tree_head = 'NewHeadline'
-    bodyLines = ['%s%s' %('\t'*(level-1), tree_head),]
+    bodyLines = ['%s- %s' %('\t'*(level-1), tree_head),]
     return (tree_head, bodyLines)
 
 
-#def hook_changeLevBodyHead(VO, h, levDelta):
-    #"""Increase of decrease level number of Body headline by levDelta."""
-    #if levDelta==0: return h
+# ---- The rest is identical to vimoutliner/thevimoutliner modes. -----------
 
 def hook_doBodyAfterOop(VO, oop, levDelta, blnum1, tlnum1, blnum2, tlnum2, blnumCut, tlnumCut):
     # this is instead of hook_changeLevBodyHead()

@@ -1,14 +1,10 @@
 # voom.py
-# Last Modified: 2012-12-02
-# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim version 7.x
-# Version: 4.6
+# Last Modified: 2013-01-28
+# Version: 4.7
+# VOoM -- Vim two-pane outliner, plugin for Python-enabled Vim 7.x
 # Website: http://www.vim.org/scripts/script.php?script_id=2657
 # Author: Vlad Irnov (vlad DOT irnov AT gmail DOT com)
-# License: This program is free software. It comes without any warranty,
-#          to the extent permitted by applicable law. You can redistribute it
-#          and/or modify it under the terms of the Do What The Fuck You Want To
-#          Public License, Version 2, as published by Sam Hocevar.
-#          See http://sam.zoy.org/wtfpl/COPYING for more details.
+# License: CC0, see http://creativecommons.org/publicdomain/zero/1.0/
 
 """This module is meant to be imported by voom.vim ."""
 
@@ -92,21 +88,22 @@ def voom_Init(body): #{{{2
 
     ### get markup mode, l:qargs is mode's name ###
     mModule = 0
-    qargs = vim.eval('l:qargs').strip() or FT_MODES.get(VO.filetype, MODE)
-    if qargs:
-        mName = 'voom_mode_%s' %qargs
+    mmode = vim.eval('l:qargs').strip() or FT_MODES.get(VO.filetype, MODE)
+    if mmode:
+        mName = 'voom_mode_%s' %mmode
         try:
             mModule = __import__(mName)
-            VO.bname += ', %s' %qargs
+            VO.bname += ', %s' %mmode
         except ImportError:
             vim.command("call Voom_ErrorMsg('VOoM: cannot import Python module %s')" %mName.replace("'","''"))
             return
 
+    VO.mmode = mmode
     VO.mModule = mModule
     ### define mode-specific methods ###
     # no markup mode, default behavior
     if not mModule:
-        VO.mmode = 0
+        VO.MTYPE = 0
         if VO.filetype in MAKE_HEAD:
             VO.makeOutline = makeOutlineH
         else:
@@ -115,8 +112,8 @@ def voom_Init(body): #{{{2
         VO.changeLevBodyHead = changeLevBodyHead
         VO.hook_doBodyAfterOop = 0
     # markup mode for fold markers, similar to the default behavior
-    elif getattr(mModule,'MODE_FMR',0):
-        VO.mmode = 0
+    elif getattr(mModule,'MTYPE',1)==0:
+        VO.MTYPE = 0
         f = getattr(mModule,'hook_makeOutline',0)
         if f:
             VO.makeOutline = f
@@ -129,7 +126,7 @@ def voom_Init(body): #{{{2
         VO.hook_doBodyAfterOop = 0
     # markup mode not for fold markers
     else:
-        VO.mmode = 1
+        VO.MTYPE = 1
         VO.makeOutline = getattr(mModule,'hook_makeOutline',0) or makeOutline
         VO.newHeadline = getattr(mModule,'hook_newHeadline',0) or newHeadline
         # These must be False if not defined by the markup mode.
@@ -137,7 +134,7 @@ def voom_Init(body): #{{{2
         VO.hook_doBodyAfterOop = getattr(mModule,'hook_doBodyAfterOop',0)
 
     ### the end ###
-    vim.command('let l:mmode=%s' %VO.mmode)
+    vim.command('let l:MTYPE=%s' %VO.MTYPE)
     VOOMS[body] = VO
 
 
@@ -147,7 +144,7 @@ def voom_TreeCreate(): #{{{2
     blnr = int(vim.eval('a:blnr')) # Body cursor lnum
     VO = VOOMS[body]
 
-    if VO.mmode:
+    if VO.MTYPE:
         computeSnLn(body, blnr)
         # reST, wiki files often have most headlines at level >1
         vim.command('setl fdl=2')
@@ -358,7 +355,7 @@ def voom_Voominfo(): #{{{2
             print 'markup mode:     %s' %(os.path.abspath(VO.mModule.__file__))
         else:
             print 'markup mode:     NONE'
-        if VO.mmode==0:
+        if VO.MTYPE==0:
             print 'headline markers:  %s1, %s2, ...' %(VO.marker,VO.marker)
     if vimvars:
         print '%s VOoM INTERNALS %s' %('-'*10, '-'*24)
@@ -698,8 +695,11 @@ def intersectDicts(dictsAND, dictsNOT): #{{{2
 # voom_Oop... functions are called from Voom_Oop... Vim functions.
 # They use local Vim vars set by the caller and can create and change Vim vars.
 # Most of them set lines in Tree and Body via vim.buffer objects.
-# Default l:blnShow is -1.
+#
+# l:blnShow is initially set by the VimScript caller to -1.
 # Returning before setting l:blnShow means no changes were made.
+# If Python code fails, l:blnShow also stays at -1.
+# Subsequent VimScript code relies on l:blnShow.
 
 
 def setLevTreeLines(tlines, levels, j): #{{{2
@@ -738,7 +738,7 @@ def newHeadline(VO, level, blnum, ln): #{{{2
 def setClipboard(s): #{{{2
     """Set Vim + register (system clipboard) to string s."""
     # important: use '' for Vim string
-    vim.command("let @+='%s'" %s.replace("'", "''"))
+    vim.command("let @+ = '%s'" %s.replace("'", "''"))
 
     # The above failed once: empty clipboard after copy/delete >5MB outline. Could
     # not reproduce after Windows restart. Probably stale system. Thus the
@@ -934,7 +934,7 @@ def voom_OopCut(): #{{{2
 
     ### ---go back to Tree---
     vim.command('let l:blnShow=%s' %blnShow)
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     ### remove = mark before modifying Tree
     snLn = VO.snLn
@@ -959,22 +959,22 @@ def voom_OopPaste(): #{{{2
     pText = vim.eval('@+')
     if not pText:
         vim.command("call Voom_ErrorMsg('VOoM (paste): clipboard is empty')")
-        vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+        vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
         return
     pBlines = pText.split('\n') # Body lines to paste
     pTlines, pBnodes, pLevels = VO.makeOutline(VO, pBlines)
 
-    ### verify that clipboard is a valid outline 
+    ### verify that clipboard is a valid outline
     if pBnodes==[] or pBnodes[0]!=1:
         vim.command("call Voom_ErrorMsg('VOoM (paste): invalid clipboard--first line is not a headline')")
-        vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+        vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
         return
     lev_ = pLevels[0]
     for lev in pLevels:
         # there is node with level smaller than that of the first node
         if lev < pLevels[0]:
             vim.command("call Voom_ErrorMsg('VOoM (paste): invalid clipboard--root level error')")
-            vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+            vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
             return
         # level incremented by 2 or more
         elif lev-lev_ > 1:
@@ -1039,7 +1039,7 @@ def voom_OopPaste(): #{{{2
                     None, None)
 
     ### ---go back to Tree---
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     # remove = mark before modifying Tree
     snLn = VO.snLn
@@ -1141,7 +1141,7 @@ def voom_OopUp(): #{{{2
                     bln1-1+len(blines), ln1-1+len(nLevels))
 
     ### ---go back to Tree---
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     ### remove snLn mark before modifying Tree
     snLn = VO.snLn
@@ -1256,7 +1256,7 @@ def voom_OopDown(): #{{{2
                     bln1-1, ln1-1)
 
     ### ---go back to Tree---
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     ### remove snLn mark before modifying Tree
     Tree[snLn_-1] = ' ' + Tree[snLn_-1][1:]
@@ -1288,7 +1288,7 @@ def voom_OopRight(): #{{{2
 
     # can't move right if ln1 node is child of previous node
     if levels[ln1-1] > levels[ln1-2]:
-        vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+        vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
         return
 
     ### change levels of Body headlines
@@ -1311,8 +1311,8 @@ def voom_OopRight(): #{{{2
         VO.hook_doBodyAfterOop(VO, 'right', 1, blnShow, ln1, blnum2, ln2, None, None)
 
     ### ---go back to Tree---
-    vim.command("let &fdm=fdm_b")
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("let &fdm=b_fdm")
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     ### change levels of Tree lines (same as for VO.levels)
     tlines = Tree[ln1-1:ln2]
@@ -1343,11 +1343,11 @@ def voom_OopLeft(): #{{{2
 
     # can't move left if at top level 1
     if levels[ln1-1]==1:
-        vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+        vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
         return
     # don't move left if the range is not at the end of subtree
     if ln2 < len(levels) and levels[ln2]==levels[ln1-1]:
-        vim.command("call Voom_OopFromBody(%s,%s,-1,1)" %(body,tree))
+        vim.command("call Voom_OopFromBody(%s,%s,-1)" %(body,tree))
         return
 
     ### change levels of Body headlines
@@ -1370,8 +1370,8 @@ def voom_OopLeft(): #{{{2
         VO.hook_doBodyAfterOop(VO, 'left', -1, blnShow, ln1, blnum2, ln2, None, None)
 
     ### ---go back to Tree---
-    vim.command("let &fdm=fdm_b")
-    vim.command("call Voom_OopFromBody(%s,%s,%s,1)" %(body,tree, blnShow))
+    vim.command("let &fdm=b_fdm")
+    vim.command("call Voom_OopFromBody(%s,%s,%s)" %(body,tree,blnShow))
 
     ### change levels of Tree lines (same as for VO.levels)
     tlines = Tree[ln1-1:ln2]

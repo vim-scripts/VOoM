@@ -13,13 +13,13 @@ com! VoomPrintStats call Voom_PrintStats()
 func! Voom_PrintStats()
     """"""" standard code for every VOoM add-on command
     " Determine if the current buffer is a VOoM Tree buffer, Body buffer, or neither.
-    let [bufType,body,tree] = Voom_GetBufInfo()
+    let [bufType,body,tree] = Voom_GetTypeBodyTree()
     " Error, outline is not available (Body is unloaded, outline update failed).
     if body==-1 | return | endif
     """ Do different things depending on the type of the current buffer.
     " Current buffer is not a VOoM buffer (neither Tree nor Body).
     " The error message is printed automatically. It can be suppressed by
-    " providing an optional argument: Voom_GetBufInfo(1)
+    " providing an optional argument: Voom_GetTypeBodyTree(1)
     if bufType==#'None'
         "call Voom_ErrorMsg("VOoM: current buffer is not a VOoM buffer")
         return
@@ -31,7 +31,7 @@ func! Voom_PrintStats()
         call Voom_WarningMsg("in VOoM Tree buffer")
     endif
     " Get Vim-side outline data. NOTE: Do not modify these dictionaries!
-    let [voom_bodies, voom_trees] = Voom_GetData()
+    let [voom_bodies, voom_trees] = Voom_GetBodiesTrees()
 
 
     """"""" script-specific code
