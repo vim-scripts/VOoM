@@ -5,7 +5,7 @@ VOoM (Vim Outliner of Markups) is a plugin for Vim that emulates a two-pane text
 Screenshots and an animation: http://vim-voom.github.io/
 Bug reports, questions, requests: https://github.com/vim-voom/vim-voom.github.com/issues
 GitHub mirror: https://github.com/vim-voom/VOoM
-Supplementary materials: https://github.com/vim-voom/VOoM_extras
+Supplementary Materials: https://github.com/vim-voom/VOoM_extras
 
 VOoM was originally written to work with start fold markers with level numbers, that is {{{1, {{{2, {{{3, etc. This is the most versatile outline markup -- it is suitable for organizing all kinds of files, including source code, and it allows features not possible with other markups. See :help fold-marker. (Markers are specified by option 'foldmarker'. End fold markers with levels, }}}3, }}}2, etc. are not supported.)
 
@@ -14,6 +14,7 @@ VOoM can currently handle a variety of markup formats that have headlines and su
         wiki  -- MediaWiki, headlines are surrounded by '=';
         vimwiki  -- vimwiki plugin (vimscript #2226);
         viki  -- Viki/Deplate plugin (vimscript #861);
+        dokuwiki  -- DokuWiki;
         org  -- Emacs Org-mode;
         rest  -- reStructuredText section titles;
         markdown  -- Markdown headers, both Setext-style and Atx-style;
@@ -71,6 +72,6 @@ There are four main Ex commands: Voom, Voomhelp, Voomexec, Voomlog.
 NOTE: Commands Voomexec and Voomlog attempt to emulate similar features of Leo outlining editor. A Python file with code snippets organized via fold markers, plus the command :Voomexec, plus the PyLog buffer is an alternative to Python's interactive interpreter.
 
 
-For a quick introduction to VOoM outlining, see section "Beginner Tutorial" in the help file (|voom-tutorial|).
+For a quick introduction to VOoM outlining, see section "Quick Start" in the help file (|voom-quickstart|).
 For a concise list of all VOoM commands (cheat sheet), see section "ALL MAPPINGS & COMMANDS" in the help file (|voom-map|).
 
